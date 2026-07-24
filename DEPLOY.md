@@ -9,7 +9,7 @@ Checklist dan panduan deploy production setelah remediasi.
 - Node.js 20+ (build)
 - Supabase project dengan migrations applied
 - Redis instance (recommended prod — throttling, lockout, cache)
-- Reverse proxy (nginx template: `deploy/nginx-capex-ip-allowlist.conf`)
+- Reverse proxy (nginx rate limit template: `deploy/nginx-capex-ip-allowlist.conf`)
 
 ---
 
@@ -52,28 +52,31 @@ SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...        # NEVER NEXT_PUBLIC_*
 SUPABASE_JWT_SECRET=...
 JWT_ACCESS_SECRET=<strong-random-64>   # blocked if weak/default
-CORS_ORIGINS=https://your-domain.com
+CORS_ORIGINS=https://capex.siloamhospitals.com
+FRONTEND_URL=https://capex.siloamhospitals.com
+ALLOWED_EMAIL_DOMAINS=siloamhospitals.com
 REDIS_URL=redis://:password@host:6379   # recommended
 METRICS_SECRET=<random>                 # for /metrics scrape
-IP_ALLOWLIST=1.2.3.4,5.6.7.8           # recommended
+# IP_ALLOWLIST — do NOT set in production (allow all; SSO is the gate)
 ```
 
 ### capex-apps (required prod)
 
 ```env
 NODE_ENV=production
-NEXT_PUBLIC_CAPEXBE_URL=https://api.your-domain.com
+NEXT_PUBLIC_CAPEXBE_URL=https://capex-api.siloamhospitals.com
 NEXT_PUBLIC_USE_BACKEND_SESSION=1       # REQUIRED — else 503
+NEXT_PUBLIC_ENABLE_AZURE_SSO=true       # SSO-only login (no password form)
 JWT_ACCESS_SECRET=<same-as-be>          # for edge session verify
-IP_ALLOWLIST=1.2.3.4,5.6.7.8
+# IP_ALLOWLIST — do NOT set in production
 ```
 
 ### Do NOT set in prod
 
 ```env
-CURSOR_TUNNEL_MODE=true    # bypasses IP allowlist
+CURSOR_TUNNEL_MODE=true    # dev tunnel only
 METRICS_PUBLIC=1           # blocked at BE startup
-DEMO_MODE=true             # relaxes rate limits
+CAPEX_DEMO_MODE=true       # relaxes rate limits + enables password login on /sabet
 ```
 
 ---
@@ -94,19 +97,36 @@ cd capexbe && npm run build
 
 ---
 
+## Production access model (Siloam)
+
+| Layer | Control |
+|-------|---------|
+| Domain | `https://capex.siloamhospitals.com` — set `CORS_ORIGINS` + `FRONTEND_URL` |
+| Auth | Microsoft SSO (Azure Entra) — **no password form** in production |
+| Email | `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com` on capexbe |
+| Network | **No IP allowlist** — empty `IP_ALLOWLIST` = allow all |
+| User registry | User must exist in Capex DB (SSO alone is not enough) |
+
+Azure Entra app registration must restrict to Siloam tenant. Supabase redirect URL:
+`https://capex.siloamhospitals.com/api/auth/azure/callback`
+
+---
+
 ## Deploy checklist
 
 - [ ] All migrations applied (20260721* → 20260723100000)
 - [ ] `JWT_ACCESS_SECRET` strong, unique, same on FE+BE
 - [ ] `NEXT_PUBLIC_USE_BACKEND_SESSION=1`
-- [ ] `IP_ALLOWLIST` set on FE + BE
+- [ ] `NEXT_PUBLIC_ENABLE_AZURE_SSO=true`
+- [ ] `CORS_ORIGINS` + `FRONTEND_URL` = `https://capex.siloamhospitals.com`
+- [ ] `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com`
+- [ ] **Do not** set `IP_ALLOWLIST` in production
 - [ ] `REDIS_URL` with password, private network
-- [ ] `CORS_ORIGINS` matches prod domain
 - [ ] `METRICS_SECRET` set, `/metrics` not public
-- [ ] nginx/Cloudflare configured
+- [ ] nginx/Cloudflare configured (rate limit OK; IP allowlist optional dev only)
 - [ ] `verify:security` pass
 - [ ] Smoke: Network tab shows **no** `*.supabase.co/rest/v1/`
-- [ ] Smoke: login → navigate screens → no 401/403 loop
+- [ ] Smoke: Microsoft SSO login → navigate screens → no 401/403 loop
 - [ ] Unset demo/tunnel env vars
 
 ---

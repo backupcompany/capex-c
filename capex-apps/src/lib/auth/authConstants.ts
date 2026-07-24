@@ -23,3 +23,10 @@ export function useBackendSession(): boolean {
 export function isAzureSsoEnabled(): boolean {
   return process.env.NEXT_PUBLIC_ENABLE_AZURE_SSO !== 'false';
 }
+
+/** Password form — dev/demo only; production uses Microsoft SSO. */
+export function isPasswordLoginEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_CAPEX_DEMO_MODE === 'true') return true;
+  if (process.env.NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN === 'true') return true;
+  return process.env.NODE_ENV !== 'production';
+}

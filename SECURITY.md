@@ -31,7 +31,7 @@ Semua item di atas **sudah di-address** di sprint remediasi. Detail per layer di
 | CSRF | Double-submit cookie + header match untuk `/api/be` POST |
 | Path allowlist | Unknown `/api/*` → deny; BE path harus match `bePathAllowlist.ts` |
 | Rate limit | Login 8/15min (prod), BE proxy 180 POST/min/IP |
-| IP allowlist | Optional via `IP_ALLOWLIST` env |
+| IP allowlist | Optional dev/demo only — **not used in Siloam production** |
 | CSP | Nonce-based prod CSP via `csp.ts` |
 | Prod session mode | `NEXT_PUBLIC_USE_BACKEND_SESSION` wajib — else 503 |
 
@@ -86,7 +86,8 @@ ThrottlerGuard (400/min, Redis-backed)
 - Refresh token rotation with family tracking
 - Reuse detection → revoke entire session family
 - Idle timeout (3h) + tab-hidden logout
-- Password login **disabled in production**
+- Password login **disabled in production** — Microsoft SSO only on login page
+- Email domain gate: `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com` (optional env)
 
 ### Service-layer AuthZ (complete mediation)
 

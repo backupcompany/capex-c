@@ -1,5 +1,5 @@
 # Example VPS stack — copy to server as docker-compose.yml and fill secrets.
-# IP allowlist: set IP_ALLOWLIST on both services + nginx (see nginx-capex-ip-allowlist.conf).
+# Production Siloam: SSO via Azure Entra + domain siloamhospitals.com (no IP allowlist).
 
 services:
   capex-api:
@@ -10,8 +10,9 @@ services:
       - "127.0.0.1:8082:3001"
     environment:
       NODE_ENV: production
-      IP_ALLOWLIST: "203.0.113.10,203.0.113.11"
-      CORS_ORIGINS: "https://YOUR_PUBLIC_FE_URL"
+      CORS_ORIGINS: "https://capex.siloamhospitals.com"
+      FRONTEND_URL: "https://capex.siloamhospitals.com"
+      ALLOWED_EMAIL_DOMAINS: "siloamhospitals.com"
       # SUPABASE_*, JWT_ACCESS_SECRET, etc. from capexbe/.env.example
 
   capex-web:
@@ -22,7 +23,7 @@ services:
       - "127.0.0.1:8080:3000"
     environment:
       NODE_ENV: production
-      IP_ALLOWLIST: "203.0.113.10,203.0.113.11"
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET}"
-      NEXT_PUBLIC_CAPEXBE_URL: "https://YOUR_PUBLIC_API_URL"
+      NEXT_PUBLIC_CAPEXBE_URL: "https://capex-api.siloamhospitals.com"
       NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
+      NEXT_PUBLIC_ENABLE_AZURE_SSO: "true"

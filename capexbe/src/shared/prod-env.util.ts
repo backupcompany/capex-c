@@ -29,3 +29,21 @@ export function isPasswordLoginDisabled(): boolean {
   if (process.env.DISABLE_PASSWORD_LOGIN === 'true') return true;
   return process.env.NODE_ENV === 'production';
 }
+
+/** Comma-separated email domains allowed for SSO exchange (empty = no restriction). */
+export function getAllowedEmailDomains(): Set<string> | null {
+  const raw = process.env.ALLOWED_EMAIL_DOMAINS?.trim();
+  if (!raw) return null;
+  const domains = raw
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  return domains.length ? new Set(domains) : null;
+}
+
+export function emailDomainAllowed(email: string | undefined): boolean {
+  const allowed = getAllowedEmailDomains();
+  if (!allowed) return true;
+  const domain = email?.split('@')[1]?.trim().toLowerCase();
+  return Boolean(domain && allowed.has(domain));
+}

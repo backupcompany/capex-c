@@ -16,6 +16,7 @@ import {
   OAUTH_PKCE_COOKIE,
   OAUTH_RETURN_COOKIE,
 } from './auth.constants';
+import { emailDomainAllowed } from '../shared/prod-env.util';
 import { JwtTokenService } from './jwt-token.service';
 import { SessionService } from './session.service';
 import { AuthUserResolver } from './auth-user.resolver';
@@ -144,6 +145,13 @@ export class AuthService {
 
     const lockId = this.lockout.buildIdentifier(claims.email ?? claims.sub, meta?.ip);
     await this.lockout.assertNotLocked(lockId);
+
+    if (!emailDomainAllowed(claims.email)) {
+      await this.lockout.recordFailure(lockId);
+      throw new UnauthorizedException(
+        'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam Hospitals (@siloamhospitals.com).',
+      );
+    }
 
     let appUser: ResolvedAppUser;
     try {
