@@ -1,0 +1,23 @@
+# Local Redis for capexbe perf-cache (shared BE cache layer).
+# Usage:
+#   docker compose -f deploy/docker-compose.redis.yml up -d
+#   # capexbe/.env → REDIS_URL=redis://127.0.0.1:6379
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: capex-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - capex-redis-data:/data
+    command: redis-server --save 60 1000 --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  capex-redis-data:
