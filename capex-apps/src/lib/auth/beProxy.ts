@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from './authBff';
 import { CSRF_COOKIE, CSRF_HEADER } from './authConstants';
 import { isAllowedBePath } from './bePathAllowlist';
+import { defaultBackendBase, resolveBackendBaseForPath } from './serviceRoutes';
 import {
   applyBackendSetCookies,
   applySetCookiesToResponse,
@@ -11,9 +12,7 @@ import {
 } from './authCookies.server';
 
 function backendBase(): string {
-  return (process.env.NEXT_PUBLIC_CAPEXBE_URL || process.env.CAPEXBE_URL || '')
-    .replace(/\/$/, '')
-    .trim();
+  return defaultBackendBase();
 }
 
 function decodeAccessExp(access: string): number | null {
@@ -79,7 +78,7 @@ async function forwardBePost(
   csrfHeader: string | null,
   contentType?: string | null,
 ): Promise<Response> {
-  const base = backendBase();
+  const base = resolveBackendBaseForPath(path);
   const cookieStore = await cookies();
   const cookieHeader = authCookieHeaderFromStore(cookieStore);
 
@@ -97,8 +96,9 @@ async function forwardBePost(
   const csrf = csrfHeader ?? cookieStore.get(CSRF_COOKIE)?.value;
   if (csrf) headers[CSRF_HEADER] = csrf;
 
+  const bePath = path.startsWith('/') ? path : `/${path}`;
   try {
-    return await fetch(`${base}${path.startsWith('/') ? path : `/${path}`}`, {
+    return await fetch(`${base}${bePath}`, {
       method: 'POST',
       headers,
       body,

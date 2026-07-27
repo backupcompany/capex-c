@@ -1,0 +1,12 @@
+{
+  "extends": "../../capexbe/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@capexbe/*": ["../../capexbe/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -4,10 +4,12 @@
 
 BE_DIR   := capexbe
 FE_DIR   := capex-apps
+NOTIF_DIR := services/capex-notifications
 BE_PORT  := 3001
 FE_PORT  := 3000
+NOTIF_PORT := 3002
 
-.PHONY: help setup install env ensure-install run run-tunnel run-tunnel-demo run-public run-be run-fe stop check check-env logs public-url tunnel-help tunnel-cf redis-up redis-down redis-status
+.PHONY: help setup install env ensure-install run run-tunnel run-tunnel-demo run-public run-be run-fe run-notifications stop check check-env logs public-url tunnel-help tunnel-cf redis-up redis-down redis-status
 
 help:
 	@echo "CAPEX dev commands:"
@@ -24,6 +26,7 @@ help:
 	@echo "  make tunnel-cf    Cloudflare quick tunnel (if Cursor tunnel fails)"
 	@echo "  make run-be     Start backend only"
 	@echo "  make run-fe     Start frontend only"
+	@echo "  make run-notifications  Leaf service (:$(NOTIF_PORT)) — Phase 1 microservice"
 	@echo "  make redis-up   Start local Redis (:6379) for BE perf-cache"
 	@echo "  make redis-down Stop local Redis container"
 	@echo "  make stop       Kill processes on ports $(FE_PORT) and $(BE_PORT)"
@@ -115,10 +118,16 @@ run-be:
 run-fe:
 	@cd $(FE_DIR) && npm run dev
 
+run-notifications:
+	@test -f $(NOTIF_DIR)/.env || (echo "Copy $(NOTIF_DIR)/.env.example → .env (same secrets as capexbe)" && exit 1)
+	@test -d $(BE_DIR)/node_modules/@nestjs || (echo "Run: cd $(BE_DIR) && npm install" && exit 1)
+	@cd $(NOTIF_DIR) && npm run start:dev
+
 stop:
 	@-lsof -ti:$(FE_PORT) 2>/dev/null | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:$(BE_PORT) 2>/dev/null | xargs kill -9 2>/dev/null || true
-	@echo "Stopped (if anything was running on :$(FE_PORT) / :$(BE_PORT))."
+	@-lsof -ti:$(NOTIF_PORT) 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@echo "Stopped (if anything was running on :$(FE_PORT) / :$(BE_PORT) / :$(NOTIF_PORT))."
 
 tunnel-help:
 	@chmod +x scripts/cursor-tunnel-help.sh

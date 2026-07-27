@@ -1,0 +1,37 @@
+# Optional microservice stack — leaf services alongside monolith
+# Usage: copy snippets into docker-compose.yml when a service is extracted.
+# Until env overrides are set, BFF routes 100% to capex-api (no behavior change).
+
+services:
+  capex-api:
+    image: ghcr.io/YOUR_ORG/capex-api:latest
+    container_name: capex-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:3001"
+
+  capex-web:
+    image: ghcr.io/YOUR_ORG/capex-web:latest
+    container_name: capex-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:3000"
+    environment:
+      NEXT_PUBLIC_CAPEXBE_URL: http://capex-api:3001
+      # Phase 1 — uncomment when notifications service is live:
+      # CAPEX_SERVICE_NOTIFICATIONS_URL: http://capex-notifications:3002
+
+  # Phase 1 — notifications microservice (same DB, slim NestJS app)
+  # capex-notifications:
+  #   build: ../services/capex-notifications
+  #   container_name: capex-notifications
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:3002:3002"
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 3002
+  #     SUPABASE_URL: ${SUPABASE_URL}
+  #     SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+  #     SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+  #     JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}

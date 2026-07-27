@@ -11,6 +11,7 @@
     "lint": "eslint",
     "verify:secure": "node scripts/verify-secure-production-build.mjs",
     "verify:middleware": "node scripts/verify-middleware-security.mjs",
+    "verify:service-routes": "node scripts/verify-service-routes.mjs",
     "build:secure": "npm run build && npm run verify:secure && npm run verify:middleware"
   },
   "dependencies": {
