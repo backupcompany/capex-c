@@ -27,6 +27,8 @@ export class MyTasksService {
   /** Align with FE TanStack staleTime — avoids cold reload on every poll. */
   private static readonly CACHE_TTL_MS = 5 * 60 * 1000;
   private static readonly OPEN_COUNT_TTL_MS = 5 * 60 * 1000;
+  /** ponytail: cap notification payload; scale via cursor if users exceed this regularly. */
+  private static readonly NOTIFY_PAGE_SIZE = 100;
 
   private snapshotKey(userId: number, periodName?: string): string {
     return `my-tasks:v4:${userId}::${(periodName || '').trim().toLowerCase()}`;
@@ -134,7 +136,7 @@ export class MyTasksService {
         taskViewMode: 'my_tasks_only',
         showCompleted: false,
         page: 1,
-        pageSize: 200,
+        pageSize: MyTasksService.NOTIFY_PAGE_SIZE,
       });
       return {
         openCount: page.totalCount,
@@ -159,7 +161,7 @@ export class MyTasksService {
           taskViewMode: 'my_tasks_only',
           showCompleted: false,
           page: 1,
-          pageSize: 200,
+          pageSize: MyTasksService.NOTIFY_PAGE_SIZE,
           sortBy: 'targetDate_asc',
         }).tasks,
       };

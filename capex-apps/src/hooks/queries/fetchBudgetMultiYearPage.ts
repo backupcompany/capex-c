@@ -118,7 +118,8 @@ async function fetchPageBundleFromNetwork(
 }
 
 /**
- * Muat multi-year + kategori — seed cache dulu (<50ms), network hanya bila seed belum lengkap.
+ * Muat multi-year + rollup agregat untuk tabel utama.
+ * Bootstrap seed hanya placeholder paint; network wajib saat BE tersedia.
  */
 export async function fetchBudgetMultiYearPageBundle(
   queryClient?: QueryClient,
@@ -126,7 +127,7 @@ export async function fetchBudgetMultiYearPageBundle(
   const userId = await resolveBootstrapUserId(queryClient);
   const seed = buildBudgetMultiYearPageSeedFromCache(queryClient, userId);
 
-  if (seed.multiYears.length && seed.categories.length) {
+  if (!isCapexBeConfigured()) {
     return seed;
   }
 

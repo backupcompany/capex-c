@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthContextService } from '../auth/auth-context.service';
 import { AuthZService } from '../auth/auth-z.service';
-import { fetchAllRecords, toCamelCase } from '../project-list/supabase-helpers';
+import { fetchAllRecords, fetchRecordsInBatches, toCamelCase } from '../project-list/supabase-helpers';
 import {
   invalidateBudgetHuPeriodSharedCaches,
   pruneProcessCachesForBudgetPeriod,
@@ -15,7 +15,7 @@ import {
 } from '../shared/perf-cache';
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import {
-  buildMultiYearsShellFromRows,
+  buildMultiYearsFromRows,
   loadPeriodCategoryBudgetsForMultiYear,
 } from './budget-multi-year.util';
 
@@ -98,15 +98,29 @@ export class BudgetMultiYearService {
     await perfCacheDeleteByPrefix(`app:table:budget-multi-year:period-budgets:${userId}:`);
   }
 
-  /** Shell: multi-year + kategori aktif saja — detail periode via period-budgets on expand. */
+  /** Table rollup on page open — per-period category breakdown stays on row expand. */
   private async loadPageBundleFromDb(client: SupabaseClient) {
-    const [multiYearRows, categories] = await Promise.all([
+    const [multiYearRows, categories, periodRows] = await Promise.all([
       fetchAllRecords(client, 'budget_multi_years', MULTI_YEAR_SHELL_COLUMNS),
       getActiveBudgetCategories(client),
+      fetchAllRecords(client, 'budget_periods', 'period_name,multi_year_name'),
     ]);
 
+    const periodNames = (periodRows ?? [])
+      .map((p) => String((p as { period_name?: string }).period_name ?? ''))
+      .filter(Boolean);
+    const categoryBudgets = periodNames.length
+      ? await fetchRecordsInBatches(
+          client,
+          'budget_period_category_budgets',
+          'period_name',
+          periodNames,
+          'period_name, budget_carry_forward, budget_allocated, approved_budget, consumed_budget',
+        )
+      : [];
+
     return {
-      multiYears: buildMultiYearsShellFromRows(multiYearRows),
+      multiYears: buildMultiYearsFromRows(multiYearRows, periodRows ?? [], categoryBudgets),
       categories,
     };
   }

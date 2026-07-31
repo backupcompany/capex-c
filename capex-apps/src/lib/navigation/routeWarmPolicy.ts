@@ -40,6 +40,8 @@ import {
   prefetchFsRealizationPage,
 } from '@/hooks/queries/fetchFsRealizationPageData';
 import { scheduleRouteIntentPrefetch, scheduleRouteNetworkPrefetch } from '@/lib/prefetchGate';
+import { routeNeedsPeriodStructure } from '@/components/app-shell/appShellPagesWithFilters';
+import * as budgetService from '@/services/budgetService';
 
 export type RouteWarmContext = {
   queryClient: QueryClient;
@@ -199,6 +201,12 @@ export function prefetchRouteOnIntent(ctx: RouteIntentPrefetchContext): void {
   } = ctx;
 
   prefetchScreenChunk(routePage);
+
+  if (routeNeedsPeriodStructure(routePage) && periodName.trim()) {
+    scheduleRouteIntentPrefetch(`period-structure:${periodName}`, () => {
+      void budgetService.getBudgetPeriodStructure(periodName);
+    });
+  }
 
   if (routePage === Page.BudgetPeriod && periodName.trim()) {
     prefetchBudgetSiloamPeriod(queryClient, periodName, uid);

@@ -20,6 +20,8 @@ import type { MyTaskViewMode } from '@/screens/MyTask/listUtils';
 
 /** Shared stale window for my-tasks query, prefetch, and notification polling. */
 export const MY_TASKS_STALE_MS = 5 * 60 * 1000;
+/** Cap open-task poll payload — UUID ids are fine at this scale; raise only with cursor API. */
+export const MY_TASKS_NOTIFY_PAGE_SIZE = 100;
 
 const FILTER_MASTER_TTL_MS = 30 * 60 * 1000;
 
@@ -155,7 +157,7 @@ export async function resolveMyTasksForNotifications(
 ): Promise<UserTask[]> {
   const defaultQuery: MyTasksQueryInput = {
     page: 1,
-    pageSize: 200,
+    pageSize: MY_TASKS_NOTIFY_PAGE_SIZE,
     taskViewMode: 'my_tasks_only',
     showCompleted: false,
     sortBy: 'targetDate_asc',
@@ -206,7 +208,7 @@ export async function resolveMyTasksForUser(
 ): Promise<UserTask[]> {
   const defaultQuery: MyTasksQueryInput = {
     page: 1,
-    pageSize: 200,
+    pageSize: MY_TASKS_NOTIFY_PAGE_SIZE,
     taskViewMode: 'my_tasks_only',
     showCompleted: false,
     sortBy: 'targetDate_asc',

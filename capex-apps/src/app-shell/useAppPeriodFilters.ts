@@ -22,6 +22,7 @@ import {
   prefetchBudgetHuPage,
   prefetchBudgetHuUnitsIdle,
 } from '@/hooks/queries/warmBudgetHuCache';
+import { routeNeedsPeriodStructure } from '@/components/app-shell/appShellPagesWithFilters';
 
 const initialPeriodShell = readInitialPeriodShellState();
 
@@ -118,6 +119,7 @@ export function useAppPeriodFilters({
       }
 
       const uid = currentUser.id;
+      const needsStructure = routeNeedsPeriodStructure(routePage);
       const cachedFull = resolveFullBudgetPeriodForDisplay(
         selectedPeriodName,
         uid,
@@ -127,7 +129,14 @@ export function useAppPeriodFilters({
 
       if (hasCachedFull) {
         setCurrentBudgetPeriod(cachedFull);
-      } else {
+      }
+
+      if (!needsStructure) {
+        setIsLoadingBudgetPeriod(false);
+        return;
+      }
+
+      if (!hasCachedFull) {
         setIsLoadingBudgetPeriod(true);
       }
 
@@ -154,7 +163,7 @@ export function useAppPeriodFilters({
       }
     };
     void fetchPeriodData();
-  }, [authProbeComplete, selectedPeriodName, currentUser?.id, queryClient]);
+  }, [authProbeComplete, selectedPeriodName, currentUser?.id, queryClient, routePage]);
 
   useEffect(() => {
     if (!selectedPeriodName && allPeriods.length === 0) return;

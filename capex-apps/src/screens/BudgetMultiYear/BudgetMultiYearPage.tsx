@@ -396,9 +396,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   const canEdit = permissions.canOperateOnPage(Page.BudgetMultiYear, 'edit');
   const canCreate = permissions.canOperateOnPage(Page.BudgetMultiYear, 'create');
 
-  const [editedData, setEditedData] = useState<BudgetMultiYear[]>(() =>
-    bootstrapSeed?.multiYears?.length ? cloneDeep(bootstrapSeed.multiYears) : [],
-  );
+  const [editedData, setEditedData] = useState<BudgetMultiYear[]>([]);
   const [editedPeriods, setEditedPeriods] = useState<BudgetPeriod[]>(() =>
     allPeriods.length ? cloneDeep(allPeriods) : [],
   );
@@ -416,9 +414,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const [loadingPeriodBudgetsFor, setLoadingPeriodBudgetsFor] = useState<string | null>(null);
 
-  const serverMultiYearsRef = useRef<BudgetMultiYear[]>(
-    bootstrapSeed?.multiYears?.length ? cloneDeep(bootstrapSeed.multiYears) : [],
-  );
+  const serverMultiYearsRef = useRef<BudgetMultiYear[]>([]);
   const serverPeriodsRef = useRef<BudgetPeriod[]>(allPeriods.length ? cloneDeep(allPeriods) : []);
 
   const updateIsDirty = useCallback(
@@ -811,8 +807,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
     setIsCreatePeriodModalOpen(true);
   }, []);
 
-  const showShell =
-    pageQuery.isPending && !pageQuery.data && editedData.length === 0 && !hasInstantSeed;
+  const showShell = canView && !pageQuery.isFetched && !pageQuery.isError;
   const showLoadError = pageQuery.isError && editedData.length === 0;
 
   const existingPeriodsForModal = useMemo(

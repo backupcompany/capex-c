@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { AdhocTaskStatus, Page, TaskCurrentStatus, type User, type UserTask } from '@/types';
 import * as taskService from '@/services/taskService';
-import { MY_TASKS_STALE_MS, resolveMyTasksForNotifications, buildMyTasksQueryKeySuffix } from '@/hooks/queries/fetchMyTasksPage';
+import { MY_TASKS_STALE_MS, MY_TASKS_NOTIFY_PAGE_SIZE, resolveMyTasksForNotifications, buildMyTasksQueryKeySuffix } from '@/hooks/queries/fetchMyTasksPage';
+import { scheduleIdlePrefetch } from '@/lib/scheduleIdlePrefetch';
 import { isCapexBeConfigured } from '@/services/myTasksApi';
 import { queryKeys } from '@/lib/query-keys';
 import { filterMyTasksForNotifications } from '@/screens/MyTask/listUtils';
@@ -13,6 +14,8 @@ import type { UserRole } from '@/types';
 
 const MAX_PERSISTED_OPEN_TASK_IDS = 3000;
 const MAX_PERSISTED_REMINDER_KEYS = 6000;
+/** Defer first poll so login + active screen fetch finish first. */
+const TASK_NOTIFY_FIRST_POLL_MS = 45_000;
 
 function trimSetToNewest(set: Set<string>, maxSize: number): Set<string> {
   if (set.size <= maxSize) return set;
@@ -207,7 +210,7 @@ export function useTaskNotifications({
               period,
               buildMyTasksQueryKeySuffix({
                 page: 1,
-                pageSize: 200,
+                pageSize: MY_TASKS_NOTIFY_PAGE_SIZE,
                 taskViewMode: 'my_tasks_only',
                 showCompleted: false,
                 sortBy: 'targetDate_asc',
@@ -365,12 +368,14 @@ export function useTaskNotifications({
       }
     };
 
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      checkTaskNotifications();
-    }
+    scheduleIdlePrefetch(() => {
+      if (!cancelled) void checkTaskNotifications();
+    }, TASK_NOTIFY_FIRST_POLL_MS);
     const intervalId = window.setInterval(checkTaskNotifications, MY_TASKS_STALE_MS);
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void checkTaskNotifications();
+      if (document.visibilityState !== 'visible') return;
+      if (!hasTaskBaselineRef.current) return;
+      void checkTaskNotifications();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
