@@ -6,15 +6,18 @@
   "scripts": {
     "postinstall": "node scripts/link-nest-deps.mjs",
     "build": "nest build && node scripts/postbuild.mjs",
+    "build:full": "npm install --ignore-scripts && nest build && node scripts/postbuild.mjs && node scripts/link-nest-deps.mjs",
     "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:prod": "node -r @swc-node/register dist/src/main.js",
+    "start:dev": "node scripts/dev-watch.mjs",
+    "start:prod": "node -r @swc-node/register -r tsconfig-paths/register dist/src/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/core": "^11.0.1",
-    "@nestjs/platform-express": "^11.0.1",
+    "@capex/auth-core": "file:../../packages/capex-auth-core",
+    "@capex/notifications-core": "file:../../packages/capex-notifications-core",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
     "@nestjs/throttler": "^6.5.0",
     "@supabase/supabase-js": "^2.103.3",
     "compression": "^1.8.1",

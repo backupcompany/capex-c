@@ -7,14 +7,21 @@ import {
   authCookieHeaderFromStore,
   collectSetCookies,
 } from './authCookies.server';
+import { REQUEST_ID_HEADER, resolveRequestId } from '../http/requestId';
 
 export const ACCESS_COOKIE = 'capex_access';
 export const REFRESH_COOKIE = 'capex_refresh';
 
-function backendBase(): string {
+function defaultBackendBase(): string {
   return (process.env.NEXT_PUBLIC_CAPEXBE_URL || process.env.CAPEXBE_URL || '')
     .replace(/\/$/, '')
     .trim();
+}
+
+/** Phase 10 — optional auth leaf override (zero prod impact when unset). */
+function authBackendBase(): string {
+  const override = process.env.CAPEX_SERVICE_AUTH_URL?.trim().replace(/\/$/, '');
+  return override || defaultBackendBase();
 }
 
 export async function proxyAuthToBackend(
@@ -22,7 +29,7 @@ export async function proxyAuthToBackend(
   init: RequestInit,
   incomingReq?: Request,
 ): Promise<NextResponse> {
-  const base = backendBase();
+  const base = authBackendBase();
   if (!base) {
     return NextResponse.json({ message: 'Backend not configured' }, { status: 503 });
   }
@@ -44,6 +51,7 @@ export async function proxyAuthToBackend(
   if (csrfFromStore && !headers.has(CSRF_HEADER)) {
     headers.set(CSRF_HEADER, csrfFromStore);
   }
+  headers.set(REQUEST_ID_HEADER, resolveRequestId(incomingReq?.headers.get('x-request-id')));
 
   let res: Response;
   try {
@@ -95,7 +103,7 @@ export async function proxyAuthRedirectToBackend(
   path: string,
   incomingReq?: Request,
 ): Promise<NextResponse> {
-  const base = backendBase();
+  const base = authBackendBase();
   if (!base) {
     return NextResponse.json({ message: 'Backend not configured' }, { status: 503 });
   }

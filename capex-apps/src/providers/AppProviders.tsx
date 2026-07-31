@@ -13,11 +13,11 @@ function createQueryClient() {
     defaultOptions: {
       queries: {
         staleTime: 120_000,
-        gcTime: 1000 * 60 * 60 * 24,
+        gcTime: 1000 * 60 * 60,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
-        /** Cache-first navigation; invalidasi Realtime / mutasi memicu refetch bila perlu. */
-        refetchOnMount: false,
+        /** Revalidate on mount so UI converges to DB truth; disk/TanStack cache stays as placeholder. */
+        refetchOnMount: true,
         placeholderData: keepPreviousData,
         retry: (failureCount, error) => {
           if (failureCount >= 1) return false;
@@ -45,7 +45,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return createSyncStoragePersister({
       storage: window.localStorage,
       key: TANSTACK_PERSIST_STORAGE_KEY,
-      throttleTime: 800,
+      throttleTime: 2_000,
     });
   }, []);
 

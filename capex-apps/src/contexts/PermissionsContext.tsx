@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { fetchConfigurationSlicesFromBackend } from '../services/configurationApi';
+import { fetchFreshConfigurationSlices, type ConfigurationDataPack } from '../services/configurationApi';
+import { readConfigurationPackCacheAnyAge } from '../lib/configurationDiskCache';
 import { isCapexBeConfigured } from '../lib/capexBeClient';
 import { useBackendSession } from '../lib/auth/authConstants';
 import { getAccessTokenForBackend } from '../lib/authSession';
@@ -22,6 +23,25 @@ const defaultClassification: ScopeClassification = {
 
 const PermissionsContext = createContext<ScopeClassification>(defaultClassification);
 
+function classificationFromPack(
+    pack: Partial<ConfigurationDataPack> | null | undefined,
+): ScopeClassification | null {
+    const archetypes = Array.isArray(pack?.archetypes) ? pack.archetypes : [];
+    const hus = Array.isArray(pack?.hospitalUnits) ? pack.hospitalUnits : [];
+    if (!archetypes.length && !hus.length) return null;
+    return {
+        archetypeNames: new Set(archetypes.map((a) => a.name)),
+        huNames: new Set(hus.map((h) => h.name)),
+        archetypeIdToName: new Map(archetypes.map((a) => [String(a.id), a.name])),
+        huIdToName: new Map(hus.map((h) => [String(h.id), h.name])),
+    };
+}
+
+function readInitialClassification(userId: number): ScopeClassification {
+    if (typeof window === 'undefined') return defaultClassification;
+    return classificationFromPack(readConfigurationPackCacheAnyAge(userId)) ?? defaultClassification;
+}
+
 async function loadScopeMasterConfig(userId: number): Promise<{
     archetypes: ArchetypeConfig[];
     hus: HospitalUnitConfig[];
@@ -33,7 +53,7 @@ async function loadScopeMasterConfig(userId: number): Promise<{
     const accessToken = useBackendSession()
         ? null
         : await getAccessTokenForBackend();
-    const pack = await fetchConfigurationSlicesFromBackend(accessToken, userId, [
+    const pack = await fetchFreshConfigurationSlices(accessToken, userId, [
         'archetypes',
         'hospitalUnits',
     ]);
@@ -45,10 +65,12 @@ async function loadScopeMasterConfig(userId: number): Promise<{
 }
 
 export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [classification, setClassification] = useState<ScopeClassification>(defaultClassification);
     const authStatus = useAuthStore((s) => s.status);
     const sessionUserId = useAuthStore((s) =>
         s.status === 'authenticated' && s.user?.id ? s.user.id : null,
+    );
+    const [classification, setClassification] = useState<ScopeClassification>(() =>
+        sessionUserId != null ? readInitialClassification(sessionUserId) : defaultClassification,
     );
 
     useEffect(() => {
@@ -57,11 +79,17 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             return;
         }
 
+        const diskSeed = readInitialClassification(sessionUserId);
+        setClassification((prev) => {
+            if (prev.archetypeIdToName.size || prev.huIdToName.size) return prev;
+            return diskSeed;
+        });
+
         let cancelled = false;
         void (async () => {
             try {
                 const { archetypes, hus } = await loadScopeMasterConfig(sessionUserId);
-                if (cancelled || (!archetypes.length && !hus.length)) return;
+                if (cancelled) return;
                 setClassification({
                     archetypeNames: new Set(archetypes.map(a => a.name)),
                     huNames: new Set(hus.map(h => h.name)),

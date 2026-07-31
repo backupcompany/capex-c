@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { AuthCoreModule } from '../auth/auth-core.module';
 import { DuplicateDetectionController } from './duplicate-detection.controller';
 import { DuplicateDetectionService } from './duplicate-detection.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthCoreModule],
   controllers: [DuplicateDetectionController],
   providers: [DuplicateDetectionService],
   exports: [DuplicateDetectionService],

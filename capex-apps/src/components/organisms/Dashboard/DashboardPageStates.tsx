@@ -1,9 +1,33 @@
 import React, { memo } from 'react';
 
-export const DashboardSelectPeriod = memo(function DashboardSelectPeriod() {
+export const DashboardEmptyPeriod = memo(function DashboardEmptyPeriod() {
   return (
-    <div className="text-center p-8 bg-siloam-surface rounded-xl shadow-soft">
-      Please select a budget period to view the dashboard.
+    <div
+      className="flex flex-col items-center justify-center min-h-[40vh] p-8 bg-siloam-surface rounded-xl shadow-soft text-center"
+      role="status"
+    >
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-siloam-blue/10">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-8 w-8 text-siloam-blue"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+      </div>
+      <p className="text-base font-semibold text-siloam-text-primary">Belum ada periode budget</p>
+      <p className="mt-2 max-w-md text-sm text-siloam-text-secondary">
+        Data dashboard akan tampil otomatis setelah periode budget tersedia. Hubungi admin jika perlu
+        setup periode baru.
+      </p>
     </div>
   );
 });

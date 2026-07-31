@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.leaf.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@capex/auth-core": [
+        "../../packages/capex-auth-core/src/index.ts"
+      ],
+      "@capexbe/*": [
+        "../../capexbe/src/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

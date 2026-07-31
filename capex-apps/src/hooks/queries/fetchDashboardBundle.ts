@@ -1,6 +1,6 @@
 import type { BudgetPeriod } from '@/types';
 import { isBackendConfigured } from '@/lib/backendApiClient';
-import { writeCachedDashboardBundle } from '@/lib/dashboard/snapshotCache';
+import { readCachedDashboardBundle, writeCachedDashboardBundle } from '@/lib/dashboard/snapshotCache';
 import {
   fetchDashboardSnapshotFromBackend,
   type DashboardSnapshot,
@@ -29,6 +29,8 @@ export async function fetchDashboardBundle(
     return emptyBundle();
   }
 
+  const cached = readCachedDashboardBundle(periodName, userId);
+
   if (isBackendConfigured()) {
     const fromBe = await fetchDashboardSnapshotFromBackend(periodName, userId);
     if (fromBe) {
@@ -41,7 +43,8 @@ export async function fetchDashboardBundle(
       writeCachedDashboardBundle(periodName, userId, bundle);
       return bundle;
     }
+    throw new Error('Dashboard snapshot unavailable');
   }
 
-  return emptyBundle();
+  return cached ?? emptyBundle();
 }

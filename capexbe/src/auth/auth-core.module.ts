@@ -33,6 +33,12 @@ import { AuthZService } from './auth-z.service';
     AuthUserResolver,
     JwtTokenService,
     SessionService,
+    AuthAuditService,
+    AuthRateLimiterService,
+    AuthAccountLockoutService,
+    CsrfService,
+    SuspiciousLoginService,
+    SupabaseJwtService,
   ],
 })
 export class AuthCoreModule {}

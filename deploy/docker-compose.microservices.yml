@@ -1,0 +1,253 @@
+name: capex-microservices
+
+x-supabase-env: &supabase-env
+  SUPABASE_URL: ${SUPABASE_URL:?set in deploy/.env.compose}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?}
+  SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:?}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
+
+x-leaf-env: &leaf-env
+  <<: *supabase-env
+  NODE_ENV: production
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+
+x-leaf-health: &leaf-health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: capex-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  capex-api:
+    build:
+      context: ../capexbe
+      dockerfile: Dockerfile
+    container_name: capex-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      <<: *supabase-env
+      NODE_ENV: production
+      PORT: 3001
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *leaf-health
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+
+  capex-notifications:
+    build: &leaf-build
+      context: ..
+      dockerfile: services/Dockerfile.leaf
+      args: { SERVICE: capex-notifications, PORT: 3002 }
+    container_name: capex-notifications
+    restart: unless-stopped
+    ports: ["127.0.0.1:3002:3002"]
+    environment: { <<: *leaf-env, PORT: 3002 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"] }
+
+  capex-audit:
+    build: { <<: *leaf-build, args: { SERVICE: capex-audit, PORT: 3003 } }
+    container_name: capex-audit
+    restart: unless-stopped
+    ports: ["127.0.0.1:3003:3003"]
+    environment: { <<: *leaf-env, PORT: 3003 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/health"] }
+
+  capex-backup:
+    build: { <<: *leaf-build, args: { SERVICE: capex-backup, PORT: 3004 } }
+    container_name: capex-backup
+    restart: unless-stopped
+    ports: ["127.0.0.1:3004:3004"]
+    environment: { <<: *leaf-env, PORT: 3004 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3004/health"] }
+
+  capex-config:
+    build: { <<: *leaf-build, args: { SERVICE: capex-config, PORT: 3005 } }
+    container_name: capex-config
+    restart: unless-stopped
+    ports: ["127.0.0.1:3005:3005"]
+    environment: { <<: *leaf-env, PORT: 3005 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3005/health"] }
+
+  capex-mom-daily-summary:
+    build: { <<: *leaf-build, args: { SERVICE: capex-mom-daily-summary, PORT: 3006 } }
+    container_name: capex-mom-daily-summary
+    restart: unless-stopped
+    ports: ["127.0.0.1:3006:3006"]
+    environment: { <<: *leaf-env, PORT: 3006 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3006/health"] }
+
+  capex-asset-timeline:
+    build: { <<: *leaf-build, args: { SERVICE: capex-asset-timeline, PORT: 3007 } }
+    container_name: capex-asset-timeline
+    restart: unless-stopped
+    ports: ["127.0.0.1:3007:3007"]
+    environment: { <<: *leaf-env, PORT: 3007 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3007/health"] }
+
+  capex-duplicate-detection:
+    build: { <<: *leaf-build, args: { SERVICE: capex-duplicate-detection, PORT: 3008 } }
+    container_name: capex-duplicate-detection
+    restart: unless-stopped
+    ports: ["127.0.0.1:3008:3008"]
+    environment: { <<: *leaf-env, PORT: 3008 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3008/health"] }
+
+  capex-user-admin:
+    build: { <<: *leaf-build, args: { SERVICE: capex-user-admin, PORT: 3009 } }
+    container_name: capex-user-admin
+    restart: unless-stopped
+    ports: ["127.0.0.1:3009:3009"]
+    environment: { <<: *leaf-env, PORT: 3009 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3009/health"] }
+
+  capex-procurement:
+    build: { <<: *leaf-build, args: { SERVICE: capex-procurement, PORT: 3010 } }
+    container_name: capex-procurement
+    restart: unless-stopped
+    ports: ["127.0.0.1:3010:3010"]
+    environment: { <<: *leaf-env, PORT: 3010 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3010/health"] }
+
+  capex-fs:
+    build: { <<: *leaf-build, args: { SERVICE: capex-fs, PORT: 3011 } }
+    container_name: capex-fs
+    restart: unless-stopped
+    ports: ["127.0.0.1:3011:3011"]
+    environment: { <<: *leaf-env, PORT: 3011 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3011/health"] }
+
+  capex-monitoring:
+    build: { <<: *leaf-build, args: { SERVICE: capex-monitoring, PORT: 3012 } }
+    container_name: capex-monitoring
+    restart: unless-stopped
+    ports: ["127.0.0.1:3012:3012"]
+    environment: { <<: *leaf-env, PORT: 3012 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3012/health"] }
+
+  capex-reporting:
+    build: { <<: *leaf-build, args: { SERVICE: capex-reporting, PORT: 3013 } }
+    container_name: capex-reporting
+    restart: unless-stopped
+    ports: ["127.0.0.1:3013:3013"]
+    environment: { <<: *leaf-env, PORT: 3013 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3013/health"] }
+
+  capex-executive-summary:
+    build: { <<: *leaf-build, args: { SERVICE: capex-executive-summary, PORT: 3014 } }
+    container_name: capex-executive-summary
+    restart: unless-stopped
+    ports: ["127.0.0.1:3014:3014"]
+    environment: { <<: *leaf-env, PORT: 3014 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3014/health"] }
+
+  capex-tasks:
+    build: { <<: *leaf-build, args: { SERVICE: capex-tasks, PORT: 3015 } }
+    container_name: capex-tasks
+    restart: unless-stopped
+    ports: ["127.0.0.1:3015:3015"]
+    environment: { <<: *leaf-env, PORT: 3015 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3015/health"] }
+
+  capex-core:
+    build: { <<: *leaf-build, args: { SERVICE: capex-core, PORT: 3016 } }
+    container_name: capex-core
+    restart: unless-stopped
+    ports: ["127.0.0.1:3016:3016"]
+    environment: { <<: *leaf-env, PORT: 3016 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3016/health"] }
+
+  capex-smart-migration:
+    build: { <<: *leaf-build, args: { SERVICE: capex-smart-migration, PORT: 3017 } }
+    container_name: capex-smart-migration
+    restart: unless-stopped
+    ports: ["127.0.0.1:3017:3017"]
+    environment: { <<: *leaf-env, PORT: 3017 }
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3017/health"] }
+
+  capex-auth:
+    build: { <<: *leaf-build, args: { SERVICE: capex-auth, PORT: 3018 } }
+    container_name: capex-auth
+    restart: unless-stopped
+    ports: ["127.0.0.1:3018:3018"]
+    environment:
+      <<: *leaf-env
+      PORT: 3018
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck: { <<: *leaf-health, test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3018/health"] }
+
+  capex-web:
+    build:
+      context: ../capex-apps
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CAPEXBE_URL: http://capex-api:3001
+        NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
+        NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK: "false"
+    container_name: capex-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
+      NEXT_PUBLIC_CAPEXBE_URL: http://capex-api:3001
+      NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
+      NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK: "false"
+      CAPEX_SERVICE_NOTIFICATIONS_URL: http://capex-notifications:3002
+      CAPEX_SERVICE_AUDIT_URL: http://capex-audit:3003
+      CAPEX_SERVICE_BACKUP_URL: http://capex-backup:3004
+      CAPEX_SERVICE_CONFIGURATION_URL: http://capex-config:3005
+      CAPEX_SERVICE_MOM_DAILY_SUMMARY_URL: http://capex-mom-daily-summary:3006
+      CAPEX_SERVICE_ASSET_TIMELINE_URL: http://capex-asset-timeline:3007
+      CAPEX_SERVICE_DUPLICATE_DETECTION_URL: http://capex-duplicate-detection:3008
+      CAPEX_SERVICE_USER_ADMIN_URL: http://capex-user-admin:3009
+      CAPEX_SERVICE_PROCUREMENT_URL: http://capex-procurement:3010
+      CAPEX_SERVICE_FS_URL: http://capex-fs:3011
+      CAPEX_SERVICE_MONITORING_URL: http://capex-monitoring:3012
+      CAPEX_SERVICE_REPORTING_URL: http://capex-reporting:3013
+      CAPEX_SERVICE_EXECUTIVE_SUMMARY_URL: http://capex-executive-summary:3014
+      CAPEX_SERVICE_TASKS_URL: http://capex-tasks:3015
+      CAPEX_SERVICE_CORE_URL: http://capex-core:3016
+      CAPEX_SERVICE_SMART_MIGRATION_URL: http://capex-smart-migration:3017
+      CAPEX_SERVICE_AUTH_URL: http://capex-auth:3018
+    depends_on:
+      - capex-api
+      - capex-notifications
+      - capex-audit
+      - capex-backup
+      - capex-config
+      - capex-mom-daily-summary
+      - capex-asset-timeline
+      - capex-duplicate-detection
+      - capex-user-admin
+      - capex-procurement
+      - capex-fs
+      - capex-monitoring
+      - capex-reporting
+      - capex-executive-summary
+      - capex-tasks
+      - capex-core
+      - capex-smart-migration
+      - capex-auth

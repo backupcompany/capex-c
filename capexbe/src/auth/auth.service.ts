@@ -16,7 +16,7 @@ import {
   OAUTH_PKCE_COOKIE,
   OAUTH_RETURN_COOKIE,
 } from './auth.constants';
-import { emailDomainAllowed } from '../shared/prod-env.util';
+import { emailDomainAllowed, DEV_LOCAL_ORIGIN } from '../shared/prod-env.util';
 import { JwtTokenService } from './jwt-token.service';
 import { SessionService } from './session.service';
 import { AuthUserResolver } from './auth-user.resolver';
@@ -573,7 +573,7 @@ export class AuthService {
       .split(',')
       .map((origin) => origin.trim().replace(/\/$/, ''))
       .filter(Boolean);
-    const fallbackOrigin = allowedOrigins[0] || 'http://localhost:3000';
+    const fallbackOrigin = allowedOrigins[0] || DEV_LOCAL_ORIGIN;
     const fallback = `${fallbackOrigin}/`;
 
     if (!clientRedirect?.trim()) return fallback;
@@ -598,7 +598,7 @@ export class AuthService {
       .split(',')[0]
       ?.trim()
       .replace(/\/$/, '');
-    return cors || 'http://localhost:3000';
+    return cors || DEV_LOCAL_ORIGIN;
   }
 
   private oauthCallbackUrl(): string {

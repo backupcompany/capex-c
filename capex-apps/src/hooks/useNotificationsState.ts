@@ -14,6 +14,9 @@ export function useNotificationsState(userId: number | null) {
     queryKey: userId != null ? queryKeys.notifications.list(userId) : ['notifications', 'idle'],
     queryFn: () => notificationService.getNotificationsForUser(userId!),
     enabled,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
   const markOne = useMutation({

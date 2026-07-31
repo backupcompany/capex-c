@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/** Post-build: symlink capexbe + fix require paths for dist/src/*.js */
-import { readdir, readFile, writeFile, symlink } from 'node:fs/promises';
+/** Post-build: symlink capexbe + auth-core + fix require paths for dist/src/*.js */
+import { readdir, readFile, writeFile, symlink, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,15 +21,23 @@ async function walk(dir) {
 
 for (const file of await walk(DIST_SRC)) {
   let code = await readFile(file, 'utf8');
-  const next = code.replaceAll('../../../capexbe/', '../capexbe/');
+  let next = code.replaceAll('../../../capexbe/', '../capexbe/');
+  next = next.replaceAll('../../../packages/capex-auth-core/', '../packages/capex-auth-core/');
+  next = next.replaceAll('../../../packages/capex-notifications-core/', '../packages/capex-notifications-core/');
   if (next !== code) await writeFile(file, next);
 }
 
-const linkPath = join(DIST, 'capexbe');
-try {
-  await symlink(join(ROOT, '../../capexbe'), linkPath);
-} catch (e) {
-  if (!(e && typeof e === 'object' && 'code' in e && e.code === 'EEXIST')) throw e;
+async function link(from, to) {
+  try {
+    await symlink(from, to);
+  } catch (e) {
+    if (!(e && typeof e === 'object' && 'code' in e && e.code === 'EEXIST')) throw e;
+  }
 }
 
-console.log('OK  postbuild: dist capexbe symlink + paths');
+await link(join(ROOT, '../../capexbe'), join(DIST, 'capexbe'));
+await mkdir(join(DIST, 'packages'), { recursive: true });
+await link(join(ROOT, '../../packages/capex-auth-core'), join(DIST, 'packages/capex-auth-core'));
+await link(join(ROOT, '../../packages/capex-notifications-core'), join(DIST, 'packages/capex-notifications-core'));
+
+console.log('OK  postbuild: dist symlinks (capexbe + auth-core + notifications-core) + paths');

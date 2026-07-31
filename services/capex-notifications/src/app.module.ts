@@ -2,19 +2,17 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
-import { NotificationsModule } from '@capexbe/notifications/notifications.module';
+import { NotificationsModule } from '@capex/notifications-core';
+import { leafPinoHttpOptions } from '@capexbe/shared/leaf-pino.config';
 import { JwtAuthGuard } from '@capexbe/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@capexbe/auth/guards/roles.guard';
 import { PermissionsGuard } from '@capexbe/auth/guards/permissions.guard';
+import { RolesGuard } from '@capexbe/auth/guards/roles.guard';
 import { AppController } from './app.controller';
 
 @Module({
   imports: [
     LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-        autoLogging: false,
-      },
+      pinoHttp: leafPinoHttpOptions(),
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 400 }],

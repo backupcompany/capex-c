@@ -7,3 +7,6 @@ export const CurrentAuth = createParamDecorator(
     return req.authContext;
   },
 );
+
+/** @alias CurrentAuth */
+export const CurrentUser = CurrentAuth;

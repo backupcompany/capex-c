@@ -2,7 +2,7 @@ import type { User } from '../../types';
 import { useBackendSession } from './authConstants';
 import { coordinatedRefreshSession } from './authRefreshCoordinator';
 import { authenticatedFetch } from './authenticatedFetch';
-import { clearClientCsrfCookie, getCsrfToken, withCsrfHeaders } from './csrfToken';
+import { clearClientCsrfCookie, withCsrfHeaders } from './csrfToken';
 import { hasSessionCookieHint, setSessionCookieHint } from './sessionCookieHint';
 import { clearTabSessionState } from './clearTabSessionState';
 import { updateSessionMeta, clearSessionMeta } from './sessionMetaStore';
@@ -16,31 +16,31 @@ export type AuthSessionMeta = {
   idleTimeoutMs: number;
 };
 
-export type AuthMeAssignment = {
+export type AuthSessionAssignment = {
   roleName: string;
   assignedScopes?: string[];
 };
 
-export type AuthMeResponse = {
+export type AuthSessionResponse = {
   authenticated: boolean;
   user?: {
     id: number;
     username: string;
     email: string;
     roles: string[];
-    assignments?: AuthMeAssignment[];
+    assignments?: AuthSessionAssignment[];
     idleTimeoutMs: number;
     session?: AuthSessionMeta;
   };
   session?: AuthSessionMeta;
 };
 
-let meInFlight: Promise<AuthMeResponse | null> | null = null;
+let sessionInFlight: Promise<AuthSessionResponse | null> | null = null;
 
 const PROBE_CACHE_MS = 4_000;
 let lastProbeAt = 0;
-let lastProbeResult: AuthMeResponse | null = null;
-let probeInFlight: Promise<AuthMeResponse | null> | null = null;
+let lastProbeResult: AuthSessionResponse | null = null;
+let probeInFlight: Promise<AuthSessionResponse | null> | null = null;
 
 function hasLocalSessionHint(): boolean {
   if (typeof window === 'undefined') return false;
@@ -76,16 +76,16 @@ export function invalidateAuthProbeCache(): void {
   lastProbeAt = 0;
   lastProbeResult = null;
   probeInFlight = null;
-  meInFlight = null;
+  sessionInFlight = null;
 }
 
 /**
  * Single deduped session probe for app startup.
- * Skips refresh when no local session hint (clean login page → one /me, no data).
+ * Skips refresh when no local session hint (clean login page → no session probe).
  */
 export async function probeBackendSession(options?: {
   force?: boolean;
-}): Promise<AuthMeResponse | null> {
+}): Promise<AuthSessionResponse | null> {
   if (!useBackendSession()) return { authenticated: false };
 
   const now = Date.now();
@@ -100,17 +100,17 @@ export async function probeBackendSession(options?: {
 
   probeInFlight = (async () => {
     const hadSessionHint = hasLocalSessionHint();
-    let me = await fetchAuthMe();
-    if (!me?.authenticated && hadSessionHint && hasSessionCookieHint()) {
+    let session = await fetchAuthSession();
+    if (!session?.authenticated && hadSessionHint && hasSessionCookieHint()) {
       const refreshOk = await refreshBackendSessionCoordinated();
-      if (refreshOk) me = await fetchAuthMe();
+      if (refreshOk) session = await fetchAuthSession();
       else {
         clearStaleClientSessionHints();
         void clearServerAuthCookies();
       }
     }
     lastProbeAt = Date.now();
-    lastProbeResult = me ?? { authenticated: false };
+    lastProbeResult = session ?? { authenticated: false };
     return lastProbeResult;
   })().finally(() => {
     probeInFlight = null;
@@ -119,7 +119,7 @@ export async function probeBackendSession(options?: {
   return probeInFlight;
 }
 
-/** True when startup should call /api/auth/me (session cookies or OAuth in progress). */
+/** True when startup should call /api/auth/session (session cookies or OAuth in progress). */
 export function shouldRunAuthSessionProbe(options: {
   hasSessionCookies?: boolean;
   oauthCallback?: boolean;
@@ -146,7 +146,7 @@ function errorFromAuthResponse(
     return 'Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.';
   }
   if (status === 503) {
-    return 'Backend tidak berjalan. Jalankan capexbe di port 3001 (npm run start:dev).';
+    return 'Auth service tidak berjalan. Jalankan: make run (atau make run-auth di port 3018).';
   }
   if (status === 404) {
     return 'Endpoint auth tidak ditemukan. Pastikan capexbe berjalan di port 3001.';
@@ -165,7 +165,7 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   if (!headers.has('Content-Type') && init?.body) {
     headers.set('Content-Type', 'application/json');
   }
-  const noRetryPaths = new Set(['/login', '/exchange', '/refresh', '/me', '/forgot-password']);
+  const noRetryPaths = new Set(['/login', '/exchange', '/refresh', '/session', '/forgot-password']);
   const mergedInit = withCsrfHeaders({ ...init, headers });
   return authenticatedFetch(url, {
     ...mergedInit,
@@ -174,13 +174,13 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-function meUserToAppUser(
-  data: NonNullable<AuthMeResponse['user']>,
+function sessionUserToAppUser(
+  data: NonNullable<AuthSessionResponse['user']>,
 ): User {
   return mergeAuthIdentityUser(
     { id: data.id, username: data.username, email: data.email },
     {
-      meAssignments: data.assignments,
+      sessionAssignments: data.assignments,
       roleSlugs: data.roles,
     },
   );
@@ -205,7 +205,9 @@ async function loginWithServerPassword(
         error: errorFromAuthResponse(res.status, body),
       };
     }
-    const data = (await res.json()) as AuthMeResponse['user'] & { session?: AuthSessionMeta };
+    const data = (await res.json()) as NonNullable<AuthSessionResponse['user']> & {
+      session?: AuthSessionMeta;
+    };
     if (!data?.id) {
       return { user: null, roles: [], error: 'Login failed' };
     }
@@ -213,7 +215,7 @@ async function loginWithServerPassword(
     clearTabSessionState();
     setSessionCookieHint(true);
     return {
-      user: meUserToAppUser(data),
+      user: sessionUserToAppUser(data),
       roles: Array.isArray(data.roles) ? data.roles : [],
       error: null,
     };
@@ -222,7 +224,7 @@ async function loginWithServerPassword(
   }
 }
 
-/** Login always goes through backend session endpoint. */
+/** Email/password sign-in via POST /api/auth/login (sets httpOnly session cookies). */
 export async function loginWithBackend(
   email: string,
   password: string,
@@ -284,28 +286,28 @@ export async function changePasswordBackend(
   }
 }
 
-export async function fetchAuthMe(): Promise<AuthMeResponse | null> {
+export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
   if (!useBackendSession()) return null;
-  if (meInFlight) return meInFlight;
-  meInFlight = (async () => {
+  if (sessionInFlight) return sessionInFlight;
+  sessionInFlight = (async () => {
     try {
-      const res = await authFetch('/me', { method: 'GET' });
+      const res = await authFetch('/session', { method: 'GET' });
       if (res.status === 503) {
-        // BE mid-restart (common during dev HMR) — keep session, do not treat as logged out.
+        // Auth leaf mid-restart — keep session, do not treat as logged out.
         return null;
       }
       if (!res.ok) return { authenticated: false };
-      const data = (await res.json()) as AuthMeResponse;
+      const data = (await res.json()) as AuthSessionResponse;
       const session = data.user?.session ?? data.session;
       if (session) updateSessionMeta(session);
       return data;
     } catch {
       return null;
     } finally {
-      meInFlight = null;
+      sessionInFlight = null;
     }
   })();
-  return meInFlight;
+  return sessionInFlight;
 }
 
 export async function logoutBackend(options?: {
@@ -330,7 +332,6 @@ export async function refreshBackendSession(): Promise<boolean> {
   if (!useBackendSession()) return false;
   // Refresh token is httpOnly — rely on server cookie hint, not lingering CSRF alone.
   if (!hasSessionCookieHint()) return false;
-  if (!getCsrfToken()) return false;
   try {
     const res = await authFetch('/refresh', { method: 'POST' });
     if (res.ok) {

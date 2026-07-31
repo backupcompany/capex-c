@@ -60,6 +60,7 @@ import {
   useBudgetHuProjectsPage,
   useBudgetHuProjectsPageSession,
 } from './BudgetHU/useBudgetHuProjectsPage';
+import { useBudgetHuTableDisplay } from './BudgetHU/useBudgetHuTableDisplay';
 import { BudgetHUPageSkeleton } from './BudgetHU/BudgetHUPageSkeleton';
 import { BudgetHuStrategicProjectsSection } from './BudgetHU/BudgetHuStrategicProjectsSection';
 import {
@@ -85,11 +86,13 @@ import {
   invalidateBudgetHuDiskCache,
   writeBudgetPeriodCache,
 } from '../lib/budgetHuDiskCache';
+import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../lib/table/pageSizeOptions';
+import { PageContentSkeleton } from '../components/app-shell/PageContentSkeleton';
 
 const STALE_MS = 5 * 60 * 1000;
 const GC_MS = 1000 * 60 * 30;
 const SEARCH_DEBOUNCE_MS = 200;
-const INITIAL_PAGE_SIZE = 20;
+const INITIAL_PAGE_SIZE = DEFAULT_TABLE_PAGE_SIZE;
 
 const AssetEditorModal = lazy(() =>
   import('../components/organisms/AssetEditorModal/AssetEditorModal').then((m) => ({
@@ -314,6 +317,19 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   const paginatedProjects = projectsPage.displayProjects;
   const filteredCount = projectsPage.total;
   const totalPages = projectsPage.totalPages;
+
+  const deferTableRows =
+    searchTerm.trim() !== debouncedSearch.trim() ||
+    (projectsPage.isFetching && paginatedProjects.length > 0);
+  const isTablePageTransition = projectsPage.isFetching && projectsPage.isLoading;
+  const isSearchPending = searchTerm.trim() !== debouncedSearch.trim();
+  const isTableFetching = projectsPage.isFetching;
+
+  const { paginatedProjects: footerProjects, tableProjects } = useBudgetHuTableDisplay({
+    displayProjects: paginatedProjects,
+    deferTableRows,
+    isPageTransition: isTablePageTransition,
+  });
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1426,7 +1442,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   const handleClearSearch = useCallback(() => setSearchTerm(''), []);
   const handlePageChange = useCallback((page: number) => setCurrentPage(page), []);
   const handleItemsPerPageChange = useCallback((size: number) => {
-    setItemsPerPage(size);
+    setItemsPerPage(clampTablePageSize(size));
     setCurrentPage(1);
   }, []);
 
@@ -1616,7 +1632,11 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
               <div className="h-full w-1/3 animate-pulse rounded-full bg-siloam-blue/70" />
             </div>
           ) : null}
-          <div data-tour="budget-hu-summary">
+          <div
+            data-tour="budget-hu-summary"
+            className={`transition-opacity duration-200 ${isBackgroundRefresh ? 'opacity-60' : ''}`}
+            aria-busy={isBackgroundRefresh}
+          >
             <BudgetSummary
               data={summaryTableData}
               isCompact={isSummaryCompact}
@@ -1637,7 +1657,9 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
                   <div className="max-h-[min(42vh,420px)] overflow-y-auto overscroll-contain">
                     <Suspense
                       fallback={
-                        <div className="p-6 text-siloam-text-secondary text-sm">Loading pipeline planner…</div>
+                        <div className="p-4">
+                          <PageContentSkeleton variant="budget" />
+                        </div>
                       }
                     >
                       <ProjectPipelinePage
@@ -1680,7 +1702,8 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
             searchTerm={searchTerm}
             onSearchChange={handleSearchChange}
             onClearSearch={handleClearSearch}
-            paginatedProjects={paginatedProjects}
+            paginatedProjects={footerProjects}
+            tableProjects={tableProjects}
             filteredCount={filteredCount}
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
@@ -1701,6 +1724,8 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
             onShowAllColumns={showAllTableColumns}
             onExportExcel={() => void handleExportExcel()}
             isExporting={isExporting}
+            isTableLoading={isTableFetching}
+            isSearchPending={isSearchPending}
           />
         </div>
       )}
@@ -1781,7 +1806,13 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
             </button>
           </header>
           <main className="flex-1 overflow-y-auto">
-            <Suspense fallback={<div className="p-8 text-siloam-text-secondary text-sm">Loading planner…</div>}>
+            <Suspense
+              fallback={
+                <div className="p-6">
+                  <PageContentSkeleton variant="budget" />
+                </div>
+              }
+            >
               <ProjectPipelinePage
                 budgetPeriod={editedData}
                 huId={huId}

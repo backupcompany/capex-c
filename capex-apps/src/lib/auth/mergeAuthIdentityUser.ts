@@ -6,7 +6,7 @@ import {
   normalizeRoleNameKey,
 } from '../userRoleResolution';
 
-export type AuthMeAssignment = {
+export type AuthSessionAssignment = {
   roleName: string;
   assignedScopes?: string[];
 };
@@ -22,8 +22,8 @@ export function humanizeRoleSlug(slug: string): string {
     .join(' ');
 }
 
-export function mapMeAssignmentsToUserAssignments(
-  assignments?: AuthMeAssignment[] | null,
+export function mapSessionAssignmentsToUserAssignments(
+  assignments?: AuthSessionAssignment[] | null,
   roleSlugs?: string[] | null,
 ): UserAssignment[] {
   if (assignments?.length) {
@@ -50,13 +50,13 @@ function assignmentScopeCount(assignments: UserAssignment[]): number {
 }
 
 /**
- * Bangun User dari identitas /auth/me tanpa menghapus assignments cache
- * (atau assignments dari response /me) — mencegah flicker "No Role".
+ * Bangun User dari identitas session/login tanpa menghapus assignments cache
+ * (atau assignments dari response auth) — mencegah flicker "No Role".
  */
 export function mergeAuthIdentityUser(
   identity: { id: number; username: string; email: string },
   options?: {
-    meAssignments?: AuthMeAssignment[] | null;
+    sessionAssignments?: AuthSessionAssignment[] | null;
     roleSlugs?: string[] | null;
     previous?: User | null;
   },
@@ -69,18 +69,18 @@ export function mergeAuthIdentityUser(
         ? cached
         : null;
 
-  const fromMe = mapMeAssignmentsToUserAssignments(
-    options?.meAssignments,
+  const fromSession = mapSessionAssignmentsToUserAssignments(
+    options?.sessionAssignments,
     options?.roleSlugs,
   );
   const previousAssignments = previous?.assignments ?? [];
 
-  let assignments = fromMe;
+  let assignments = fromSession;
   if (previousAssignments.length) {
-    if (!fromMe.length) {
+    if (!fromSession.length) {
       assignments = previousAssignments;
     } else if (
-      assignmentScopeCount(previousAssignments) > assignmentScopeCount(fromMe)
+      assignmentScopeCount(previousAssignments) > assignmentScopeCount(fromSession)
     ) {
       // Cache bootstrap biasanya punya scope lebih lengkap; jangan ditimpa stub kosong.
       assignments = previousAssignments;

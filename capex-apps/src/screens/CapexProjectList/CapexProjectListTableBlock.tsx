@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import type { EnrichedAsset } from '@/types';
 import type { Column } from '@/components/organisms/GenericTable/GenericTable';
 import { GenericTable } from '@/components/organisms/GenericTable/GenericTable';
+import { TABLE_PAGE_SIZE_OPTIONS } from '@/lib/table/pageSizeOptions';
 import { CapexProjectListMobileAssetList } from './CapexProjectListMobileAssetList';
 
 function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
@@ -166,11 +167,11 @@ function CapexProjectListTableBlockInner({
               disabled={paginationBusy}
               className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue disabled:opacity-50"
             >
-              <option value={20}>20</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={200}>200</option>
+              {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
             </select>
           </div>
 

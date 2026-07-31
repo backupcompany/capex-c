@@ -30,10 +30,11 @@ import {
   LazyFSRealizationPage,
   LazyConfigurationPage,
   LazyProfilePage,
-} from '@/screens/registry';
+} from '@/app-shell/screenRegistry';
 import { areUserScopesReadyForList } from '@/lib/appUserBootstrap';
 import type { PagePreloads } from '@/hooks/usePagePreloads';
 import type { ShowToastOptions } from '@/contexts/ToastContext';
+import { PageContentSkeleton } from '@/components/app-shell/PageContentSkeleton';
 
 type PermissionsLike = {
   canAccessPage: (page: Page) => boolean;
@@ -110,16 +111,8 @@ function AppRouteRendererComponent({
 }: AppRouteRendererProps) {
   if (!shellPermissionsReady) {
     return (
-      <div
-        className="flex-1 p-4 md:p-8 h-screen flex items-center justify-center"
-        aria-busy="true"
-        aria-label="Memuat akses"
-      >
-        <div className="w-full max-w-md space-y-3 animate-pulse" aria-hidden>
-          <div className="h-8 w-2/3 rounded-lg bg-siloam-border/50" />
-          <div className="h-32 rounded-xl bg-siloam-border/30" />
-          <div className="h-20 rounded-xl bg-siloam-border/20" />
-        </div>
+      <div className="flex-1" aria-busy="true" aria-label="Memuat akses">
+        <PageContentSkeleton variant="table" />
       </div>
     );
   }
@@ -161,7 +154,14 @@ function AppRouteRendererComponent({
 
   switch (routePage) {
     case Page.Dashboard:
-      return <LazyDashboardPage periodName={selectedPeriodName} currentUser={currentUser} />;
+      return (
+        <LazyDashboardPage
+          periodName={selectedPeriodName}
+          currentUser={currentUser}
+          dataInitialized={dataInitialized}
+          hasAvailablePeriods={allPeriods.length > 0}
+        />
+      );
     case Page.ExecutiveSummary:
       return (
         <LazyExecutiveSummaryPage

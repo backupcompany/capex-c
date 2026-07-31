@@ -2,7 +2,7 @@ import { useBackendSession } from './authConstants';
 import { coordinatedRefreshSession } from './authRefreshCoordinator';
 import { authDebug } from './authDebug';
 import { isBackendSessionValid } from './sessionValidity';
-import { withCsrfHeaders } from './csrfToken';
+import { withCsrfHeadersAsync } from './csrfToken';
 
 export type AuthenticatedFetchOptions = RequestInit & {
   /** Retry once after refresh on 401. Default true when backend session is enabled. */
@@ -35,7 +35,7 @@ export async function authenticatedFetch(
   let lastRes: Response | null = null;
 
   while (true) {
-    const mergedInit = withCsrfHeaders(fetchInit);
+    const mergedInit = await withCsrfHeadersAsync(fetchInit);
     const res = await fetch(input, {
       ...mergedInit,
       credentials: mergedInit.credentials ?? fetchInit.credentials ?? 'include',
@@ -77,7 +77,7 @@ export async function authenticatedFetch(
           notifyAuthFailure();
         }
       } else {
-        authDebug('fetch 401: refresh failed but /me still valid — keep session');
+        authDebug('fetch 401: refresh failed but session still valid — keep session');
       }
       return res;
     }

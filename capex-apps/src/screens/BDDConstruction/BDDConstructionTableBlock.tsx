@@ -3,6 +3,7 @@
 import React, { memo } from 'react';
 import type { Column } from '@/components/organisms/GenericTable/GenericTable';
 import { GenericTable } from '@/components/organisms/GenericTable/GenericTable';
+import { Spinner } from '@/components/atoms/Spinner/Spinner';
 import type { EnrichedAsset } from '@/types';
 
 export type BddConstructionTableBlockProps = {
@@ -16,6 +17,8 @@ export type BddConstructionTableBlockProps = {
   totalPages: number;
   onPageChange: (page: number) => void;
   onItemsPerPageChange: (size: number) => void;
+  isTableLoading?: boolean;
+  isSearchPending?: boolean;
 };
 
 function BddConstructionTableBlockInner({
@@ -29,15 +32,28 @@ function BddConstructionTableBlockInner({
   totalPages,
   onPageChange,
   onItemsPerPageChange,
+  isTableLoading = false,
+  isSearchPending = false,
 }: BddConstructionTableBlockProps) {
+  const showTableBusy = isTableLoading || isSearchPending;
+
   return (
-    <div className="h-full bg-siloam-surface rounded-xl border border-siloam-border overflow-hidden flex flex-col">
+    <div className="flex-1 min-h-0 bg-siloam-surface rounded-xl border border-siloam-border overflow-hidden flex flex-col relative">
+      {showTableBusy ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-siloam-surface/70 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+            <Spinner size={18} className="text-siloam-blue" />
+            <span>{isSearchPending && !isTableLoading ? 'Mencari…' : 'Memuat data terbaru…'}</span>
+          </div>
+        </div>
+      ) : null}
+      <div className={showTableBusy ? 'flex flex-col flex-1 min-h-0 opacity-50 select-none' : 'flex flex-col flex-1 min-h-0'}>
       <GenericTable
         columns={columns}
         data={tableAssets}
         onRowClick={onRowClick}
         selectedRowId={selectedAssetId}
-        className="flex-1 border-none"
+        className="flex-1 min-h-0 border-none"
         virtualizeRows="auto"
         estimatedRowHeight={56}
       />
@@ -46,6 +62,9 @@ function BddConstructionTableBlockInner({
           <div className="text-xs text-siloam-text-secondary">
             Showing {(currentPage - 1) * itemsPerPage + 1} -{' '}
             {Math.min(currentPage * itemsPerPage, footerTotalCount)} of {footerTotalCount} assets
+            {isTableLoading ? (
+              <span className="ml-2 text-siloam-blue">· Memperbarui…</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <select
@@ -79,6 +98,7 @@ function BddConstructionTableBlockInner({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

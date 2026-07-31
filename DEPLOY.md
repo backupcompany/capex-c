@@ -1,156 +1,94 @@
 # Deploy
 
-Checklist dan panduan deploy production setelah remediasi.
+Production gate: `make verify-prod-readiness`
 
----
+## Architecture (VPS production — default)
+
+| Process | Role |
+|---------|------|
+| `capex-web` | Next.js BFF + UI (public :443 via Caddy/Cloudflare) |
+| `capex-api` | NestJS **monolith** — all business logic (:8082 localhost) |
+| Supabase Postgres | Data + RLS |
+| Redis | Throttle, lockout, cache (recommended) |
+
+**CI/CD:** `.github/workflows/deploy-web.yml` + `deploy-api.yml` → GHCR → SSH VPS (`docker compose pull` + recreate).
+
+**Do not set `CAPEX_SERVICE_*` on production VPS.** BFF proxies everything to `capex-api` via `NEXT_PUBLIC_CAPEXBE_URL` / internal `http://capex-api:8082`.
+
+### Optional (manual / dev only)
+
+Full strangler stack (`capex-auth` + 17 leaf services): [deploy/docker-compose.microservices.yml](./deploy/docker-compose.microservices.yml). Not used by production CI/CD. Requires `deploy/.env.compose` + all internal service URLs wired in compose.
 
 ## Prerequisites
 
-- Node.js 20+ (build)
-- Supabase project dengan migrations applied
-- Redis instance (recommended prod — throttling, lockout, cache)
-- Reverse proxy (nginx rate limit template: `deploy/nginx-capex-ip-allowlist.conf`)
+- Node.js 20+
+- Supabase project with migrations applied
+- Redis (recommended)
+- Reverse proxy + TLS (template: `deploy/nginx-capex-ip-allowlist.conf`)
 
----
+## Migrations
 
-## Database migrations
+Apply in order under `capex-apps/supabase/migrations/` (20260721* through 20260723100000).
 
-Apply **berurutan** di Supabase SQL editor atau CLI:
+## Environment — VPS monolith (production)
 
-```
-capex-apps/supabase/migrations/
-├── 20260721120000_security_rls_hardening.sql
-├── 20260721140000_capex_security_foundation.sql
-├── 20260721160000_capex_security_phase2_lock_authenticated.sql
-├── 20260721190000_capex_security_restore_steady_state.sql
-├── 20260722100000_capex_security_revoke_authenticated_rpc.sql
-├── 20260722220000_assets_add_cpr_id.sql
-└── 20260723100000_audit_logs_append_only.sql
-```
-
-Verify steady state:
+One env file on the VPS for **`capex-api`** (e.g. `/opt/capex-deploy/.env`):
 
 ```bash
-# Anon read users → empty or permission denied (NOT 200 with rows)
-curl -s "$SUPABASE_URL/rest/v1/users?select=id&limit=1" \
-  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
-
-# BE without JWT → 401
-curl -s -o /dev/null -w "%{http_code}" "$CAPEXBE_URL/bootstrap" -X POST
+cp deploy/.env.vps.example /opt/capex-deploy/.env
+# edit secrets — never commit .env
 ```
 
----
+Required on **capex-api**:
 
-## Environment variables
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`
+- `JWT_ACCESS_SECRET` (same value on `capex-web` server runtime)
+- `NODE_ENV=production`, `CORS_ORIGINS`, `FRONTEND_URL`
+- `REDIS_URL` (recommended)
 
-### capexbe (required prod)
+Required on **capex-web** (runtime, not build-args):
 
-```env
-NODE_ENV=production
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...        # NEVER NEXT_PUBLIC_*
-SUPABASE_JWT_SECRET=...
-JWT_ACCESS_SECRET=<strong-random-64>   # blocked if weak/default
-CORS_ORIGINS=https://capex.siloamhospitals.com
-FRONTEND_URL=https://capex.siloamhospitals.com
-ALLOWED_EMAIL_DOMAINS=siloamhospitals.com
-REDIS_URL=redis://:password@host:6379   # recommended
-METRICS_SECRET=<random>                 # for /metrics scrape
-# IP_ALLOWLIST — do NOT set in production (allow all; SSO is the gate)
-```
+- `JWT_ACCESS_SECRET` (must match API)
 
-### capex-apps (required prod)
+Baked at **image build** (GitHub Secrets / `deploy-web.yml`):
 
-```env
-NODE_ENV=production
-NEXT_PUBLIC_CAPEXBE_URL=https://capex-api.siloamhospitals.com
-NEXT_PUBLIC_USE_BACKEND_SESSION=1       # REQUIRED — else 503
-NEXT_PUBLIC_ENABLE_AZURE_SSO=true       # SSO-only login (no password form)
-JWT_ACCESS_SECRET=<same-as-be>          # for edge session verify
-# IP_ALLOWLIST — do NOT set in production
-```
+- `NEXT_PUBLIC_CAPEXBE_URL`
+- `NEXT_PUBLIC_USE_BACKEND_SESSION=true`
+- `NEXT_PUBLIC_ENABLE_AZURE_SSO=true`
 
-### Do NOT set in prod
+**Leave unset in production:** all `CAPEX_SERVICE_*`, `CAPEX_DEMO_MODE`, `CURSOR_TUNNEL_MODE`, `METRICS_PUBLIC=1`.
 
-```env
-CURSOR_TUNNEL_MODE=true    # dev tunnel only
-METRICS_PUBLIC=1           # blocked at BE startup
-CAPEX_DEMO_MODE=true       # relaxes rate limits + enables password login on /sabet
-```
+Local dev: `make run` — see `capexbe/.env` + `capex-apps/.env.local`. No leaf URLs needed for monolith.
 
----
-
-## Pre-deploy verification
+## Environment — microservices stack (optional)
 
 ```bash
-# Backend security (6 checks)
-cd capexbe && npm run verify:security
-
-# Frontend middleware
-cd capex-apps && node scripts/verify-middleware-security.mjs
-
-# Production build + secret scan
-cd capex-apps && npm run build:secure
-cd capexbe && npm run build
+cp deploy/.env.compose.example deploy/.env.compose   # or: make compose-env
+make prod-up
 ```
 
----
+Uses shared `deploy/.env.compose` + internal URLs in `docker-compose.microservices.yml`.
 
-## Production access model (Siloam)
+## Deploy (VPS monolith)
 
-| Layer | Control |
-|-------|---------|
-| Domain | `https://capex.siloamhospitals.com` — set `CORS_ORIGINS` + `FRONTEND_URL` |
-| Auth | Microsoft SSO (Azure Entra) — **no password form** in production |
-| Email | `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com` on capexbe |
-| Network | **No IP allowlist** — empty `IP_ALLOWLIST` = allow all |
-| User registry | User must exist in Capex DB (SSO alone is not enough) |
+1. `make verify-prod-readiness`
+2. Push to `main` → GitHub Actions builds + deploys images
+3. VPS: `docker compose pull && docker compose up -d` in deploy dir
+4. Expose only `capex-web` via reverse proxy; `capex-api` on `127.0.0.1` only
 
-Azure Entra app registration must restrict to Siloam tenant. Supabase redirect URL:
-`https://capex.siloamhospitals.com/api/auth/azure/callback`
+## Deploy (full microservices — manual)
 
----
-
-## Deploy checklist
-
-- [ ] All migrations applied (20260721* → 20260723100000)
-- [ ] `JWT_ACCESS_SECRET` strong, unique, same on FE+BE
-- [ ] `NEXT_PUBLIC_USE_BACKEND_SESSION=1`
-- [ ] `NEXT_PUBLIC_ENABLE_AZURE_SSO=true`
-- [ ] `CORS_ORIGINS` + `FRONTEND_URL` = `https://capex.siloamhospitals.com`
-- [ ] `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com`
-- [ ] **Do not** set `IP_ALLOWLIST` in production
-- [ ] `REDIS_URL` with password, private network
-- [ ] `METRICS_SECRET` set, `/metrics` not public
-- [ ] nginx/Cloudflare configured (rate limit OK; IP allowlist optional dev only)
-- [ ] `verify:security` pass
-- [ ] Smoke: Network tab shows **no** `*.supabase.co/rest/v1/`
-- [ ] Smoke: Microsoft SSO login → navigate screens → no 401/403 loop
-- [ ] Unset demo/tunnel env vars
-
----
-
-## Docker reference
-
-Templates (not production-ready out of box):
-
-```
-deploy/docker-compose.public.example.yml  ← bind 127.0.0.1
-deploy/docker-compose.redis.yml           ← local dev Redis
-deploy/nginx-capex-ip-allowlist.conf      ← IP allowlist template
+```bash
+make verify-prod-readiness
+make compose-build && make compose-up
+make compose-verify
 ```
 
-Dockerfiles exist but lack non-root user and HEALTHCHECK — harden before prod use.
+## Checklist
 
----
-
-## Rollback strategy
-
-1. BE rollback: deploy previous container/image — sessions in DB remain valid
-2. FE rollback: deploy previous Next.js build — ensure same JWT secret
-3. DB rollback: migrations are **forward-only** (RLS revoke, append-only triggers). Rollback requires manual SQL — test in staging first.
-
----
-
-[Lihat README](./README.md) · [Security](./SECURITY.md)
+- [ ] `make verify-prod-readiness` green
+- [ ] Migrations applied
+- [ ] VPS `.env` filled — **no** `CAPEX_SERVICE_*`
+- [ ] `JWT_ACCESS_SECRET` identical on web + api
+- [ ] SSO redirect URI registered in Azure Entra
+- [ ] Smoke: SSO login, project list, no direct Supabase REST in browser Network tab

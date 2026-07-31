@@ -196,6 +196,8 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
     deferTableRows: isFilterRefreshing,
   });
 
+  const isPageDataRefreshing = isFilterRefreshing || isBackgroundRefetch;
+
   const selectedProject = useMemo((): Project | null => {
     if (!selectedAsset) return null;
     return allProjects.find((p) => p.id === selectedAsset.projectId) || null;
@@ -438,10 +440,10 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
   }
 
   return (
-    <div className="md:flex h-full bg-siloam-surface rounded-xl shadow-soft overflow-hidden">
+    <div className="md:flex h-full min-h-0 bg-siloam-surface rounded-xl shadow-soft overflow-hidden">
       <div
         className={`
-                flex flex-col h-full w-full transition-all duration-300 ease-in-out
+                flex flex-col h-full min-h-0 w-full transition-all duration-300 ease-in-out
                 md:border-r md:border-siloam-border
                 ${selectedAsset ? 'hidden md:flex md:w-1/2 lg:w-2/3' : 'flex md:w-full'}
             `}
@@ -496,12 +498,7 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
           />
         </div>
 
-        <div className="flex-1 overflow-hidden p-4 bg-siloam-bg relative">
-          {isFilterRefreshing && hasListData ? (
-            <div className="pointer-events-none absolute inset-x-4 top-0 z-20 flex justify-center py-1">
-              <p className="text-xs text-siloam-text-secondary">Memfilter…</p>
-            </div>
-          ) : null}
+        <div className="flex-1 min-h-0 overflow-hidden p-4 bg-siloam-bg relative flex flex-col" aria-busy={isPageDataRefreshing}>
           {isBackgroundRefetch ? (
             <div
               className="pointer-events-none absolute inset-x-4 top-0 z-20 h-0.5 overflow-hidden bg-siloam-border rounded"
@@ -512,6 +509,16 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
           ) : null}
 
           {viewMode === 'kanban' ? (
+            <div className="relative flex-1 min-h-0">
+              {isPageDataRefreshing ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-bg/70 backdrop-blur-[1px]">
+                  <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+                    <span className="inline-block h-4 w-4 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
+                    <span>{isSearchStaging ? 'Mencari…' : 'Memuat data terbaru…'}</span>
+                  </div>
+                </div>
+              ) : null}
+              <div className={isPageDataRefreshing ? 'h-full min-h-0 opacity-50 select-none' : 'h-full min-h-0'}>
             <Suspense
               fallback={
                 <div className="h-full min-h-[200px] animate-pulse bg-siloam-border/30 rounded-xl" />
@@ -525,6 +532,8 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
                 canEditUnassigned={isSuperAdmin || hasBDDRole}
               />
             </Suspense>
+              </div>
+            </div>
           ) : (
             <BddConstructionTableBlock
               columns={tableColumns}
@@ -537,6 +546,8 @@ export const BDDConstructionPage: React.FC<BDDConstructionPageProps> = memo(func
               totalPages={totalPages}
               onPageChange={handlePageChange}
               onItemsPerPageChange={handleItemsPerPageChange}
+              isTableLoading={isPageDataRefreshing}
+              isSearchPending={isSearchStaging}
             />
           )}
         </div>

@@ -132,6 +132,11 @@ export function useFsUpdateTableQuery({
   const totalCount = tableQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  const isBlockingLoad = tableQuery.isPending && rows.length === 0;
+  const isBackgroundRefresh =
+    rows.length > 0 && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
+  const isFilterRefreshing = isSearchStaging || (tableQuery.isFetching && rows.length > 0);
+
   return {
     tableQuery,
     rows,
@@ -139,9 +144,9 @@ export function useFsUpdateTableQuery({
     totalPages,
     debouncedSearch,
     isSearchStaging,
-    isBlockingLoad: tableQuery.isPending && rows.length === 0,
-    isBackgroundRefresh: rows.length > 0 && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging,
-    isFilterRefreshing:
-      isSearchStaging || (debouncedSearch.trim().length > 0 && (tableQuery.isFetching || tableQuery.isPending)),
+    isBlockingLoad,
+    isBackgroundRefresh,
+    isFilterRefreshing,
+    isTableFetching: tableQuery.isFetching,
   };
 }

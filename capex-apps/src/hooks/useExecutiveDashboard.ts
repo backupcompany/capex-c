@@ -56,6 +56,10 @@ export function useExecutiveDashboard({
     },
     enabled: Boolean(periodName),
     staleTime: STALE_TIME_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    placeholderData: (prev) => prev,
   });
 
   const metrics = dashboardQuery.data ?? EMPTY_EXECUTIVE_DASHBOARD;

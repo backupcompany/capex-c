@@ -1,7 +1,8 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from './authBff';
 import { CSRF_COOKIE, CSRF_HEADER } from './authConstants';
+import { REQUEST_ID_HEADER, resolveRequestId } from '../http/requestId';
 import { isAllowedBePath } from './bePathAllowlist';
 import { defaultBackendBase, resolveBackendBaseForPath } from './serviceRoutes';
 import {
@@ -82,25 +83,28 @@ async function forwardBePost(
   const cookieStore = await cookies();
   const cookieHeader = authCookieHeaderFromStore(cookieStore);
 
-  const headers: Record<string, string> = {};
+  const outboundHeaders: Record<string, string> = {};
   if (contentType) {
-    headers['Content-Type'] = contentType;
+    outboundHeaders['Content-Type'] = contentType;
   } else if (typeof body === 'string') {
-    headers['Content-Type'] = 'application/json';
+    outboundHeaders['Content-Type'] = 'application/json';
   }
-  if (cookieHeader) headers.Cookie = cookieHeader;
+  if (cookieHeader) outboundHeaders.Cookie = cookieHeader;
   const access = cookieStore.get(ACCESS_COOKIE)?.value;
   if (access) {
-    headers.Authorization = `Bearer ${access}`;
+    outboundHeaders.Authorization = `Bearer ${access}`;
   }
   const csrf = csrfHeader ?? cookieStore.get(CSRF_COOKIE)?.value;
-  if (csrf) headers[CSRF_HEADER] = csrf;
+  if (csrf) outboundHeaders[CSRF_HEADER] = csrf;
+
+  const incomingHeaders = await headers();
+  outboundHeaders[REQUEST_ID_HEADER] = resolveRequestId(incomingHeaders.get('x-request-id'));
 
   const bePath = path.startsWith('/') ? path : `/${path}`;
   try {
     return await fetch(`${base}${bePath}`, {
       method: 'POST',
-      headers,
+      headers: outboundHeaders,
       body,
       cache: 'no-store',
     });
@@ -113,8 +117,12 @@ async function forwardBePost(
       code === 'ECONNREFUSED' ||
       code === 'ECONNRESET' ||
       (err instanceof Error && err.message.includes('fetch failed'));
+    const leafHint =
+      base.includes(':300') && !base.endsWith(':3001')
+        ? ' Leaf service belum jalan — jalankan: make run-all-leaf (atau make run untuk monolith-only tanpa CAPEX_SERVICE_* di .env.local).'
+        : '';
     const message = unreachable
-      ? `Backend tidak berjalan di ${base}. Jalankan: cd capexbe && npm run start:dev`
+      ? `Backend tidak berjalan di ${base}.${leafHint} Monolith: cd capexbe && npm run start:dev`
       : 'Backend tidak dapat dihubungi';
     return new Response(JSON.stringify({ message, statusCode: 503 }), {
       status: 503,
@@ -131,13 +139,13 @@ async function refreshSessionOnServer(): Promise<string[] | null> {
   if (!cookieStore.get(REFRESH_COOKIE)?.value) return null;
 
   const cookieHeader = authCookieHeaderFromStore(cookieStore);
-  const headers: Record<string, string> = { Cookie: cookieHeader };
+  const refreshHeaders: Record<string, string> = { Cookie: cookieHeader };
   const csrf = cookieStore.get(CSRF_COOKIE)?.value;
-  if (csrf) headers[CSRF_HEADER] = csrf;
+  if (csrf) refreshHeaders[CSRF_HEADER] = csrf;
 
   const res = await fetch(`${base}/auth/refresh`, {
     method: 'POST',
-    headers,
+    headers: refreshHeaders,
     cache: 'no-store',
   });
 

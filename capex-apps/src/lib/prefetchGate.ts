@@ -1,7 +1,7 @@
 import { scheduleIdlePrefetch, scheduleStaggeredIdle } from './scheduleIdlePrefetch';
 
 /** Max concurrent background prefetches after bootstrap settles. */
-const MAX_INFLIGHT = 2;
+const MAX_INFLIGHT = 1;
 let inflightCount = 0;
 const waitQueue: Array<() => void> = [];
 

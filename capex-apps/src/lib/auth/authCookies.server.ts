@@ -63,6 +63,16 @@ export function applyBackendSetCookies(
   }
 }
 
+/** True when httpOnly session cookies are present on the incoming request. */
+export function readHasSessionCookies(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+): boolean {
+  return Boolean(
+    cookieStore.get(ACCESS_COOKIE)?.value?.trim() ||
+      cookieStore.get(REFRESH_COOKIE)?.value?.trim(),
+  );
+}
+
 export function collectSetCookies(res: Response): string[] {
   return typeof res.headers.getSetCookie === 'function'
     ? res.headers.getSetCookie()

@@ -40,7 +40,7 @@ import { parseCookies } from './cookie.util';
 
 import { Public } from './decorators/public.decorator';
 
-import { ACCESS_COOKIE, REFRESH_COOKIE, OAUTH_PKCE_COOKIE, OAUTH_RETURN_COOKIE } from './auth.constants';
+import { ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE, OAUTH_PKCE_COOKIE, OAUTH_RETURN_COOKIE, REFRESH_TOKEN_TTL_SEC } from './auth.constants';
 
 
 
@@ -174,7 +174,10 @@ export class AuthController {
 
     }
 
-    this.csrf.assertValid(req.method, cookies, req.headers);
+    const hasCsrfCookie = Boolean(cookies[CSRF_COOKIE]?.trim());
+    if (hasCsrfCookie) {
+      this.csrf.assertValid(req.method, cookies, req.headers);
+    }
 
     return this.auth.refresh(refreshRaw, res, { ip: req.ip });
 
@@ -184,8 +187,8 @@ export class AuthController {
 
   /** Session probe — must stay public so guests get `{ authenticated: false }` (not 401). */
   @Public()
-  @Get('me')
-  async me(@Req() req: Request) {
+  @Get('session')
+  async session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
 
     const cookies = parseCookies(req.headers.cookie);
 
@@ -199,6 +202,11 @@ export class AuthController {
 
       return { authenticated: false };
 
+    }
+
+    if (!cookies[CSRF_COOKIE]?.trim()) {
+      const csrfToken = this.csrf.generateToken();
+      this.csrf.setCsrfCookie(res, csrfToken, REFRESH_TOKEN_TTL_SEC);
     }
 
     return { authenticated: true, user: me };

@@ -29,6 +29,71 @@ export const EXTRACTABLE_SERVICE_ROUTES: ServiceRoute[] = [
     prefixes: ['backup', 'backup/'],
     envVar: 'CAPEX_SERVICE_BACKUP_URL',
   },
+  {
+    name: 'configuration',
+    prefixes: ['configuration', 'configuration/'],
+    envVar: 'CAPEX_SERVICE_CONFIGURATION_URL',
+  },
+  {
+    name: 'mom-daily-summary',
+    prefixes: ['mom-daily-summary', 'mom-daily-summary/'],
+    envVar: 'CAPEX_SERVICE_MOM_DAILY_SUMMARY_URL',
+  },
+  {
+    name: 'asset-timeline',
+    prefixes: ['asset-timeline'],
+    envVar: 'CAPEX_SERVICE_ASSET_TIMELINE_URL',
+  },
+  {
+    name: 'duplicate-detection',
+    prefixes: ['duplicate-detection', 'duplicate-detection/'],
+    envVar: 'CAPEX_SERVICE_DUPLICATE_DETECTION_URL',
+  },
+  {
+    name: 'user-admin',
+    prefixes: ['user-admin', 'user-admin/'],
+    envVar: 'CAPEX_SERVICE_USER_ADMIN_URL',
+  },
+  {
+    name: 'procurement',
+    prefixes: ['po-update', 'po-update/', 'gr-update', 'gr-update/'],
+    envVar: 'CAPEX_SERVICE_PROCUREMENT_URL',
+  },
+  {
+    name: 'fs',
+    prefixes: ['fs', 'fs/', 'fs-update', 'fs-update/', 'fs-approval', 'fs-approval/', 'fs-realization', 'fs-realization/'],
+    envVar: 'CAPEX_SERVICE_FS_URL',
+  },
+  {
+    name: 'monitoring',
+    prefixes: ['monitoring', 'monitoring/'],
+    envVar: 'CAPEX_SERVICE_MONITORING_URL',
+  },
+  {
+    name: 'reporting',
+    prefixes: ['dashboard', 'dashboard/', 'budget-multi-year', 'budget-multi-year/'],
+    envVar: 'CAPEX_SERVICE_REPORTING_URL',
+  },
+  {
+    name: 'executive-summary',
+    prefixes: ['executive-summary', 'executive-summary/'],
+    envVar: 'CAPEX_SERVICE_EXECUTIVE_SUMMARY_URL',
+  },
+  {
+    name: 'tasks',
+    prefixes: ['my-tasks', 'my-tasks/', 'task-actions', 'task-actions/'],
+    envVar: 'CAPEX_SERVICE_TASKS_URL',
+  },
+  {
+    name: 'core',
+    prefixes: ['bootstrap', 'bootstrap/', 'project-list', 'project-list/', 'budget-hu', 'budget-hu/'],
+    envVar: 'CAPEX_SERVICE_CORE_URL',
+  },
+  {
+    name: 'smart-migration',
+    prefixes: ['smart-migration', 'smart-migration/'],
+    envVar: 'CAPEX_SERVICE_SMART_MIGRATION_URL',
+  },
 ];
 
 export function defaultBackendBase(): string {

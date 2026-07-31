@@ -4,7 +4,7 @@ import { proxyAuthToBackend } from '@/lib/auth/authBff';
 import { proxyBePost } from '@/lib/auth/beProxy';
 
 async function resolveServerUserId(): Promise<number | null> {
-  const meRes = await proxyAuthToBackend('/me', { method: 'GET' });
+  const meRes = await proxyAuthToBackend('/session', { method: 'GET' });
   if (!meRes.ok) return null;
   const me = (await meRes.json()) as { authenticated?: boolean; user?: { id?: number } };
   if (!me.authenticated || me.user?.id == null) return null;

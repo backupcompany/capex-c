@@ -23,9 +23,9 @@ import {
 import { useToast } from '../contexts/ToastContext';
 
 const SEARCH_DEBOUNCE_MS = 250;
-const STALE_MS = 30_000;
-const REFETCH_INTERVAL_MS = 30_000;
-const LIVE_TICK_MS = 30_000;
+const STALE_MS = 60_000;
+const REFETCH_INTERVAL_MS = 90_000;
+const LIVE_TICK_MS = 60_000;
 
 const RefreshIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -186,7 +186,8 @@ export const UserMonitoringPage: React.FC<UserMonitoringPageProps> = ({
     enabled: canView && isBackendConfigured(),
     staleTime: STALE_MS,
     refetchInterval: REFETCH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 
   const tableQuery = useQuery({
@@ -207,8 +208,9 @@ export const UserMonitoringPage: React.FC<UserMonitoringPageProps> = ({
     enabled: canView,
     staleTime: STALE_MS,
     refetchInterval: REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
   const tableRows = tableQuery.data?.rows ?? [];

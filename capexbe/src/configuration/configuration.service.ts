@@ -568,6 +568,8 @@ export class ConfigurationService {
 
     const out: Partial<Record<ConfigurationSliceKey, unknown>> = {};
     const toLoad: ConfigurationSliceKey[] = [];
+    // users/vendors: process-cache only — shared Redis must not hold viewer-full PII.
+    const skipSharedCache = new Set<ConfigurationSliceKey>(['users', 'vendors']);
 
     for (const key of requested) {
       if (!skipCache) {
@@ -577,12 +579,14 @@ export class ConfigurationService {
           out[key] = processHit;
           continue;
         }
-        const sharedHit = await perfCacheGet<unknown>(cacheKey);
-        if (sharedHit !== null) {
-          const ttl = configurationSliceTtlMs(key);
-          this.setProcessCache(cacheKey, sharedHit, ttl);
-          out[key] = sharedHit;
-          continue;
+        if (!skipSharedCache.has(key)) {
+          const sharedHit = await perfCacheGet<unknown>(cacheKey);
+          if (sharedHit !== null) {
+            const ttl = configurationSliceTtlMs(key);
+            this.setProcessCache(cacheKey, sharedHit, ttl);
+            out[key] = sharedHit;
+            continue;
+          }
         }
       }
       toLoad.push(key);
@@ -598,7 +602,9 @@ export class ConfigurationService {
             const ttl = configurationSliceTtlMs(key);
             const cacheKey = cacheKeys.configurationSlice(userId, key);
             this.setProcessCache(cacheKey, value, ttl);
-            await perfCacheSet(cacheKey, value, ttl);
+            if (!skipSharedCache.has(key)) {
+              await perfCacheSet(cacheKey, value, ttl);
+            }
             return [key, value] as const;
           }),
         ),

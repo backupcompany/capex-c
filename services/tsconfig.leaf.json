@@ -1,0 +1,7 @@
+{
+  "extends": "../capexbe/tsconfig.shared.json",
+  "compilerOptions": {
+    "outDir": "${configDir}/dist",
+    "rootDir": "${configDir}/../.."
+  }
+}

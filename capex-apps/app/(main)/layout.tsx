@@ -1,14 +1,6 @@
 import { cookies } from "next/headers";
+import { readHasSessionCookies } from "@/lib/auth/authCookies.server";
 import { MainShellClient } from "./MainShellClient";
-
-const ACCESS_COOKIE = "capex_access";
-const REFRESH_COOKIE = "capex_refresh";
-
-function readHasSessionCookies(cookieStore: Awaited<ReturnType<typeof cookies>>): boolean {
-  return Boolean(
-    cookieStore.get(ACCESS_COOKIE)?.value || cookieStore.get(REFRESH_COOKIE)?.value,
-  );
-}
 
 /**
  * Shell yang tetap hidup saat navigasi antar path. `App` tidak boleh di `page.tsx`

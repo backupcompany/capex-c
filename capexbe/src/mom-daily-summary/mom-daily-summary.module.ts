@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { AuthCoreModule } from '../auth/auth-core.module';
 import { MomDailySummaryController } from './mom-daily-summary.controller';
 import { MomDailySummaryService } from './mom-daily-summary.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthCoreModule],
   controllers: [MomDailySummaryController],
   providers: [MomDailySummaryService],
 })

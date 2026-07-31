@@ -1,0 +1,87 @@
+name: Verify microservices
+
+on:
+  pull_request:
+    paths:
+      - 'capexbe/**'
+      - 'capex-apps/**'
+      - 'services/**'
+      - 'packages/capex-auth-core/**'
+      - 'packages/capex-notifications-core/**'
+      - 'packages/capex-audit-core/**'
+      - 'scripts/microservices/**'
+      - 'deploy/docker-compose.microservices.yml'
+      - 'Makefile'
+      - '.github/workflows/verify-microservices.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'capexbe/**'
+      - 'capex-apps/**'
+      - 'services/**'
+      - 'packages/capex-auth-core/**'
+      - 'packages/capex-notifications-core/**'
+      - 'packages/capex-audit-core/**'
+      - 'scripts/microservices/**'
+      - 'deploy/docker-compose.microservices.yml'
+      - 'Makefile'
+      - '.github/workflows/verify-microservices.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static checks (no services required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install capexbe (for auth-core path refs)
+        run: npm ci
+        working-directory: capexbe
+
+      - name: Phase 11 gate (static + auth + cross-HU + notifications-core)
+        run: make verify-phase11
+
+  leaf-build:
+    name: Leaf compile (canary ×3)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: capexbe/package-lock.json
+
+      - name: Install capexbe dependencies
+        run: npm ci
+        working-directory: capexbe
+
+      - name: Canary leaf build (notifications, core, auth)
+        run: make verify-leaf-build
+
+  compose-config:
+    name: Docker Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose YAML structure
+        run: make verify-compose-config
+
+      - name: docker compose config (syntax + env interpolation)
+        run: make compose-config

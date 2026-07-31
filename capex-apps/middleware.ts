@@ -6,6 +6,7 @@ import {
   PUBLIC_PAGE_EXACT,
   validateBeProxyRequest,
 } from '@/lib/auth/edgeApiPolicy';
+import { LOGIN_PATH, POST_LOGIN_PATH } from '@/lib/auth/loginRoute';
 import { checkEdgeRateLimit } from '@/lib/auth/edgeRateLimit';
 import {
   clientIp,
@@ -15,7 +16,11 @@ import {
 } from '@/lib/auth/edgeSession';
 import { isDemoMode } from '@/lib/auth/demoMode';
 import { requestIpAllowed } from '@/lib/auth/ipAllowlist';
-import { applySecurityHeaders, generateCspNonce } from '@/lib/security/csp';
+import {
+  applySecurityHeaders,
+  buildContentSecurityPolicy,
+  generateCspNonce,
+} from '@/lib/security/csp';
 
 const AUTH_RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   '/api/auth/login': { max: 8, windowMs: 15 * 60 * 1000 },
@@ -34,7 +39,7 @@ const AUTH_RATE_LIMITS_DEMO: Record<string, { max: number; windowMs: number }> =
 const BE_PROXY_LIMIT = { max: 180, windowMs: 60 * 1000 };
 
 function isPublicPage(pathname: string): boolean {
-  if (pathname === '/') return true;
+  if (pathname === LOGIN_PATH) return true;
   return PUBLIC_PAGE_EXACT.has(pathname);
 }
 
@@ -43,6 +48,13 @@ function isBackendSessionEnabled(): boolean {
     process.env.NEXT_PUBLIC_USE_BACKEND_SESSION !== 'false' &&
     Boolean(process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim())
   );
+}
+
+function ensureRequestId(req: NextRequest, requestHeaders: Headers): string {
+  const existing = req.headers.get('x-request-id')?.trim();
+  const id = existing || crypto.randomUUID();
+  requestHeaders.set('x-request-id', id);
+  return id;
 }
 
 function attachRequestId(res: NextResponse, req: NextRequest, nonce?: string): NextResponse {
@@ -54,8 +66,14 @@ function attachRequestId(res: NextResponse, req: NextRequest, nonce?: string): N
 }
 
 function forwardWithNonce(req: NextRequest, nonce: string): NextResponse {
+  const isProd = process.env.NODE_ENV === 'production';
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
+  // Next.js stamps framework scripts from the *request* CSP nonce, not only the response header.
+  if (isProd) {
+    requestHeaders.set('Content-Security-Policy', buildContentSecurityPolicy(nonce, true));
+  }
+  ensureRequestId(req, requestHeaders);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
@@ -159,9 +177,16 @@ export async function middleware(req: NextRequest) {
   }
 
   const pagePermitted = edgeSessionPermits(session);
+
+  if (pathname === LOGIN_PATH && pagePermitted) {
+    const url = req.nextUrl.clone();
+    url.pathname = POST_LOGIN_PATH;
+    return attachRequestId(NextResponse.redirect(url), req, nonce);
+  }
+
   if (!pagePermitted && !isPublicPage(pathname)) {
     const url = req.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = LOGIN_PATH;
     return attachRequestId(NextResponse.redirect(url), req, nonce);
   }
 

@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { AuthCoreModule } from '../auth/auth-core.module';
 import { PoUpdateController } from './po-update.controller';
 import { PoUpdateService } from './po-update.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthCoreModule],
   controllers: [PoUpdateController],
   providers: [PoUpdateService],
 })

@@ -146,15 +146,47 @@ async function loadMyTasksPage(
 
 /**
  * Personal open tasks for notification polling — lightweight BE endpoint.
+ * Reuses TanStack cache + in-flight dedupe to avoid duplicate polls at scale.
  */
 export async function resolveMyTasksForNotifications(
   currentUser: User,
   periodName: string | undefined,
+  queryClient?: QueryClient,
 ): Promise<UserTask[]> {
+  const defaultQuery: MyTasksQueryInput = {
+    page: 1,
+    pageSize: 200,
+    taskViewMode: 'my_tasks_only',
+    showCompleted: false,
+    sortBy: 'targetDate_asc',
+  };
+  const taskQueryKey = queryKeys.myTasks.page(
+    currentUser.id,
+    periodName,
+    buildMyTasksQueryKeySuffix(defaultQuery),
+  );
+
+  if (queryClient) {
+    const cachedBundle = queryClient.getQueryData<MyTasksPageBundle>(taskQueryKey);
+    const queryState = queryClient.getQueryState(taskQueryKey);
+    const cacheFresh =
+      cachedBundle?.tasks &&
+      queryState?.dataUpdatedAt != null &&
+      Date.now() - queryState.dataUpdatedAt < MY_TASKS_STALE_MS;
+    if (cacheFresh && cachedBundle.tasks) {
+      return cachedBundle.tasks;
+    }
+  }
+
   if (isCapexBeConfigured()) {
     const token = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+    const cacheKey = `my-tasks:open-notifications:${currentUser.id}:${periodName?.trim() ?? ''}`;
     try {
-      const data = await fetchMyTasksOpenForNotifications(currentUser.id, token, periodName);
+      const data = await withRequestCache(
+        cacheKey,
+        () => fetchMyTasksOpenForNotifications(currentUser.id, token, periodName),
+        MY_TASKS_STALE_MS,
+      );
       return data.tasks ?? [];
     } catch (beErr) {
       if (!isCapexBeNetworkError(beErr)) throw beErr;

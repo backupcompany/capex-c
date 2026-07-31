@@ -35,6 +35,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AuditModule } from './audit/audit.module';
 import { BackupModule } from './backup/backup.module';
 
+/** Monolith AppModule — all domains on :3001. Leaf CAPEX_SERVICE_* overrides are optional. */
 @Module({
   imports: [
     LoggerModule.forRoot({

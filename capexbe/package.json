@@ -25,10 +25,12 @@
     "verify:be-routes": "node scripts/verify-be-route-allowlist.mjs",
     "verify:service-authz": "node scripts/verify-service-authz.mjs",
     "verify:endpoint-permissions": "node scripts/verify-endpoint-permissions.mjs",
-    "verify:security": "npm run verify:query-safety && npm run verify:be-routes && npm run verify:service-authz && npm run verify:endpoint-permissions && npm run verify:pii-sanitization",
-    "verify:pii-sanitization": "node scripts/verify-pii-sanitization.mjs"
+    "verify:security": "npm run verify:query-safety && npm run verify:be-routes && npm run verify:service-authz && npm run verify:endpoint-permissions && npm run verify:pii-sanitization && npm run verify:cache-pii",
+    "verify:pii-sanitization": "node scripts/verify-pii-sanitization.mjs",
+    "verify:cache-pii": "node scripts/verify-cache-pii-and-errors.mjs"
   },
   "dependencies": {
+    "@capex/auth-core": "file:../packages/capex-auth-core",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",

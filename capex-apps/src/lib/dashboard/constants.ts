@@ -1,7 +1,7 @@
 import type { DashboardStats } from './types';
 
 export const DASHBOARD_STALE_TIME_MS = 60_000;
-export const DASHBOARD_GC_TIME_MS = 1000 * 60 * 60 * 24;
+export const DASHBOARD_GC_TIME_MS = 1000 * 60 * 60;
 export const DASHBOARD_SNAPSHOT_PREFIX = 'dashboard';
 
 export const EMPTY_DASHBOARD_STATS: DashboardStats = {

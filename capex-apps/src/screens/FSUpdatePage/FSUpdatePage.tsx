@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   lazy,
   Suspense,
   memo,
@@ -36,6 +37,12 @@ import {
   buildScopedArchetypeOptions,
   buildScopedHuOptions,
 } from '../../lib/scopedFilterOptions';
+import { Spinner } from '../../components/atoms/Spinner/Spinner';
+import {
+  TABLE_PAGE_SIZE_OPTIONS,
+  clampTablePageSize,
+} from '../../lib/table/pageSizeOptions';
+import { useViewportTablePageSize } from '../../lib/table/useViewportTablePageSize';
 import {
   type SortOption,
   type FsEditableProject,
@@ -47,12 +54,16 @@ import {
   resolveFsApproval,
   toFsProjectSavePatch,
 } from './fsUpdateHelpers';
-import { QuickFsUpdateModal } from './QuickFsUpdateModal';
-import { FsSmartMigrationModal } from './FsSmartMigrationModal';
+
+const QuickFsUpdateModal = lazy(() =>
+  import('./QuickFsUpdateModal').then((m) => ({ default: m.QuickFsUpdateModal })),
+);
+const FsSmartMigrationModal = lazy(() =>
+  import('./FsSmartMigrationModal').then((m) => ({ default: m.FsSmartMigrationModal })),
+);
 
 const STALE_MS = 120_000;
 const SEARCH_DEBOUNCE_MS = 200;
-const INITIAL_PAGE_SIZE = 20;
 
 type FsProjectEditEntry = { original: FsEditableProject; current: FsEditableProject };
 
@@ -153,7 +164,10 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
   const [isQuickFsModalOpen, setIsQuickFsModalOpen] = useState(false);
   const [isFsMigrationOpen, setIsFsMigrationOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(INITIAL_PAGE_SIZE);
+  const tableScrollHostRef = useRef<HTMLDivElement>(null);
+  const { pageSize: viewportPageSize, maxHeightPx } = useViewportTablePageSize(tableScrollHostRef);
+  const [pageSizeOverride, setPageSizeOverride] = useState<number | null>(null);
+  const itemsPerPage = pageSizeOverride ?? viewportPageSize;
 
   useEffect(() => {
     setIsPageDirty(isDirty);
@@ -203,6 +217,8 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
     isBlockingLoad,
     isBackgroundRefresh,
     isFilterRefreshing,
+    isSearchStaging,
+    isTableFetching,
   } = useFsUpdateTableQuery({
     periodName,
     userId: currentUser.id,
@@ -258,6 +274,8 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
   );
 
   const hasListData = totalCount > 0 || paginatedData.length > 0;
+  const showTableBusy = isFilterRefreshing || isTableFetching;
+  const tableMaxHeight = `min(70vh, ${maxHeightPx}px)`;
 
   useEffect(() => {
     if (tableQuery.isError) {
@@ -281,6 +299,7 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
     setShowOnlyNotFSApproved(true);
     setSortBy('projectName_asc');
     setMeetingFilters({ archetype: null });
+    setPageSizeOverride(null);
   }, [periodName]);
 
   useEffect(() => {
@@ -687,6 +706,7 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
 
       <MeetingFilterBar
         onFilterChange={handleMeetingFilterChange}
+        selectedArchetype={meetingFilters.archetype}
         archetypeOptions={scopedArchetypeOptions}
         showAssetGroupFilter={false}
       />
@@ -743,72 +763,101 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
         </div>
       </TaskFilterPanel>
 
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[12rem]">
+      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[20rem] flex flex-col">
         <FsScreenRefreshChrome
           isBlockingLoad={isBlockingLoad}
           isBackgroundRefresh={isBackgroundRefresh}
           isFilterRefreshing={isFilterRefreshing}
           hasListData={hasListData}
           blockingMessage="Memuat data project…"
-          filterMessage="Memfilter…"
+          filterMessage="Memuat data terbaru…"
         />
-        <div className="bg-siloam-blue/10 p-3 rounded-lg text-sm text-siloam-blue mb-4">
+        <div className="bg-siloam-blue/10 p-3 rounded-lg text-sm text-siloam-blue mb-4 flex-shrink-0">
           <strong>Note:</strong> Approved Budget for &apos;Network Pipeline&apos; and &apos;General & Routine
           Assets&apos; projects are automatically synced with their Budget Plan and cannot be edited here.
         </div>
-        {isBlockingLoad ? (
-          <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
-            <span
-              className="inline-block h-5 w-5 rounded-full border-2 border-siloam-border border-t-siloam-blue animate-spin"
-              aria-hidden
-            />
-            <span>Memuat data project…</span>
-          </div>
-        ) : paginatedData.length > 0 ? (
-          <SpreadsheetTable
-            columns={columns}
-            data={paginatedData}
-            onDataChange={handleDataChange}
-            rowHeaderAccessor="projectName"
-          />
-        ) : (
-          <div className="py-12 text-center text-sm text-siloam-text-secondary">
-            {tableQuery.isError ? (
-              <span>Gagal memuat data. Periksa koneksi backend lalu refresh halaman.</span>
-            ) : totalCount > 0 ? (
-              <span>
-                Tidak ada project yang cocok dengan filter saat ini. Coba matikan &quot;Show only
-                projects not FS Approved&quot; atau reset filter.
-              </span>
-            ) : (
-              <span>Tidak ada data project untuk periode {periodName}.</span>
-            )}
-          </div>
-        )}
+        <div
+          ref={tableScrollHostRef}
+          className="relative flex-1 min-h-[16rem]"
+          aria-busy={showTableBusy}
+        >
+          {showTableBusy && paginatedData.length > 0 ? (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-surface/70 backdrop-blur-[1px]">
+              <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+                <Spinner size={18} className="text-siloam-blue" />
+                <span>{isSearchStaging ? 'Mencari…' : 'Memuat data terbaru…'}</span>
+              </div>
+            </div>
+          ) : null}
+          {isBlockingLoad ? (
+            <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
+              <Spinner size={20} className="text-siloam-blue" />
+              <span>Memuat data project…</span>
+            </div>
+          ) : paginatedData.length > 0 ? (
+            <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
+              <SpreadsheetTable
+                columns={columns}
+                data={paginatedData}
+                onDataChange={handleDataChange}
+                rowHeaderAccessor="projectName"
+                virtualizeRows="auto"
+                maxHeight={tableMaxHeight}
+              />
+            </div>
+          ) : (
+            <div className="py-12 text-center text-sm text-siloam-text-secondary">
+              {tableQuery.isError ? (
+                <span>Gagal memuat data. Periksa koneksi backend lalu refresh halaman.</span>
+              ) : totalCount > 0 ? (
+                <span>
+                  Tidak ada project yang cocok dengan filter saat ini. Coba matikan &quot;Show only
+                  projects not FS Approved&quot; atau reset filter.
+                </span>
+              ) : (
+                <span>Tidak ada data project untuk periode {periodName}.</span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {totalCount > 0 ? (
+      {totalCount > 0 || showTableBusy ? (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">
           <div className="text-sm text-siloam-text-secondary">
             Showing {Math.min(totalCount, (currentPage - 1) * itemsPerPage + 1)} -{' '}
             {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} projects
+            {pageSizeOverride == null ? (
+              <span className="ml-2 text-xs text-siloam-text-secondary/80">
+                (auto {itemsPerPage} rows/viewport)
+              </span>
+            ) : null}
+            {showTableBusy ? (
+              <span className="ml-2 text-xs text-siloam-blue">· Memperbarui…</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm text-siloam-text-secondary">Per page:</label>
               <select
-                value={itemsPerPage}
+                value={pageSizeOverride == null ? 'auto' : String(pageSizeOverride)}
                 onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
+                  const v = e.target.value;
+                  if (v === 'auto') {
+                    setPageSizeOverride(null);
+                  } else {
+                    setPageSizeOverride(clampTablePageSize(Number(v)));
+                  }
                   setCurrentPage(1);
                 }}
                 className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
               >
-                <option value={20}>20</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
+                <option value="auto">Auto ({viewportPageSize})</option>
+                {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
               </select>
             </div>
             {totalPages > 1 ? (
@@ -816,7 +865,7 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
+                  disabled={currentPage === 1 || showTableBusy}
                   className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Previous
@@ -827,7 +876,7 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || showTableBusy}
                   className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Next
@@ -839,31 +888,35 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
       ) : null}
 
       {canEdit ? (
-        <QuickFsUpdateModal
-          isOpen={isQuickFsModalOpen}
-          onClose={() => setIsQuickFsModalOpen(false)}
-          onSuccess={() => {
-            showToast('Data FS berhasil diperbarui.', 'success');
-            onDataChange();
-            void invalidateFsUpdateQueries();
-          }}
-          currentUser={currentUser}
-          periodName={periodName}
-        />
+        <Suspense fallback={null}>
+          <QuickFsUpdateModal
+            isOpen={isQuickFsModalOpen}
+            onClose={() => setIsQuickFsModalOpen(false)}
+            onSuccess={() => {
+              showToast('Data FS berhasil diperbarui.', 'success');
+              onDataChange();
+              void invalidateFsUpdateQueries();
+            }}
+            currentUser={currentUser}
+            periodName={periodName}
+          />
+        </Suspense>
       ) : null}
 
       {canEdit ? (
-        <FsSmartMigrationModal
-          isOpen={isFsMigrationOpen}
-          onClose={() => setIsFsMigrationOpen(false)}
-          onSuccess={() => {
-            onDataChange();
-            void invalidateFsUpdateQueries();
-          }}
-          currentUser={currentUser}
-          periodName={periodName}
-          showToast={showToast}
-        />
+        <Suspense fallback={null}>
+          <FsSmartMigrationModal
+            isOpen={isFsMigrationOpen}
+            onClose={() => setIsFsMigrationOpen(false)}
+            onSuccess={() => {
+              onDataChange();
+              void invalidateFsUpdateQueries();
+            }}
+            currentUser={currentUser}
+            periodName={periodName}
+            showToast={showToast}
+          />
+        </Suspense>
       ) : null}
 
       {selectedProjectForFS && canCreateFS ? (

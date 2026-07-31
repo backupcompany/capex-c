@@ -399,28 +399,35 @@ export async function fetchBudgetHuSyncStamp(
   const huId = hospitalUnitId.trim();
   if (!base || !pn || !huId || !Number.isFinite(userId)) return null;
 
-  const headers = await budgetHuRequestHeaders();
-  if (!headers) return null;
+  const cacheKey = `budget-hu:sync-stamp:${userId}:${pn}:${huId}`;
+  return withRequestCache(
+    cacheKey,
+    async () => {
+      const headers = await budgetHuRequestHeaders();
+      if (!headers) return null;
 
-  try {
-    const res = await authenticatedFetch(capexBeRequestUrl('/budget-hu/hu-sync-stamp'), {
-      method: 'POST',
-      headers,
-      credentials: useBackendSession() ? 'include' : 'same-origin',
-      body: JSON.stringify({ periodName: pn, userId, hospitalUnitId: huId }),
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as Partial<BudgetHuSyncStamp>;
-    const fingerprint = String(body.fingerprint ?? '').trim();
-    if (!fingerprint) return null;
-    return {
-      fingerprint,
-      projectSignature: String(body.projectSignature ?? '').trim(),
-      projectCount: Number(body.projectCount ?? 0) || 0,
-      assetCount: Number(body.assetCount ?? 0) || 0,
-    };
-  } catch {
-    return null;
-  }
+      try {
+        const res = await authenticatedFetch(capexBeRequestUrl('/budget-hu/hu-sync-stamp'), {
+          method: 'POST',
+          headers,
+          credentials: useBackendSession() ? 'include' : 'same-origin',
+          body: JSON.stringify({ periodName: pn, userId, hospitalUnitId: huId }),
+          cache: 'no-store',
+        });
+        if (!res.ok) return null;
+        const body = (await res.json()) as Partial<BudgetHuSyncStamp>;
+        const fingerprint = String(body.fingerprint ?? '').trim();
+        if (!fingerprint) return null;
+        return {
+          fingerprint,
+          projectSignature: String(body.projectSignature ?? '').trim(),
+          projectCount: Number(body.projectCount ?? 0) || 0,
+          assetCount: Number(body.assetCount ?? 0) || 0,
+        };
+      } catch {
+        return null;
+      }
+    },
+    15_000,
+  );
 }

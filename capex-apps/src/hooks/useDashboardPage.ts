@@ -8,7 +8,7 @@ import {
   EMPTY_DASHBOARD_STATS,
 } from '@/lib/dashboard/constants';
 import { readCachedDashboardBundle, writeCachedDashboardBundle } from '@/lib/dashboard/snapshotCache';
-import { readCachedDashboardStats, writeCachedDashboardStats } from '@/lib/dashboard/statsCache';
+import { writeCachedDashboardStats } from '@/lib/dashboard/statsCache';
 import { resolveDashboardStatsFromBundle } from '@/lib/dashboard/resolveDashboardStats';
 import type { DashboardStats } from '@/lib/dashboard/types';
 import { fetchDashboardBundle, type DashboardBundle } from './queries/fetchDashboardBundle';
@@ -33,16 +33,7 @@ export function useDashboardPage({ periodName, currentUser }: UseDashboardPagePa
     [trimmedPeriod, userId],
   );
 
-  const cachedStats = useMemo(
-    () => (trimmedPeriod ? readCachedDashboardStats(trimmedPeriod, userId) : null),
-    [trimmedPeriod, userId],
-  );
-
   const initialBundle = cachedBundle;
-  const initialStats = useMemo(
-    () => (initialBundle ? statsFromBundle(initialBundle) : cachedStats ?? EMPTY_DASHBOARD_STATS),
-    [initialBundle, cachedStats],
-  );
 
   const query = useQuery({
     queryKey: queryKeys.dashboard.bundle(trimmedPeriod, userId),
@@ -59,16 +50,15 @@ export function useDashboardPage({ periodName, currentUser }: UseDashboardPagePa
     staleTime: DASHBOARD_STALE_TIME_MS,
     gcTime: DASHBOARD_GC_TIME_MS,
     refetchOnWindowFocus: false,
-    initialData: initialBundle,
-    initialDataUpdatedAt: initialBundle ? Date.now() - 1000 : undefined,
+    refetchOnMount: true,
     placeholderData: (previousData) => previousData ?? initialBundle,
   });
 
   const stats: DashboardStats = useMemo(() => {
     if (query.data) return statsFromBundle(query.data);
-    if (cachedStats) return cachedStats;
-    return initialStats;
-  }, [query.data, cachedStats, initialStats]);
+    if (initialBundle) return statsFromBundle(initialBundle);
+    return EMPTY_DASHBOARD_STATS;
+  }, [query.data, initialBundle]);
 
   const projectCountDisplay = useMemo(() => {
     const fromBundle = query.data?.totalProjectsCount ?? cachedBundle?.totalProjectsCount ?? 0;
@@ -77,7 +67,7 @@ export function useDashboardPage({ periodName, currentUser }: UseDashboardPagePa
   }, [query.data?.totalProjectsCount, cachedBundle?.totalProjectsCount, stats.projectCount]);
 
   const errorMessage =
-    query.isError && !query.data && !cachedBundle && !cachedStats
+    query.isError && !query.data && !cachedBundle
       ? SAFE_ERROR_MESSAGE
       : null;
 
@@ -88,11 +78,14 @@ export function useDashboardPage({ periodName, currentUser }: UseDashboardPagePa
     !query.data?.serverSnapshot &&
     !query.data?.budgetPeriod;
 
+  const isBlockingLoad = Boolean(trimmedPeriod) && query.isPending && !query.data && !cachedBundle;
+
   return {
     stats,
     projectCountDisplay,
     errorMessage,
     hasPeriod: Boolean(trimmedPeriod),
+    isBlockingLoad,
     isRefreshing,
     isBackendEmpty,
   };

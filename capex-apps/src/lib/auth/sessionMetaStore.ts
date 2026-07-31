@@ -1,19 +1,19 @@
-import type { AuthMeResponse } from './authApi';
+import type { AuthSessionResponse } from './authApi';
 
-let sessionMeta: AuthMeResponse['session'] | null = null;
-const listeners = new Set<(meta: AuthMeResponse['session'] | null) => void>();
+let sessionMeta: AuthSessionResponse['session'] | null = null;
+const listeners = new Set<(meta: AuthSessionResponse['session'] | null) => void>();
 
-export function updateSessionMeta(meta: AuthMeResponse['session'] | null | undefined): void {
+export function updateSessionMeta(meta: AuthSessionResponse['session'] | null | undefined): void {
   sessionMeta = meta ?? null;
   listeners.forEach((fn) => fn(sessionMeta));
 }
 
-export function getSessionMeta(): AuthMeResponse['session'] | null {
+export function getSessionMeta(): AuthSessionResponse['session'] | null {
   return sessionMeta;
 }
 
 export function subscribeSessionMeta(
-  fn: (meta: AuthMeResponse['session'] | null) => void,
+  fn: (meta: AuthSessionResponse['session'] | null) => void,
 ): () => void {
   listeners.add(fn);
   fn(sessionMeta);

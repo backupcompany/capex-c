@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { Page, type User } from '@/types';
-import { prefetchScreenChunk } from '@/screens/registry';
+import { prefetchScreenChunk } from '@/app-shell/screenRegistry';
 import {
   hydrateCapexProjectListTableFromDisk,
   warmCapexProjectListTableCache,
@@ -91,18 +91,17 @@ export function hydrateRouteDisk(ctx: RouteWarmContext): void {
 
 /** Chunk + network warm after paint — avoids blocking navigation transition. */
 export function prefetchRouteNetwork(ctx: RouteWarmContext): void {
-  const { queryClient, routePage, periodName, userId: uid, user, selectedArchetypeId, selectedHuId } =
+  const { queryClient, routePage, periodName, userId: uid, user, selectedArchetypeId } =
     ctx;
   if (!periodName.trim()) return;
 
   prefetchScreenChunk(routePage);
-  const huId = selectedHuId ?? undefined;
 
   const warm = (fn: () => void | Promise<void>) => scheduleRouteNetworkPrefetch(fn);
 
   switch (routePage) {
     case Page.BudgetHU:
-      warm(() => prefetchBudgetHuPage(queryClient, periodName, uid, { hospitalUnitId: huId }));
+      // HU-scoped prefetch lives in useBudgetHuPagePipeline (avoids duplicate network warm).
       break;
     case Page.Dashboard:
       warm(() => prefetchDashboardBundle(queryClient, periodName, uid));
@@ -146,23 +145,14 @@ export function prefetchRouteNetwork(ctx: RouteWarmContext): void {
   }
 }
 
-/** Warm caches when budget period changes — active route only. */
+/** Warm disk caches when budget period changes — network warm is owned by useRouteWarm. */
 export function warmRouteOnPeriodChange(
   ctx: RouteWarmContext & { pinArchetypeId?: string | null; pinHuId?: string | null },
 ): void {
-  const { queryClient, routePage, periodName, userId: uid, pinArchetypeId, pinHuId } = ctx;
+  const { queryClient, routePage, periodName, userId: uid, user } = ctx;
 
   switch (routePage) {
-    case Page.Dashboard:
-      prefetchDashboardBundle(queryClient, periodName, uid);
-      break;
-    case Page.ExecutiveSummary:
-      prefetchExecutiveDashboard(queryClient, periodName, uid, pinArchetypeId ?? null);
-      break;
     case Page.BudgetHU:
-      prefetchBudgetHuPage(queryClient, periodName, uid, {
-        hospitalUnitId: pinHuId ?? undefined,
-      });
       hydrateBudgetHuPageFromDisk(queryClient, periodName, uid);
       break;
     case Page.CapexProjectList:
@@ -183,9 +173,8 @@ export function warmRouteOnPeriodChange(
     case Page.POUpdate:
       hydratePoUpdatePageFromDisk(queryClient, uid, periodName);
       break;
-    case Page.BudgetPeriod:
-    case Page.BudgetArchetype:
-      prefetchBudgetSiloamPeriod(queryClient, periodName, uid);
+    case Page.BDDConstruction:
+      hydrateBddConstructionTableFromDisk(queryClient, periodName, user);
       break;
     default:
       break;

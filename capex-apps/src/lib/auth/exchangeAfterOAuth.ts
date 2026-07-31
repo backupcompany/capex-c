@@ -2,14 +2,14 @@ import type { User } from '../../types';
 import { clearTabSessionState } from './clearTabSessionState';
 import { updateSessionMeta } from './sessionMetaStore';
 import { clearSupabaseSessionAfterExchange } from './signInForExchange';
-import { mergeAuthIdentityUser, type AuthMeAssignment } from './mergeAuthIdentityUser';
+import { mergeAuthIdentityUser, type AuthSessionAssignment } from './mergeAuthIdentityUser';
 
 type ExchangeUser = {
   id: number;
   username: string;
   email: string;
   roles?: string[];
-  assignments?: AuthMeAssignment[];
+  assignments?: AuthSessionAssignment[];
   idleTimeoutMs?: number;
   session?: {
     accessExpiresAt: number;
@@ -22,7 +22,7 @@ function toAppUser(data: ExchangeUser): User {
   return mergeAuthIdentityUser(
     { id: data.id, username: data.username, email: data.email },
     {
-      meAssignments: data.assignments,
+      sessionAssignments: data.assignments,
       roleSlugs: data.roles,
     },
   );

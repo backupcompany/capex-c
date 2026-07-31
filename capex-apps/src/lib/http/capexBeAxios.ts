@@ -3,7 +3,7 @@ import { CSRF_HEADER, useBackendSession } from '../auth/authConstants';
 import { authDebug } from '../auth/authDebug';
 import { coordinatedRefreshSession } from '../auth/authRefreshCoordinator';
 import { isBackendSessionValid } from '../auth/sessionValidity';
-import { getCsrfToken } from '../auth/csrfToken';
+import { getCsrfToken, ensureCsrfToken } from '../auth/csrfToken';
 
 const MAX_401_RETRIES = 1;
 const MAX_503_RETRIES = 1;
@@ -29,10 +29,14 @@ export const capexBeAxios = axios.create({
   transitional: { clarifyTimeoutError: true },
 });
 
-capexBeAxios.interceptors.request.use((config) => {
+capexBeAxios.interceptors.request.use(async (config) => {
   const method = (config.method ?? 'get').toLowerCase();
   if (method !== 'get' && method !== 'head' && method !== 'options') {
-    const csrf = getCsrfToken();
+    let csrf = getCsrfToken();
+    if (!csrf) {
+      await ensureCsrfToken();
+      csrf = getCsrfToken();
+    }
     if (csrf) {
       config.headers.set(CSRF_HEADER, csrf);
     }

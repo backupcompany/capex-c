@@ -1,7 +1,41 @@
-import { maskEmail, maskPhone } from './pii-hash.util';
+import { maskEmail, maskPhone, maskTaxId } from './pii-hash.util';
 
 /** DB columns safe to load for user directory (never auth_id / password). */
 export const USER_DIRECTORY_COLUMNS = 'id,username,email,phone_number';
+
+const CACHE_PII_KEYS = new Set([
+  'email',
+  'phone',
+  'phoneNumber',
+  'phone_number',
+  'npwp',
+  'taxId',
+  'tax_id',
+]);
+
+/**
+ * Deep-mask PII before Redis/shared cache write.
+ * Privileged viewers must not rely on cache for full PII (reload / process cache).
+ */
+export function maskPiiForCache<T>(value: T): T {
+  return maskPiiNode(value) as T;
+}
+
+function maskPiiNode(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(maskPiiNode);
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (CACHE_PII_KEYS.has(key) && typeof child === 'string' && child.trim()) {
+      if (key === 'email') out[key] = maskEmail(child);
+      else if (key === 'npwp' || key === 'taxId' || key === 'tax_id') out[key] = maskTaxId(child);
+      else out[key] = maskPhone(child);
+      continue;
+    }
+    out[key] = maskPiiNode(child);
+  }
+  return out;
+}
 
 export type DirectoryUser = {
   id: number;

@@ -1,23 +1,6 @@
 # Security
 
-Defense-in-depth yang diimplementasikan selama remediasi 22–23 Juli 2026.
-
-**Score: 7.6 / 10 overall** (dari ~5.5 inherited)
-
----
-
-## Inherited risks (kondisi overtake)
-
-| Risk | Severity | Kondisi inherited |
-|------|----------|-------------------|
-| Direct PostgREST dari browser | Critical | Anon key bisa hit tables langsung |
-| RBAC hanya di UI | High | Bypass via API call jika session valid |
-| Secrets di client bundle | High | Potensi `NEXT_PUBLIC_SUPABASE_*`, API keys |
-| No brute-force protection | Medium | Unlimited login attempts |
-| No audit immutability | Medium | Audit logs bisa di-update/delete |
-| PII full dump ke client | High | Bootstrap return all users dengan email/phone |
-
-Semua item di atas **sudah di-address** di sprint remediasi. Detail per layer di bawah.
+**Score: 8.0 / 10 overall**
 
 ---
 
@@ -72,7 +55,7 @@ ThrottlerGuard (400/min, Redis-backed)
       → PermissionsGuard (@RequirePermission decorator)
 ```
 
-### Auth hardening (baru)
+### Auth hardening
 
 | Service | File |
 |---------|------|
@@ -162,9 +145,9 @@ Runs 6 checks:
 |-------|-------|-------|
 | L2 Access Control | 9.0 | Guards + lockout + session rotation |
 | L3 Application | 9.0 | Throttle, CSP, allowlist, CSRF |
-| L4 Data Protection | 7.8 | PII masking; no field encryption at-rest |
+| L4 Data Protection | 8.4 | PII masking on egress + Redis cache |
 | L5 Audit | 8.8 | Append-only migration + insert-only code |
-| L1 Network | 6.0 | nginx/Cloudflare template ready, ops manual |
+| L1 Network | 6.5 | nginx/Cloudflare template ready; CSP nonce wired |
 
 ---
 
@@ -172,12 +155,12 @@ Runs 6 checks:
 
 | Priority | Item |
 |----------|------|
-| P1 | Wire CSP nonce ke root layout `<Script>` tags |
-| P2 | Sanitize before `perfCacheSet` (don't cache raw PII in Redis) |
-| P2 | Generic error messages in prod (wrap Supabase errors) |
+| ~~P1~~ | ~~Wire CSP nonce ke root layout~~ — done: request CSP + `force-dynamic` layout |
+| ~~P2~~ | ~~Sanitize before `perfCacheSet`~~ — done: `maskPiiForCache` + skip Redis for users/vendors |
+| ~~P2~~ | ~~Generic error messages in prod~~ — done: scrub PostgREST/Supabase internals |
 | P3 | Turnstile/CAPTCHA on login |
 | P3 | Distributed edge rate limit (currently in-process) |
 
 ---
 
-[Lihat README](./README.md) · [Architecture](./ARCHITECTURE.md) · [Auth & Session](./AUTH-SESSION.md)
+[Lihat README](./README.md) · [Deploy](./DEPLOY.md)

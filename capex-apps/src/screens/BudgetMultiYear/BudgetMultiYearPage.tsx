@@ -435,12 +435,10 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
     queryKey: queryKeys.budgetMultiYear.page(currentUser.id),
     queryFn: () => fetchBudgetMultiYearPageBundle(queryClient),
     enabled: canView && Number.isFinite(currentUser.id),
-    initialData: hasInstantSeed ? initialPageBundle : undefined,
-    initialDataUpdatedAt: hasInstantSeed ? bootstrapUpdatedAt : undefined,
     staleTime: STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: hasInstantSeed ? false : true,
+    refetchOnMount: true,
     placeholderData: (prev) => prev ?? (hasInstantSeed ? initialPageBundle : undefined),
   });
 

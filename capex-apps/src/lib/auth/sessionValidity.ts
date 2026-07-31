@@ -1,9 +1,9 @@
-import { fetchAuthMe } from './authApi';
+import { fetchAuthSession } from './authApi';
 
-/** Lightweight session check — reuses fetchAuthMe dedupe (no parallel /me). */
+/** Lightweight session check — reuses fetchAuthSession dedupe (no parallel /session). */
 export async function isBackendSessionValid(): Promise<boolean> {
   try {
-    const me = await fetchAuthMe();
+    const me = await fetchAuthSession();
     return me?.authenticated === true;
   } catch {
     return false;

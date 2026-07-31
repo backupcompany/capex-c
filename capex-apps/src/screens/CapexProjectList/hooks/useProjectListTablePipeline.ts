@@ -320,7 +320,7 @@ export function useProjectListTablePipeline(
       : null,
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (preloadTableAppliedRef.current) return;
     const scope = resolveInitialPreloadScope();
     if (!scope) return;
@@ -935,7 +935,7 @@ export function useProjectListTablePipeline(
     clearTableRows();
   }, [setCurrentPage, clearTableRows]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!hadActiveFiltersOnMountRef.current || mountFilterClearAppliedRef.current) return;
     mountFilterClearAppliedRef.current = true;
     mustRefetchTableRef.current = true;
@@ -987,14 +987,14 @@ export function useProjectListTablePipeline(
     };
   }, [currentUser?.id]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!currentUser?.id || !queryPeriodKey || isMultiPeriodView) return;
     const active = clientFilterPoolRef.current;
     if (active?.periodKey === queryPeriodKey && isCompleteListSource(active.source)) {
       if (!clientFilterPoolReady) setClientFilterPoolReady(true);
       return;
     }
-    if (restoreClientPoolFromSession(queryPeriodKey)) return;
+    restoreClientPoolFromSession(queryPeriodKey);
   }, [
     currentUser?.id,
     queryPeriodKey,
@@ -1228,7 +1228,7 @@ export function useProjectListTablePipeline(
     userScopesReadyRef,
   ]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const pool = clientFilterPoolRef.current?.source;
     if (!pool || !clientFilterPoolReady) return;
     applyMasterFromSource(pool);
@@ -1276,7 +1276,7 @@ export function useProjectListTablePipeline(
     clearTableRows,
   ]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (pipelineDiskPurgedRef.current || typeof window === 'undefined') return;
     const markerKey = 'capex.projectList.dataPolicy';
     const stored = window.localStorage.getItem(markerKey);
@@ -1422,9 +1422,11 @@ export function useProjectListTablePipeline(
     gcTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchOnMount: hasActiveTableFilters || hasPanelTableFilters || !diskTableSeed,
+    refetchOnMount: true,
     placeholderData: (previousData, previousQuery) => {
-      if (!previousData || !previousQuery) return undefined;
+      if (!previousData || !previousQuery) {
+        return mayUseDiskSeed ? diskTableSeed : undefined;
+      }
       const prevListKey = previousQuery.queryKey[5];
       const prevPage = previousQuery.queryKey[6];
       const prevPageSize = previousQuery.queryKey[7];
@@ -1438,7 +1440,6 @@ export function useProjectListTablePipeline(
       }
       return undefined;
     },
-    initialData: mayUseDiskSeed ? diskTableSeed : undefined,
     queryFn: async ({ signal }) => {
       if (!currentUser) throw new Error('Missing user');
       const bff = useBeBffProxy();

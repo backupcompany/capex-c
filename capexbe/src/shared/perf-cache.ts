@@ -1,3 +1,5 @@
+import { maskPiiForCache } from './response-sanitize.util';
+
 type CacheEntry = {
   expiresAt: number;
   value: unknown;
@@ -182,15 +184,17 @@ export async function perfCacheGet<T>(key: string): Promise<T | null> {
 }
 
 export async function perfCacheSet(key: string, value: unknown, ttlMs: number): Promise<void> {
+  // Never persist raw email/phone/tax id in shared cache (Redis dump = PII leak).
+  const safe = maskPiiForCache(value);
   const expiresAt = Date.now() + ttlMs;
-  memoryCache.set(key, { expiresAt, value });
+  memoryCache.set(key, { expiresAt, value: safe });
   logCache('set', key, `${Math.floor(ttlMs / 1000)}s`);
 
   const redis = await getRedisClient();
   if (!redis) return;
   try {
     const ttlSec = Math.max(1, Math.floor(ttlMs / 1000));
-    await redis.set(key, JSON.stringify(value), { EX: ttlSec });
+    await redis.set(key, JSON.stringify(safe), { EX: ttlSec });
   } catch (err) {
     logCache('error', key, err instanceof Error ? err.message : 'set');
   }

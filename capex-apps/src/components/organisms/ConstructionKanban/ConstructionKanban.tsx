@@ -82,7 +82,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ title, assets, tagId, onDro
 
     return (
         <div
-            className={`flex-1 min-w-[280px] flex flex-col bg-siloam-bg rounded-xl border-2 transition-colors duration-200 h-full ${isDisabled ? 'opacity-60' : ''} ${isDragOver && !isDisabled ? 'border-siloam-blue bg-siloam-blue/5' : 'border-transparent'}`}
+            className={`flex-1 min-w-[280px] min-h-0 flex flex-col bg-siloam-bg rounded-xl border-2 transition-colors duration-200 h-full ${isDisabled ? 'opacity-60' : ''} ${isDragOver && !isDisabled ? 'border-siloam-blue bg-siloam-blue/5' : 'border-transparent'}`}
             onDragOver={isDisabled ? undefined : handleDragOver}
             onDragLeave={isDisabled ? undefined : handleDragLeave}
             onDrop={isDisabled ? undefined : handleDrop}
@@ -93,7 +93,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ title, assets, tagId, onDro
                     {assets.length}
                 </span>
             </div>
-            <div className="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+            <div className="p-3 space-y-3 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                 {assets.map(asset => (
                     <AssetCard key={asset.id} asset={asset} onClick={() => onAssetClick(asset)} />
                 ))}
@@ -128,7 +128,7 @@ export const ConstructionKanban: React.FC<ConstructionKanbanProps> = ({ assets, 
     }, [assets, tags]);
 
     return (
-        <div className="flex gap-4 h-full overflow-x-auto pb-2 px-2">
+        <div className="flex gap-4 h-full min-h-0 overflow-x-auto overflow-y-hidden pb-2 px-2">
             {/* Always show Unassigned first */}
             <KanbanColumn
                 title="UNASSIGNED"

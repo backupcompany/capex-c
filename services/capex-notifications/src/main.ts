@@ -8,6 +8,7 @@ import { AppModule } from './app.module';
 import { leafRouteAllowlistMiddleware } from './leaf-route-allowlist.middleware';
 import { ProductionSafeExceptionFilter } from '@capexbe/shared/http-exception.filter';
 import { createCompressionMiddleware } from '@capexbe/shared/compression.middleware';
+import { requestIdMiddleware } from '@capexbe/shared/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
@@ -19,6 +20,7 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(createCompressionMiddleware());
+  app.use(requestIdMiddleware);
   app.use(leafRouteAllowlistMiddleware());
   app.use(json({ limit: '2mb' }));
   app.use(urlencoded({ extended: true, limit: '2mb' }));

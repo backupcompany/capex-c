@@ -52,7 +52,7 @@ function normalizeBudgetPeriodTree(period: BudgetPeriod): BudgetPeriod {
 }
 
 /** Peer sync via backend stamp — keep light; only soft-refetch on real change. */
-const HU_SYNC_POLL_MS = 30_000;
+const HU_SYNC_POLL_MS = 90_000;
 const STALE_MS = 5 * 60 * 1000;
 const CONFIG_STALE_MS = 30 * 60 * 1000;
 const GC_MS = 1000 * 60 * 30;
@@ -302,16 +302,6 @@ export function useBudgetHuPagePipeline({
       hydrationContextRef.current = contextKey;
     }
 
-    // Prefer instant disk hydrate for this HU; prefetch network when cache is cold.
-    hydrateBudgetHuPageFromDisk(queryClient, periodName, userId, {
-      hospitalUnitId: huId ?? undefined,
-    });
-    if (!useDiskSeedForHuQuery || likelyPartialDiskCache) {
-      void prefetchBudgetHuPage(queryClient, periodName, userId, {
-        hospitalUnitId: huId ?? undefined,
-      });
-    }
-
     const shouldSeedLocal =
       periodChanged || (!preloadAppliedRef.current && !isDirtyRef.current);
     if (shouldSeedLocal) {
@@ -345,11 +335,31 @@ export function useBudgetHuPagePipeline({
     userId,
     huId,
     canView,
-    queryClient,
     diskPageSeed,
     applyPageBundle,
     currentBudgetPeriod,
     preloadedBudgetHuPage,
+    useDiskSeedForHuQuery,
+  ]);
+
+  // Disk hydrate + network prefetch after paint — do not block sidebar navigation.
+  useEffect(() => {
+    if (!periodName.trim() || !canView) return;
+
+    hydrateBudgetHuPageFromDisk(queryClient, periodName, userId, {
+      hospitalUnitId: huId ?? undefined,
+    });
+    if (!useDiskSeedForHuQuery || likelyPartialDiskCache) {
+      void prefetchBudgetHuPage(queryClient, periodName, userId, {
+        hospitalUnitId: huId ?? undefined,
+      });
+    }
+  }, [
+    periodName,
+    userId,
+    huId,
+    canView,
+    queryClient,
     useDiskSeedForHuQuery,
     likelyPartialDiskCache,
   ]);
@@ -383,8 +393,7 @@ export function useBudgetHuPagePipeline({
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchOnMount: hasWarmHuCache ? false : likelyPartialDiskCache || !useDiskSeedForHuQuery ? 'always' : false,
-    initialData: warmHuSeed,
+    refetchOnMount: true,
     placeholderData: (prev) => prev ?? warmHuSeed,
   });
 
@@ -395,8 +404,7 @@ export function useBudgetHuPagePipeline({
     staleTime: CONFIG_STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: diskConfigSeed ? false : true,
-    initialData: diskConfigSeed ?? undefined,
+    refetchOnMount: true,
     placeholderData: (prev) => prev ?? diskConfigSeed ?? undefined,
   });
 
@@ -439,7 +447,7 @@ export function useBudgetHuPagePipeline({
     staleTime: STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
-    refetchOnMount: likelyPartialDiskCache || seedAssetCountMap.size === 0 ? 'always' : false,
+    refetchOnMount: true,
     placeholderData: (prev) =>
       prev ?? (seedAssetCountMap.size > 0 ? Object.fromEntries(seedAssetCountMap) : undefined),
   });
@@ -637,6 +645,7 @@ export function useBudgetHuPagePipeline({
 
     void tick();
     const intervalId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void tick();
     }, HU_SYNC_POLL_MS);
 

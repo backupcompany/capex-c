@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppBootstrapPayload } from '@/hooks/queries/fetchAppBootstrapData';
 import { fetchConfigurationSlicesForUser } from '@/hooks/queries/fetchConfigurationSlices';
@@ -17,6 +17,8 @@ import {
   type ConfigSliceKey,
   type ConfigurationDataPack,
 } from '@/services/configurationApi';
+import { isCapexBeConfigured } from '@/lib/capexBeClient';
+import { useBackendSession } from '@/lib/auth/authConstants';
 import {
   buildSeedFromBootstrap,
   getMissingSlices,
@@ -48,7 +50,7 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
   const queryClient = useQueryClient();
   const qk = queryKeys.configuration.page(userId);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     hydrateConfigurationFromDisk(queryClient, userId);
   }, [queryClient, userId]);
 
@@ -82,6 +84,19 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
       const slicesToFetch = skipAuthFetch
         ? missingCritical.filter((k) => k !== 'users' && k !== 'roles')
         : missingCritical;
+
+      if (isCapexBeConfigured()) {
+        const token = useBackendSession() ? null : (await getAccessTokenForBackend()) ?? null;
+        const revalidateKeys =
+          slicesToFetch.length > 0
+            ? slicesToFetch
+            : excludeUserManagedConfigurationSlices([...INITIAL_CRITICAL_SLICES]);
+        const fresh = await fetchFreshConfigurationSlices(token, userId, revalidateKeys);
+        const merged = mergeConfigurationPack(seed, fresh);
+        writeConfigurationPackCache(userId, merged, { replace: true });
+        return merged;
+      }
+
       if (slicesToFetch.length) {
         const partial = await fetchConfigurationSlicesForUser(userId, slicesToFetch);
         const merged = mergeConfigurationPack(seed, partial);
@@ -94,13 +109,7 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
     staleTime: CONFIG_STALE_MS,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    initialData: () => {
-      const disk = readDiskSeed();
-      if (isMinimalConfigurationReady(disk)) return disk;
-      const seed = readBootstrapSeed();
-      if (isMinimalConfigurationReady(seed)) return seed;
-      return undefined;
-    },
+    refetchOnMount: true,
     placeholderData: (previousData) => {
       if (previousData) return previousData;
       const cached = queryClient.getQueryData<Partial<ConfigurationDataPack>>(qk);

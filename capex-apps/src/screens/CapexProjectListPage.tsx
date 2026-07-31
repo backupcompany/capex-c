@@ -53,6 +53,7 @@ import { useCapexProjectListMasterConfig } from './CapexProjectList/useCapexProj
 import { useProjectListMaster } from './CapexProjectList/useProjectListMaster';
 import type { ProjectListMasterBundle } from '../services/capexProjectListApi';
 import { isAssetCancelledForProjectList } from '../lib/assetLifecycle';
+import { clampTablePageSize } from '../lib/table/pageSizeOptions';
 import { logProjectListPipelineStage } from '../lib/projectListPipelineDebug';
 import { deleteSessionClientPool } from '../lib/capexProjectListSessionPool';
 import { userCanEditProjectPriority } from '../lib/projectPriorityPolicy';
@@ -92,6 +93,7 @@ import { buildCapexProjectListTourSteps, CAPEX_PROJECT_LIST_TOUR_ID, CAPEX_PROJE
 import { usePageTour } from '../features/onboarding/usePageTour';
 import { HelpCircle, Zap } from 'lucide-react';
 import { QuickTaskDoneModal } from './CapexProjectList/QuickTaskDoneModal';
+import { PageContentSkeleton } from '../components/app-shell/PageContentSkeleton';
 import {
   handleProjectListTriggerTaskSave,
   type ProjectListTriggerTaskSaveParams,
@@ -1658,7 +1660,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
       resetAppliedTableCacheKeys();
       clearTableRows({ keepTotal: true });
       setSelectedAssetId(null);
-      setItemsPerPage(size);
+      setItemsPerPage(clampTablePageSize(size));
       setCurrentPage(1);
     },
     [resetAppliedTableCacheKeys, clearTableRows, setItemsPerPage, setCurrentPage],
@@ -1936,8 +1938,8 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
         {selectedAssetId && selectedAsset && currentUser ? (
           <Suspense
             fallback={
-              <div className="flex flex-1 items-center justify-center p-6 text-sm text-siloam-text-secondary">
-                Memuat detail…
+              <div className="flex flex-1 p-4">
+                <PageContentSkeleton variant="table" />
               </div>
             }
           >

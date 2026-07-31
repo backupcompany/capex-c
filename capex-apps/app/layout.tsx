@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { AppProviders } from "@/providers/AppProviders";
 
@@ -10,11 +11,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+/** Per-request CSP nonce from middleware only works on dynamic SSR. */
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Bind middleware x-nonce + request CSP to Next framework scripts during SSR.
+  await headers();
+
   return (
     <html lang="en" className="h-full antialiased">
       <head>

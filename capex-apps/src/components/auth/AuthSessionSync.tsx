@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import {
-  fetchAuthMe,
+  fetchAuthSession,
   heartbeatBackend,
   logoutBackend,
+  probeBackendSession,
   refreshBackendSessionCoordinated,
 } from '../../lib/auth/authApi';
 import { authDebug } from '../../lib/auth/authDebug';
@@ -33,7 +34,7 @@ type Props = {
   onForceLogout: (options?: ForceLogoutOptions) => void | Promise<void>;
 };
 
-const HEARTBEAT_INTERVAL_MS = 4 * 60 * 1000;
+const HEARTBEAT_INTERVAL_MS = 6 * 60 * 1000;
 const REFRESH_INTERVAL_MS = SESSION_REFRESH_INTERVAL_MS;
 /** After login, do not treat refresh failures as logout (ms). */
 const POST_LOGIN_GRACE_MS = 15_000;
@@ -64,7 +65,7 @@ export function AuthSessionSync({ onForceLogout }: Props) {
       handleIdleTimeout();
       return;
     }
-    const me = await fetchAuthMe();
+    const me = await fetchAuthSession();
     if (me?.user?.session) {
       updateSessionMeta(me.user.session);
     }
@@ -78,12 +79,12 @@ export function AuthSessionSync({ onForceLogout }: Props) {
     const ok = await refreshBackendSessionCoordinated();
     if (ok) {
       resetActivityTimestamp();
-      const me = await fetchAuthMe();
+      const me = await fetchAuthSession();
       if (me?.user?.session) updateSessionMeta(me.user.session);
       void heartbeatBackend();
       return;
     }
-    authDebug('refresh failed — verifying /me before logout');
+    authDebug('refresh failed — verifying session before logout');
     await confirmSessionOrLogout();
   }, [confirmSessionOrLogout]);
 
@@ -111,7 +112,7 @@ export function AuthSessionSync({ onForceLogout }: Props) {
     if (!enabled || status !== 'authenticated') return;
     return subscribeSessionRefreshed(() => {
       authDebug('peer tab refreshed session — sync metadata');
-      void fetchAuthMe().then((me) => {
+      void fetchAuthSession().then((me) => {
         if (me?.user?.session) updateSessionMeta(me.user.session);
       });
     });
@@ -121,7 +122,7 @@ export function AuthSessionSync({ onForceLogout }: Props) {
     if (!enabled || status !== 'authenticated') return;
 
     const tick = async () => {
-      const me = await fetchAuthMe();
+      const me = await probeBackendSession();
       if (me?.authenticated && me.user) {
         if (me.user.session) updateSessionMeta(me.user.session);
         queueMicrotask(() => {
@@ -133,7 +134,7 @@ export function AuthSessionSync({ onForceLogout }: Props) {
               email: me.user!.email,
             },
             {
-              meAssignments: me.user!.assignments,
+              sessionAssignments: me.user!.assignments,
               roleSlugs: me.user!.roles,
               previous: prev,
             },
@@ -146,7 +147,6 @@ export function AuthSessionSync({ onForceLogout }: Props) {
         });
       }
     };
-    void tick();
 
     const startTimers = () => {
       if (!heartbeatTimer.current) {
@@ -180,6 +180,8 @@ export function AuthSessionSync({ onForceLogout }: Props) {
           !meta?.accessExpiresAt || meta.accessExpiresAt > Date.now() + 60_000;
         if (!accessStillValid) {
           void tryRefreshSession();
+        } else {
+          void tick();
         }
         startTimers();
       } else {
@@ -189,6 +191,9 @@ export function AuthSessionSync({ onForceLogout }: Props) {
 
     if (document.visibilityState === 'visible') {
       startTimers();
+      if (!useAuthStore.getState().user?.id) {
+        void tick();
+      }
     }
 
     document.addEventListener('visibilitychange', handleVisibility);

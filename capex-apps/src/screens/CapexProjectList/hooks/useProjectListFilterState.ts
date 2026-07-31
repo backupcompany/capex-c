@@ -7,6 +7,7 @@ import {
   writeProjectListFilterSelection,
 } from '../../../lib/capexProjectListDiskCache';
 import { useDebouncedValue } from './useDebouncedValue';
+import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../../../lib/table/pageSizeOptions';
 
 const savedSearchOnMount = () => {
   const saved =
@@ -89,7 +90,9 @@ export function useProjectListFilterState(
     () => saved.current?.selectedBudgetCategoryIds ?? [],
   );
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(() => saved.current?.itemsPerPage ?? 20);
+  const [itemsPerPage, setItemsPerPage] = useState(() =>
+    clampTablePageSize(saved.current?.itemsPerPage ?? DEFAULT_TABLE_PAGE_SIZE),
+  );
   const [sortBy, setSortBy] = useState<ProjectListSortOption>(
     () => saved.current?.sortBy ?? DEFAULT_PROJECT_LIST_SORT,
   );

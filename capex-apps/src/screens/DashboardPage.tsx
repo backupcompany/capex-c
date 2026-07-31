@@ -7,29 +7,42 @@ import { DashboardKpiRow } from '../components/organisms/Dashboard/DashboardKpiR
 import { DashboardChartsSection } from '../components/organisms/Dashboard/DashboardChartsSection';
 import {
   DashboardBackendUnavailable,
+  DashboardBlockingSkeleton,
+  DashboardEmptyPeriod,
   DashboardError,
-  DashboardSelectPeriod,
 } from '../components/organisms/Dashboard/DashboardPageStates';
 
 export interface DashboardPageProps {
   periodName: string;
   currentUser: User;
+  dataInitialized: boolean;
+  hasAvailablePeriods: boolean;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = memo(function DashboardPage({
   periodName,
   currentUser,
+  dataInitialized,
+  hasAvailablePeriods,
 }) {
   const {
     stats,
     projectCountDisplay,
     errorMessage,
     hasPeriod,
+    isBlockingLoad,
     isRefreshing,
     isBackendEmpty,
   } = useDashboardPage({ periodName, currentUser });
 
-  if (!hasPeriod) return <DashboardSelectPeriod />;
+  if (!hasPeriod) {
+    if (!dataInitialized || hasAvailablePeriods) {
+      return <DashboardBlockingSkeleton />;
+    }
+    return <DashboardEmptyPeriod />;
+  }
+
+  if (isBlockingLoad) return <DashboardBlockingSkeleton />;
   if (errorMessage) return <DashboardError message={errorMessage} />;
   if (isBackendEmpty) return <DashboardBackendUnavailable />;
 

@@ -41,6 +41,7 @@ function safeWriteStorageArray(key: string, values: string[]): boolean {
 }
 
 type UseTaskNotificationsOptions = {
+  enabled?: boolean;
   currentUser: User | null;
   userScopes: UserScopesShape;
   allRoles: UserRole[];
@@ -54,6 +55,7 @@ type UseTaskNotificationsOptions = {
 };
 
 export function useTaskNotifications({
+  enabled = true,
   currentUser,
   userScopes,
   allRoles,
@@ -138,7 +140,10 @@ export function useTaskNotifications({
   }, [currentUser, desktopNotificationSettingKey, desktopNotificationsEnabled]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!enabled || !currentUser) return;
+    const notifKey = queryKeys.notifications.list(currentUser.id);
+    if (queryClient.getQueryData(notifKey) != null) return;
+
     let cancelled = false;
     refreshNotifications().catch((error) => {
       if (!cancelled) console.error('Failed to load notifications:', error);
@@ -146,10 +151,10 @@ export function useTaskNotifications({
     return () => {
       cancelled = true;
     };
-  }, [currentUser, refreshNotifications]);
+  }, [enabled, currentUser, refreshNotifications, queryClient]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!enabled || !currentUser) return;
 
     let cancelled = false;
     const MAX_PUSHES_PER_POLL = 20;
@@ -182,6 +187,7 @@ export function useTaskNotifications({
     };
 
     const checkTaskNotifications = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       if (taskNotificationCheckInFlightRef.current) return;
       taskNotificationCheckInFlightRef.current = true;
 
@@ -190,7 +196,11 @@ export function useTaskNotifications({
         try {
           const period = selectedPeriodName || undefined;
           if (isCapexBeConfigured()) {
-            tasks = await resolveMyTasksForNotifications(currentUser, period);
+            tasks = await resolveMyTasksForNotifications(
+              currentUser,
+              period,
+              queryClientRef.current,
+            );
           } else {
             const taskQueryKey = queryKeys.myTasks.page(
               currentUser.id,
@@ -355,13 +365,21 @@ export function useTaskNotifications({
       }
     };
 
-    checkTaskNotifications();
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      checkTaskNotifications();
+    }
     const intervalId = window.setInterval(checkTaskNotifications, MY_TASKS_STALE_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void checkTaskNotifications();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [
+    enabled,
     currentUser,
     userScopes,
     allRoles,

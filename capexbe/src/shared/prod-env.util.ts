@@ -1,4 +1,7 @@
-const DEFAULT_JWT_SECRET = 'change-me-use-openssl-rand-base64-48';
+export const DEFAULT_JWT_SECRET = 'change-me-use-openssl-rand-base64-48';
+
+/** Dev-only fallback origin — never used when assertProductionCors() passes. */
+export const DEV_LOCAL_ORIGIN = 'http://localhost:3000';
 
 export function assertProductionEnv(): void {
   if (process.env.NODE_ENV !== 'production') return;
@@ -21,6 +24,22 @@ export function assertProductionEnv(): void {
   const jwtSecret = process.env.JWT_ACCESS_SECRET!.trim();
   if (jwtSecret === DEFAULT_JWT_SECRET || jwtSecret.length < 32) {
     throw new Error('Production startup blocked — JWT_ACCESS_SECRET must be a strong random value (≥32 chars)');
+  }
+
+  assertProductionCors();
+}
+
+/** Block localhost CORS fallback in production — must set explicit origin(s). */
+export function assertProductionCors(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  const cors = process.env.CORS_ORIGINS?.trim();
+  if (!cors) {
+    throw new Error('Production startup blocked — CORS_ORIGINS must be set');
+  }
+  const origins = cors.split(',').map((o) => o.trim()).filter(Boolean);
+  const bad = origins.filter((o) => /localhost|127\.0\.0\.1/i.test(o));
+  if (bad.length) {
+    throw new Error(`Production startup blocked — CORS_ORIGINS must not include localhost (${bad.join(', ')})`);
   }
 }
 

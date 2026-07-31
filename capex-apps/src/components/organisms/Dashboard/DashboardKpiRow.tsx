@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { SummaryCard } from '@/components/molecules/SummaryCard/SummaryCard';
 import { DASHBOARD_ICONS } from '@/constants';
-import { formatCurrency } from '@/lib/formatter';
+import { formatAbbreviatedCurrency, formatCurrency } from '@/lib/formatter';
 
 export type DashboardKpiRowProps = {
   totalBudget: number;
@@ -26,10 +26,11 @@ export const DashboardKpiRow = memo(function DashboardKpiRow({
           Updating…
         </span>
       ) : null}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         <SummaryCard
           title="Total Budget"
-          value={formatCurrency(totalBudget)}
+          value={formatAbbreviatedCurrency(totalBudget)}
+          detailValue={formatCurrency(totalBudget)}
           icon={DASHBOARD_ICONS.Dollar}
         />
         <SummaryCard
@@ -39,7 +40,8 @@ export const DashboardKpiRow = memo(function DashboardKpiRow({
         />
         <SummaryCard
           title="Total Consumed"
-          value={formatCurrency(totalConsumed)}
+          value={formatAbbreviatedCurrency(totalConsumed)}
+          detailValue={formatCurrency(totalConsumed)}
           icon={DASHBOARD_ICONS.Clock}
         />
       </div>

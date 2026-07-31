@@ -2,7 +2,9 @@ import React, { memo, useCallback } from 'react';
 import type { Project, ProjectPriorityConfig, BudgetCategoryConfig } from '@/types';
 import { SpreadsheetTable, SpreadsheetColumn } from '@/components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { ProjectCard } from '@/components/molecules/ProjectCard/ProjectCard';
+import { Spinner } from '@/components/atoms/Spinner/Spinner';
 import { BudgetHuColumnSelector } from './BudgetHuColumnSelector';
+import { TABLE_PAGE_SIZE_OPTIONS } from '@/lib/table/pageSizeOptions';
 import type { BudgetHuTableColumnId } from './budgetHuTableColumnIds';
 
 export type BudgetHuStrategicProjectsSectionProps = {
@@ -11,6 +13,7 @@ export type BudgetHuStrategicProjectsSectionProps = {
   onSearchChange: (value: string) => void;
   onClearSearch: () => void;
   paginatedProjects: Project[];
+  tableProjects: Project[];
   filteredCount: number;
   currentPage: number;
   itemsPerPage: number;
@@ -31,7 +34,83 @@ export type BudgetHuStrategicProjectsSectionProps = {
   onShowAllColumns: () => void;
   onExportExcel: () => void;
   isExporting?: boolean;
+  /** Server fetch in progress (search, pagination, HU filter). */
+  isTableLoading?: boolean;
+  /** Search typed but debounce not applied yet. */
+  isSearchPending?: boolean;
 };
+
+type BudgetHuProjectsTableProps = {
+  huKey: string;
+  columns: SpreadsheetColumn<Project>[];
+  rows: Project[];
+  onDataChange: (newData: Project[]) => void;
+};
+
+const BudgetHuProjectsTable = memo(function BudgetHuProjectsTable({
+  huKey,
+  columns,
+  rows,
+  onDataChange,
+}: BudgetHuProjectsTableProps) {
+  return (
+    <div className="hidden md:block">
+      <SpreadsheetTable
+        key={huKey}
+        columns={columns}
+        data={rows}
+        onDataChange={onDataChange}
+        rowHeaderAccessor="projectName"
+        maxHeight="min(70vh, 720px)"
+        virtualizeRows="auto"
+      />
+    </div>
+  );
+});
+
+type BudgetHuProjectsMobileListProps = {
+  huKey: string;
+  rows: Project[];
+  searchTerm: string;
+  allCategories: BudgetCategoryConfig[];
+  allPriorities: ProjectPriorityConfig[];
+  onEditProject: (project: Project) => void;
+};
+
+const BudgetHuProjectsMobileList = memo(function BudgetHuProjectsMobileList({
+  huKey,
+  rows,
+  searchTerm,
+  allCategories,
+  allPriorities,
+  onEditProject,
+}: BudgetHuProjectsMobileListProps) {
+  return (
+    <div className="md:hidden space-y-4" key={huKey}>
+      {rows.length > 0 ? (
+        rows.map((project) => {
+          const categoryName = allCategories.find((c) => c.id === project.budgetCategoryId)?.name || 'N/A';
+          const priorityName = allPriorities.find((p) => p.id === project.priorityId)?.name || 'N/A';
+          return (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              categoryName={categoryName}
+              priorityName={priorityName}
+              onEditClick={() => onEditProject(project)}
+            />
+          );
+        })
+      ) : (
+        <p className="text-center text-siloam-text-secondary py-4">
+          {searchTerm
+            ? `Tidak ada project atau asset yang cocok dengan "${searchTerm}"`
+            : 'Belum ada strategic project untuk HU ini.'}
+        </p>
+      )}
+    </div>
+  );
+});
 
 export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicProjectsSection({
   huKey,
@@ -39,6 +118,7 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
   onSearchChange,
   onClearSearch,
   paginatedProjects,
+  tableProjects,
   filteredCount,
   currentPage,
   itemsPerPage,
@@ -59,12 +139,15 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
   onShowAllColumns,
   onExportExcel,
   isExporting = false,
+  isTableLoading = false,
+  isSearchPending = false,
 }: BudgetHuStrategicProjectsSectionProps) {
   const handleSearchInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value),
     [onSearchChange],
   );
 
+  const showTableBusy = isTableLoading || isSearchPending;
   const rangeStart = filteredCount > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
   const rangeEnd = Math.min(currentPage * itemsPerPage, filteredCount);
 
@@ -110,7 +193,8 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
             placeholder="Cari project dan asset berdasarkan kode, nama, atau kategori..."
             value={searchTerm}
             onChange={handleSearchInput}
-            className="w-full px-4 py-2 pl-10 border border-siloam-border rounded-lg bg-siloam-bg focus:outline-none focus:ring-2 focus:ring-siloam-blue text-sm"
+            aria-busy={showTableBusy}
+            className="w-full px-4 py-2 pl-10 pr-10 border border-siloam-border rounded-lg bg-siloam-bg focus:outline-none focus:ring-2 focus:ring-siloam-blue text-sm"
           />
           <svg
             className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-siloam-text-secondary"
@@ -121,7 +205,14 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          {searchTerm ? (
+          {showTableBusy ? (
+            <span
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-siloam-blue"
+              aria-label="Memuat data"
+            >
+              <Spinner size={16} className="text-siloam-blue" />
+            </span>
+          ) : searchTerm ? (
             <button
               type="button"
               onClick={onClearSearch}
@@ -136,45 +227,41 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
         </div>
       </div>
 
-      <div className="hidden md:block">
-        <SpreadsheetTable
-          key={huKey}
-          columns={projectColumns}
-          data={paginatedProjects}
-          onDataChange={onDataChange}
-          rowHeaderAccessor="projectName"
-          maxHeight="min(70vh, 720px)"
-        />
-      </div>
+      <div className="relative min-h-[12rem]" aria-busy={showTableBusy}>
+        {showTableBusy ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-surface/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+              <Spinner size={18} className="text-siloam-blue" />
+              <span>{isSearchPending && !isTableLoading ? 'Mencari…' : 'Memuat data terbaru…'}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
+          <BudgetHuProjectsTable
+            huKey={huKey}
+            columns={projectColumns}
+            rows={tableProjects}
+            onDataChange={onDataChange}
+          />
 
-      <div className="md:hidden space-y-4" key={huKey}>
-        {paginatedProjects.length > 0 ? (
-          paginatedProjects.map((project) => {
-            const categoryName = allCategories.find((c) => c.id === project.budgetCategoryId)?.name || 'N/A';
-            const priorityName = allPriorities.find((p) => p.id === project.priorityId)?.name || 'N/A';
-            return (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                categoryName={categoryName}
-                priorityName={priorityName}
-                onEditClick={() => onEditProject(project)}
-              />
-            );
-          })
-        ) : (
-          <p className="text-center text-siloam-text-secondary py-4">
-            {searchTerm
-              ? `Tidak ada project atau asset yang cocok dengan "${searchTerm}"`
-              : 'Belum ada strategic project untuk HU ini.'}
-          </p>
-        )}
+          <BudgetHuProjectsMobileList
+            huKey={huKey}
+            rows={tableProjects}
+            searchTerm={searchTerm}
+            allCategories={allCategories}
+            allPriorities={allPriorities}
+            onEditProject={onEditProject}
+          />
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">
         <div className="flex items-center gap-3">
           <div className="text-sm text-siloam-text-secondary">
             Showing {rangeStart} - {rangeEnd} dari {filteredCount} project
+            {isTableLoading ? (
+              <span className="ml-2 text-xs text-siloam-blue">· Memperbarui…</span>
+            ) : null}
           </div>
           <button
             type="button"
@@ -195,11 +282,11 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
               onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
               className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
             >
-              <option value={20}>20</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={200}>200</option>
+              {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
             </select>
           </div>
           {totalPages > 1 ? (

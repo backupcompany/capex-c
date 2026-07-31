@@ -15,6 +15,11 @@ const FORBIDDEN_ALLOWLIST = ['ai-analytics/', 'bdd-construction/'];
 const REQUIRED_EDGE_CHECKS = [
   {
     file: 'src/lib/auth/edgeApiPolicy.ts',
+    mustInclude: ['HEALTH_PUBLIC_PREFIXES'],
+    label: 'health routes public',
+  },
+  {
+    file: 'src/lib/auth/edgeApiPolicy.ts',
     mustInclude: ["if (pathname.startsWith('/api/')) return 'deny'"],
     label: 'unknown /api/* → deny',
   },
@@ -30,8 +35,20 @@ const REQUIRED_EDGE_CHECKS = [
   },
   {
     file: 'middleware.ts',
-    mustInclude: ['edgeSessionPermitsBeProxy', 'generateCspNonce', 'x-nonce', 'applySecurityHeaders'],
-    label: 'middleware BE proxy gate + CSP nonce',
+    mustInclude: [
+      'edgeSessionPermitsBeProxy',
+      'generateCspNonce',
+      'x-nonce',
+      'applySecurityHeaders',
+      'buildContentSecurityPolicy',
+      "requestHeaders.set('Content-Security-Policy'",
+    ],
+    label: 'middleware BE proxy gate + CSP nonce on request',
+  },
+  {
+    file: 'app/layout.tsx',
+    mustInclude: ['force-dynamic', 'headers()', 'x-nonce'],
+    label: 'root layout dynamic SSR for CSP nonce',
   },
   {
     file: 'src/lib/security/csp.ts',
@@ -144,13 +161,14 @@ function main() {
       break;
     }
     const covered =
+      sample.startsWith('/api/health') ||
       sample.startsWith('/api/auth/login') ||
       sample.startsWith('/api/auth/refresh') ||
       sample.startsWith('/api/auth/clear-cookies') ||
       sample.startsWith('/api/auth/exchange') ||
       sample.startsWith('/api/auth/forgot-password') ||
       sample.startsWith('/api/auth/azure') ||
-      sample.startsWith('/api/auth/me') ||
+      sample.startsWith('/api/auth/session') ||
       sample.startsWith('/api/auth/logout') ||
       sample.startsWith('/api/auth/heartbeat') ||
       sample.startsWith('/api/auth/change-password') ||

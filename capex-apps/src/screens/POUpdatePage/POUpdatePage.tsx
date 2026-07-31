@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, memo, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Zap, FileSpreadsheet } from 'lucide-react';
 import { EnrichedAsset, User, UserRole, ChangeSummary, Page } from '../../types';
@@ -36,8 +36,13 @@ import {
   shouldTriggerPoCreatedTask,
   normalize,
 } from './poUpdateHelpers';
-import { QuickPoUpdateModal } from './QuickPoUpdateModal';
-import { PoSmartMigrationModal } from './PoSmartMigrationModal';
+
+const QuickPoUpdateModal = lazy(() =>
+  import('./QuickPoUpdateModal').then((m) => ({ default: m.QuickPoUpdateModal })),
+);
+const PoSmartMigrationModal = lazy(() =>
+  import('./PoSmartMigrationModal').then((m) => ({ default: m.PoSmartMigrationModal })),
+);
 
 const STALE_MS = 120_000;
 const GC_MS = 1000 * 60 * 30;
@@ -257,7 +262,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
     [queryClient, currentUser.id, periodName],
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!periodName.trim() || !canView) return;
     if (queryClient.getQueryData(queryKeys.poUpdate.page(periodName, currentUser.id))) return;
 
@@ -958,36 +963,40 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
       )}
 
       {canEdit ? (
-        <QuickPoUpdateModal
-          isOpen={isQuickPoModalOpen}
-          onClose={() => setIsQuickPoModalOpen(false)}
-          onSuccess={(assetIds) => {
-            const n = assetIds.length;
-            showToast(n === 1 ? '1 PO berhasil diperbarui.' : `${n} PO berhasil diperbarui.`, 'success');
-            onDataChange();
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
-            });
-          }}
-          currentUser={currentUser}
-          lookupAssets={lookupAssets}
-          assetHasPOMap={assetHasPOMap}
-        />
+        <Suspense fallback={null}>
+          <QuickPoUpdateModal
+            isOpen={isQuickPoModalOpen}
+            onClose={() => setIsQuickPoModalOpen(false)}
+            onSuccess={(assetIds) => {
+              const n = assetIds.length;
+              showToast(n === 1 ? '1 PO berhasil diperbarui.' : `${n} PO berhasil diperbarui.`, 'success');
+              onDataChange();
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
+              });
+            }}
+            currentUser={currentUser}
+            lookupAssets={lookupAssets}
+            assetHasPOMap={assetHasPOMap}
+          />
+        </Suspense>
       ) : null}
 
       {canEdit ? (
-        <PoSmartMigrationModal
-          isOpen={isPoMigrationOpen}
-          onClose={() => setIsPoMigrationOpen(false)}
-          onSuccess={() => {
-            onDataChange();
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
-            });
-          }}
-          currentUser={currentUser}
-          showToast={showToast}
-        />
+        <Suspense fallback={null}>
+          <PoSmartMigrationModal
+            isOpen={isPoMigrationOpen}
+            onClose={() => setIsPoMigrationOpen(false)}
+            onSuccess={() => {
+              onDataChange();
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
+              });
+            }}
+            currentUser={currentUser}
+            showToast={showToast}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

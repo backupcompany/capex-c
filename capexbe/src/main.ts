@@ -4,7 +4,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { assertProductionEnv } from './shared/prod-env.util';
 import { isDemoLanOrigin, isDemoMode } from './shared/demo-mode.util';
 import { ProductionSafeExceptionFilter } from './shared/http-exception.filter';
 import { json, urlencoded } from 'express';
@@ -13,9 +12,9 @@ import { createCompressionMiddleware } from './shared/compression.middleware';
 import { requestIpAllowed } from './shared/ip-allowlist.util';
 import { warnIfMetricsMisconfiguredInProduction } from './shared/metrics-access.util';
 import { requestMetricsMiddleware } from './shared/request-metrics';
+import { requestIdMiddleware } from './shared/request-id.middleware';
 
 async function bootstrap() {
-  assertProductionEnv();
   warnIfMetricsMisconfiguredInProduction();
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
@@ -28,6 +27,7 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(createCompressionMiddleware());
+  app.use(requestIdMiddleware);
   app.use(requestMetricsMiddleware());
   app.use(beRouteAllowlistMiddleware());
   app.use((req, res, next) => {

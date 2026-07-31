@@ -89,13 +89,17 @@ export class ProjectListService {
   ): Promise<T> {
     if (!Array.isArray(bundle.users)) return bundle;
     const includePii = await viewerCanSeeUserPii(this.authZ, accessToken, viewerUserId);
+    // Shared cache stores masked PII — privileged viewers rehydrate from process master.
+    let users = bundle.users as Record<string, unknown>[];
+    if (includePii) {
+      const master = this.masterPayloadByUserId.get(viewerUserId);
+      if (master && master.expiresAt > Date.now() && Array.isArray(master.users)) {
+        users = master.users as Record<string, unknown>[];
+      }
+    }
     return {
       ...bundle,
-      users: sanitizeUsersForDirectory(
-        bundle.users as Record<string, unknown>[],
-        viewerUserId,
-        includePii,
-      ),
+      users: sanitizeUsersForDirectory(users, viewerUserId, includePii),
     };
   }
 

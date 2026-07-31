@@ -1,13 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { FsCoreModule } from './fs-core.module';
 import { FsController } from './fs.controller';
-import { FsService } from './fs.service';
-import { FsAuthService } from './fs-auth.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [FsCoreModule],
   controllers: [FsController],
-  providers: [FsService, FsAuthService],
-  exports: [FsService, FsAuthService],
+  exports: [FsCoreModule],
 })
 export class FsModule {}

@@ -1,7 +1,6 @@
 import React, {
   useState,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useCallback,
   lazy,
@@ -361,7 +360,7 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
     ? infiniteTasks.isFetching && tasks.length > 0 && !infiniteTasks.isFetchingNextPage
     : tasksQuery.isFetching && tasks.length > 0;
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!currentUser?.id || useServerPagination) return;
     hydrateMyTasksFromDisk(queryClient, currentUser.id, periodName);
   }, [currentUser?.id, periodName, queryClient, useServerPagination]);

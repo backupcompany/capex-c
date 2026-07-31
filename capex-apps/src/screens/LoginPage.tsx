@@ -2,8 +2,6 @@
 
 import React, { useState, memo, useEffect } from 'react';
 import {
-  clearServerAuthCookies,
-  fetchAuthMe,
   invalidateAuthProbeCache,
   loginWithBackend,
   setSessionCookieHint,
@@ -15,6 +13,7 @@ import {
 } from '../lib/auth/authConstants';
 import { writeCachedAuthUser } from '../lib/authSessionCache';
 import { consumeOAuthError, signInWithAzure } from '../lib/authAzure';
+import { POST_LOGIN_PATH } from '@/lib/auth/loginRoute';
 import { ExternalLink } from '@/components/atoms/ExternalLink/ExternalLink';
 
 const ADMIN_WHATSAPP = '6282230353419';
@@ -113,15 +112,7 @@ export const LoginPage = memo(function LoginPage() {
       setSessionCookieHint(true);
       writeCachedAuthUser(result.user);
       invalidateAuthProbeCache();
-
-      const me = await fetchAuthMe();
-      if (!me?.authenticated || !me.user) {
-        setError('Login berhasil tapi sesi tidak tersimpan. Pastikan capexbe berjalan, lalu coba lagi.');
-        void clearServerAuthCookies();
-        return;
-      }
-
-      window.location.replace('/');
+      window.location.replace(POST_LOGIN_PATH);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
       setError(msg);

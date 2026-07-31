@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 import { Page, type BudgetPeriod, type User } from '@/types';
 import { readBddConstructionPreload } from '@/hooks/queries/fetchBddConstructionPageData';
 import {
@@ -42,51 +42,71 @@ type UsePagePreloadsOptions = {
   hideUnassignedBdd: boolean;
 };
 
-/** Disk preload reads scoped to active route — avoids localStorage churn on unrelated re-renders. */
+function computePagePreloads(options: UsePagePreloadsOptions): PagePreloads {
+  const { routePage, currentUser, selectedPeriodName, currentBudgetPeriod, hideUnassignedBdd } =
+    options;
+
+  if (typeof window === 'undefined' || !currentUser) {
+    return EMPTY_PRELOADS;
+  }
+
+  const uid = currentUser.id;
+  const period = selectedPeriodName;
+  const fsUpdateRaw =
+    routePage === Page.FSUpdate && period ? readFsUpdateSnapshotAnyAge(period, uid) : null;
+
+  return {
+    cpl:
+      routePage === Page.CapexProjectList
+        ? resolveProjectListTableForDisplay(
+            period,
+            uid,
+            defaultScopesForDiskPrefetch(currentUser),
+            null,
+          )
+        : null,
+    bdd:
+      routePage === Page.BDDConstruction && period
+        ? readBddConstructionPreload(period, uid, hideUnassignedBdd)
+        : null,
+    myTasks:
+      routePage === Page.MyTask
+        ? resolveMyTasksBundleForDisplay(uid, period || undefined, null)
+        : null,
+    budgetHu:
+      routePage === Page.BudgetHU
+        ? resolveBudgetHuPageForDisplay(period, uid, currentBudgetPeriod, null)
+        : null,
+    poUpdate:
+      routePage === Page.POUpdate && period ? readPoUpdateSnapshotAnyAge(uid, period) : null,
+    fsUpdate: fsUpdateRaw && (fsUpdateRaw.editedData?.length ?? 0) > 0 ? fsUpdateRaw : null,
+    fsApproval:
+      routePage === Page.FSApproval && period ? readFsApprovalSnapshotAnyAge(period, uid) : null,
+    fsRealization:
+      routePage === Page.FSRealization && period ? readFsRealizationSnapshotAnyAge(period, uid) : null,
+  };
+}
+
+/** Disk preload reads scoped to active route — deferred so route UI shell paints first. */
 export function usePagePreloads(options: UsePagePreloadsOptions): PagePreloads {
   const { routePage, currentUser, selectedPeriodName, currentBudgetPeriod, hideUnassignedBdd } =
     options;
 
-  return useMemo(() => {
-    if (typeof window === 'undefined' || !currentUser) {
-      return EMPTY_PRELOADS;
-    }
+  const [preloads, setPreloads] = useState<PagePreloads>(EMPTY_PRELOADS);
 
-    const uid = currentUser.id;
-    const period = selectedPeriodName;
-    const fsUpdateRaw =
-      routePage === Page.FSUpdate && period ? readFsUpdateSnapshotAnyAge(period, uid) : null;
-
-    return {
-      cpl:
-        routePage === Page.CapexProjectList
-          ? resolveProjectListTableForDisplay(
-              period,
-              uid,
-              defaultScopesForDiskPrefetch(currentUser),
-              null,
-            )
-          : null,
-      bdd:
-        routePage === Page.BDDConstruction && period
-          ? readBddConstructionPreload(period, uid, hideUnassignedBdd)
-          : null,
-      myTasks:
-        routePage === Page.MyTask
-          ? resolveMyTasksBundleForDisplay(uid, period || undefined, null)
-          : null,
-      budgetHu:
-        routePage === Page.BudgetHU
-          ? resolveBudgetHuPageForDisplay(period, uid, currentBudgetPeriod, null)
-          : null,
-      poUpdate:
-        routePage === Page.POUpdate && period ? readPoUpdateSnapshotAnyAge(uid, period) : null,
-      fsUpdate:
-        fsUpdateRaw && (fsUpdateRaw.editedData?.length ?? 0) > 0 ? fsUpdateRaw : null,
-      fsApproval:
-        routePage === Page.FSApproval && period ? readFsApprovalSnapshotAnyAge(period, uid) : null,
-      fsRealization:
-        routePage === Page.FSRealization && period ? readFsRealizationSnapshotAnyAge(period, uid) : null,
-    };
+  useEffect(() => {
+    startTransition(() => {
+      setPreloads(
+        computePagePreloads({
+          routePage,
+          currentUser,
+          selectedPeriodName,
+          currentBudgetPeriod,
+          hideUnassignedBdd,
+        }),
+      );
+    });
   }, [routePage, currentUser?.id, selectedPeriodName, currentBudgetPeriod?.id, hideUnassignedBdd]);
+
+  return preloads;
 }

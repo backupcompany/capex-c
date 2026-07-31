@@ -7,7 +7,7 @@ const App = dynamic(() => import("@/App"), { ssr: false });
 
 type Props = {
   children: React.ReactNode;
-  /** From server cookies — skip /api/auth/me when false (clean login page). */
+  /** From server cookies — skip /api/auth/session when false (clean login page). */
   hasSessionCookies: boolean;
 };
 

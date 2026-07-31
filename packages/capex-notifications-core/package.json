@@ -1,0 +1,22 @@
+{
+  "name": "@capex/notifications-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Notifications domain — extracted from capexbe (Phase 12 pilot)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "node ../../capexbe/node_modules/typescript/bin/tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0"
+  }
+}

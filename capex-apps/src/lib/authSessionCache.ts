@@ -2,7 +2,7 @@ import type { User } from '../types';
 
 const STORAGE_KEY = 'capex.authUser.v1';
 
-/** Persisted fields only — no email/phone (PII stays from /auth/me in memory). */
+/** Persisted fields only — no email/phone (PII stays from /auth/session in memory). */
 type AuthUserCacheSnapshot = {
   id: number;
   username: string;
@@ -13,7 +13,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** User + id sesi untuk paint pertama setelah reload (tanpa tunggu /auth/me). */
+/** User + id sesi untuk paint pertama setelah reload (tanpa tunggu /auth/session). */
 export function readInitialAuthUser(): User | null {
   if (typeof window === 'undefined') return null;
   const cached = readCachedAuthUser();

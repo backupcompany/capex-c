@@ -26,6 +26,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, isCollapsed, o
         : 'text-white/85 hover:bg-white/15 hover:text-white'
     }`}
     onClick={onClick}
+    onPointerDown={onPrefetch}
     onMouseEnter={onPrefetch}
     onFocus={onPrefetch}
     role="menuitem"

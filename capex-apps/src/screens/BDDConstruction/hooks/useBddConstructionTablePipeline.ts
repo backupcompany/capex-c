@@ -168,7 +168,7 @@ export function useBddConstructionTablePipeline({
     undefined,
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (mustRefetchTableRef.current || !effectivePeriodName || !filtersKey) {
       setDiskTableSeed(undefined);
       return;
@@ -205,7 +205,6 @@ export function useBddConstructionTablePipeline({
   );
 
   const clearTableForRefetch = useCallback(() => {
-    lastAppliedBundleRef.current = null;
     mustRefetchTableRef.current = true;
     setDiskTableSeed(undefined);
     if (effectivePeriodName) {
@@ -218,11 +217,14 @@ export function useBddConstructionTablePipeline({
     if (listFiltersKey && filtersKeyWithoutPageRef.current !== listFiltersKey) {
       const hadPriorKey = filtersKeyWithoutPageRef.current !== '';
       filtersKeyWithoutPageRef.current = listFiltersKey;
-      lastAppliedBundleRef.current = null;
       setCurrentPage(1);
-      if (hadPriorKey) clearTableForRefetch();
+      if (hadPriorKey) {
+        // Keep prior rows visible (placeholderData) — loading stays in the data pane only.
+        mustRefetchTableRef.current = true;
+        setSelectedAsset(null);
+      }
     }
-  }, [listFiltersKey, clearTableForRefetch, setCurrentPage]);
+  }, [listFiltersKey, setCurrentPage, setSelectedAsset]);
 
   const capexBeUrl =
     typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim() ?? '' : '';
@@ -235,9 +237,8 @@ export function useBddConstructionTablePipeline({
     gcTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    placeholderData: (prev) => prev ?? diskTableSeed ?? undefined,
-    initialData: diskTableSeed,
-    refetchOnMount: diskTableSeed ? false : 'always',
+    placeholderData: (prev) => prev ?? diskTableSeed,
+    refetchOnMount: true,
     queryFn: async ({ signal }) => {
       const bff = useBeBffProxy();
       let token: string | null = null;
@@ -334,11 +335,12 @@ export function useBddConstructionTablePipeline({
   const filteredAssets = allAssets;
 
   const hasListData = allAssets.length > 0;
-  const showBlockingSkeleton = tableQuery.isPending && !hasListData;
+  const showBlockingSkeleton =
+    tableQuery.isPending && !hasListData && !tableQuery.isPlaceholderData;
   const isBackgroundRefetch =
     hasListData && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
   const isFilterRefreshing =
-    isSearchStaging || (tableQuery.isFetching && hasListData && !tableQuery.isPending);
+    isSearchStaging || (tableQuery.isFetching && hasListData);
 
   return {
     tableQuery,

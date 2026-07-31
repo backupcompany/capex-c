@@ -36,9 +36,24 @@ const CHECKS = [
     label: 'login audit stores masked email',
   },
   {
+    file: 'shared/perf-cache.ts',
+    mustInclude: ['maskPiiForCache'],
+    label: 'perfCacheSet masks PII before Redis',
+  },
+  {
     file: 'shared/response-sanitize.util.ts',
-    mustInclude: ['stripInternalUserFields', 'USER_DIRECTORY_COLUMNS'],
-    label: 'directory sanitizer strips auth fields',
+    mustInclude: ['maskPiiForCache', 'stripInternalUserFields', 'USER_DIRECTORY_COLUMNS'],
+    label: 'directory sanitizer strips auth fields + cache mask',
+  },
+  {
+    file: 'configuration/configuration.service.ts',
+    mustInclude: ['skipSharedCache', "['users', 'vendors']"],
+    label: 'configuration skips Redis for users/vendors',
+  },
+  {
+    file: 'shared/http-exception.filter.ts',
+    mustInclude: ['isInternalErrorMessage', 'scrub'],
+    label: 'prod filter scrubs Supabase/DB error messages',
   },
 ];
 

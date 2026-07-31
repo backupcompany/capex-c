@@ -2,6 +2,9 @@ import type { NextRequest } from 'next/server';
 import { CSRF_COOKIE, CSRF_HEADER } from './authConstants';
 import { isAllowedBePath } from './bePathAllowlist';
 
+/** Read-only ops endpoints (no session required). */
+export const HEALTH_PUBLIC_PREFIXES = ['/api/health'] as const;
+
 /** Unauthenticated auth endpoints (rate-limited separately). */
 export const AUTH_PUBLIC_PREFIXES = [
   '/api/auth/login',
@@ -10,7 +13,7 @@ export const AUTH_PUBLIC_PREFIXES = [
   '/api/auth/exchange',
   '/api/auth/forgot-password',
   '/api/auth/azure',
-  '/api/auth/me',
+  '/api/auth/session',
 ] as const;
 
 /** Auth endpoints that require a session cookie / valid edge JWT. */
@@ -22,11 +25,12 @@ export const AUTH_SESSION_PREFIXES = [
 
 export const PROTECTED_API_PREFIXES = ['/api/be'] as const;
 
-export const PUBLIC_PAGE_EXACT = new Set(['/sabet']);
+export const PUBLIC_PAGE_EXACT = new Set(['/login']);
 
 export type ApiRouteClass = 'public' | 'session' | 'deny' | 'page';
 
 export function classifyApiRoute(pathname: string): ApiRouteClass {
+  if (HEALTH_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return 'public';
   if (AUTH_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return 'public';
   if (AUTH_SESSION_PREFIXES.some((p) => pathname.startsWith(p))) return 'session';
   if (PROTECTED_API_PREFIXES.some((p) => pathname.startsWith(p))) return 'session';

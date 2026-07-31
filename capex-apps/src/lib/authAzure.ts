@@ -64,12 +64,15 @@ export const consumeOAuthError = (): string | null => {
 };
 
 import { sanitizeOAuthReturnTo } from './auth/oauthReturnTo';
+import { LOGIN_PATH, POST_LOGIN_PATH } from './auth/loginRoute';
 
 export const signInWithAzure = async (): Promise<{ error: Error | null }> => {
   if (typeof window === 'undefined') {
     return { error: new Error('Login Microsoft hanya tersedia di browser.') };
   }
-  const returnTo = encodeURIComponent(sanitizeOAuthReturnTo(window.location.pathname || '/'));
+  const path = window.location.pathname || POST_LOGIN_PATH;
+  const returnTarget = path === LOGIN_PATH ? POST_LOGIN_PATH : path;
+  const returnTo = encodeURIComponent(sanitizeOAuthReturnTo(returnTarget, POST_LOGIN_PATH));
   window.location.assign(`/api/auth/azure/start?returnTo=${returnTo}`);
   return { error: null };
 };
