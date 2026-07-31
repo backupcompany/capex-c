@@ -1,5 +1,12 @@
-# Local MCP config may contain Supabase PAT — do not commit
-.cursor/mcp.json
+# Cursor IDE — local only (rules/skills/MCP stay on disk, not in repo)
+.cursor/
+
+# Local-only docs & diagrams — keep on disk, not in GitHub
+/README.md
+/DEPLOY.md
+/SECURITY.md
+/docs/
+/capex-apps/TUTORIAL_PENGGUNA.md
 
 # OS
 .DS_Store
