@@ -8,6 +8,22 @@
 /docs/
 /capex-apps/TUTORIAL_PENGGUNA.md
 
+# Local dev tooling — keep on disk, not in GitHub (use make verify-* / CI on remote)
+/run
+/run.cmd
+/run.ps1
+/scripts/dev.mjs
+/scripts/setup-env.sh
+/scripts/print-public-url.sh
+/scripts/cursor-tunnel-help.sh
+/scripts/run-tunnel-demo.sh
+/scripts/start-cloudflared-tunnel.sh
+/scripts/start-public-tunnel.sh
+/scripts/generate-cloud-architecture-excalidraw.mjs
+/scripts/generate-traffic-flow-excalidraw.mjs
+/scripts/microservices/run-all-leaf.mjs
+**/.cursorrules
+
 # OS
 .DS_Store
 
