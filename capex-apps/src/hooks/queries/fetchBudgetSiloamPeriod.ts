@@ -207,7 +207,7 @@ export async function fetchBudgetSiloamPeriodBundle(
   return fetchBudgetSiloamShellBundle(periodName, userId, options);
 }
 
-/** Warm shell + Revenue Maintenance (default tab) on nav hover. */
+/** Warm shell + default tab (Revenue Maintenance) on nav hover. */
 export function prefetchBudgetSiloamPeriodBundle(
   queryClient: QueryClient,
   periodName: string,

@@ -119,8 +119,8 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 interface AssetFilterPanelProps {
     searchTerm: string;
     setSearchTerm: (term: string) => void;
-    /** Apply search to table — call on Enter. */
-    onSearchSubmit?: () => void;
+    /** Apply search to table — call on Enter or Cari (receives latest input value). */
+    onSearchSubmit?: (term: string) => void;
     /** Clear applied + draft search — call on "Clear All Filters". */
     onSearchReset?: () => void;
     periodOptions?: string[];
@@ -218,6 +218,11 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
         onExtraReset?.();
     };
 
+    const submitSearch = (value: string) => {
+        setSearchTerm(value);
+        onSearchSubmit?.(value);
+    };
+
     return (
         <div className={`p-4 border-b border-siloam-border ${isFilterVisible ? 'relative z-30' : ''}`}>
             <div className="flex flex-wrap items-center gap-4">
@@ -231,7 +236,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                                 e.preventDefault();
-                                onSearchSubmit?.();
+                                submitSearch(e.currentTarget.value);
                             }
                         }}
                         className="w-full min-w-0 px-4 py-2 border border-siloam-border rounded-xl bg-siloam-bg focus:outline-none focus:ring-2 focus:ring-siloam-blue transition-all"
@@ -239,7 +244,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                 </div>
                 <button
                     type="button"
-                    onClick={() => onSearchSubmit?.()}
+                    onClick={() => submitSearch(searchTerm)}
                     className="shrink-0 px-4 py-2 flex items-center gap-2 rounded-xl border border-siloam-blue bg-siloam-blue text-white transition-all duration-200 font-medium hover:bg-siloam-blue/90 shadow-sm"
                     aria-label="Cari"
                 >

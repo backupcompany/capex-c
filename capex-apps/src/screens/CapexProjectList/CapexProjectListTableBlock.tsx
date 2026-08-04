@@ -9,11 +9,12 @@ import { CapexProjectListMobileAssetList } from './CapexProjectListMobileAssetLi
 
 function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="absolute inset-0 z-[5] flex flex-col gap-0 bg-siloam-surface/90 px-4 py-3 pointer-events-none">
+    <div className="absolute inset-0 z-[5] flex flex-col gap-0 bg-siloam-surface/85 px-4 py-3 pointer-events-none animate-fade-in">
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
           className="flex gap-4 border-b border-siloam-border/60 py-3 animate-pulse"
+          style={{ animationDelay: `${i * 70}ms` }}
           aria-hidden
         >
           <div className="h-4 w-24 rounded bg-siloam-border/80" />
@@ -22,6 +23,45 @@ function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
           <div className="h-4 w-16 rounded bg-siloam-border/50" />
         </div>
       ))}
+    </div>
+  );
+}
+
+function ProjectListLoadingSpinner({
+  label,
+  size = 'lg',
+}: {
+  label: string;
+  size?: 'sm' | 'lg';
+}) {
+  const spinnerClass =
+    size === 'lg'
+      ? 'h-10 w-10 border-4 border-siloam-blue border-t-transparent'
+      : 'h-4 w-4 border-2 border-siloam-blue border-t-transparent';
+  return (
+    <div className="flex flex-col items-center gap-2.5" role="status" aria-live="polite" aria-busy="true">
+      <span className={`inline-flex rounded-full animate-spin ${spinnerClass}`} aria-hidden />
+      <p
+        className={
+          size === 'lg'
+            ? 'text-sm font-semibold text-siloam-text-secondary'
+            : 'text-xs font-medium text-siloam-text-secondary'
+        }
+      >
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function ProjectListTableLoadingOverlay({
+  label,
+}: {
+  label: string;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center">
+      <ProjectListLoadingSpinner label={label} />
     </div>
   );
 }
@@ -72,21 +112,18 @@ function CapexProjectListTableBlockInner({
   const paginationBusy = isPageTransition || showInitialLoading;
   const showPagination = footerTotalCount > itemsPerPage;
   const tableDimmed = isPageTransition;
+  const loadingLabel = isPageTransition
+    ? `Memuat halaman ${currentPage}…`
+    : 'Memuat daftar proyek…';
 
   return (
     <div data-tour="cpl-asset-table" className="flex-1 overflow-hidden flex flex-col relative">
-      {showInitialLoading ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center bg-siloam-surface/90 py-2">
-          <p className="text-sm font-medium text-siloam-text-secondary">
-            {isPageTransition ? `Memuat halaman ${currentPage}…` : 'Memuat daftar proyek…'}
-          </p>
-        </div>
-      ) : null}
       {isFilterRefreshing ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center bg-siloam-surface/90 py-1">
-          <p className="text-xs text-siloam-text-secondary">
-            {isSearchActive ? 'Mencari…' : 'Memfilter…'}
-          </p>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center bg-siloam-surface/95 py-2 animate-fade-in">
+          <ProjectListLoadingSpinner
+            size="sm"
+            label={isSearchActive ? 'Mencari…' : 'Memfilter…'}
+          />
         </div>
       ) : null}
       {isBackgroundRefresh ? (
@@ -108,7 +145,12 @@ function CapexProjectListTableBlockInner({
           tableDimmed ? 'opacity-45 pointer-events-none' : 'opacity-100'
         }`}
       >
-        {showInitialLoading ? <TableSkeletonRows /> : null}
+        {showInitialLoading ? (
+          <>
+            <TableSkeletonRows />
+            <ProjectListTableLoadingOverlay label={loadingLabel} />
+          </>
+        ) : null}
         <GenericTable
           columns={columns}
           data={paginatedAssets}
@@ -126,7 +168,12 @@ function CapexProjectListTableBlockInner({
           tableDimmed ? 'opacity-45 pointer-events-none' : 'opacity-100'
         }`}
       >
-        {showInitialLoading ? <TableSkeletonRows rows={6} /> : null}
+        {showInitialLoading ? (
+          <>
+            <TableSkeletonRows rows={6} />
+            <ProjectListTableLoadingOverlay label={loadingLabel} />
+          </>
+        ) : null}
         <CapexProjectListMobileAssetList
           assets={paginatedAssets}
           selectedAssetId={selectedAssetId}

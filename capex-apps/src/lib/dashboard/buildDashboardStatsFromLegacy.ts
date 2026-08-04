@@ -1,8 +1,7 @@
 import type { BudgetItem, BudgetPeriod } from '@/types';
 import { ProjectStatus } from '@/types';
 import type { DashboardSnapshot } from '@/services/dashboardSnapshotApi';
-import { EMPTY_DASHBOARD_STATS } from './constants';
-import type { DashboardStats } from './types';
+import { EMPTY_DASHBOARD_STATS, PROJECT_STATUS_CHART_COLORS, withProjectStatusChartColors } from './constants';
 
 function categoryDisplayName(
   names: Record<string, string> | undefined,
@@ -18,7 +17,7 @@ export function dashboardStatsFromSnapshot(snapshot: DashboardSnapshot): Dashboa
     totalBudget: snapshot.totalBudget,
     totalConsumed: snapshot.totalConsumed,
     projectCount: snapshot.projectCount,
-    projectStatusData: snapshot.projectStatusData,
+    projectStatusData: withProjectStatusChartColors(snapshot.projectStatusData),
     budgetByCategory: snapshot.budgetByCategory,
     sankeyData: snapshot.sankeyData,
   };
@@ -54,9 +53,9 @@ export function buildDashboardStatsFromLegacy(
   );
 
   const projectStatusData = [
-    { name: 'On Track', value: projectStatusCounts.OnTrack || 0, color: '#28A745' },
-    { name: 'At Risk', value: projectStatusCounts.AtRisk || 0, color: '#FFC107' },
-    { name: 'Off Track', value: projectStatusCounts.OffTrack || 0, color: '#DC3545' },
+    { name: 'On Track', value: projectStatusCounts.OnTrack || 0, color: PROJECT_STATUS_CHART_COLORS.onTrack },
+    { name: 'At Risk', value: projectStatusCounts.AtRisk || 0, color: PROJECT_STATUS_CHART_COLORS.atRisk },
+    { name: 'Off Track', value: projectStatusCounts.OffTrack || 0, color: PROJECT_STATUS_CHART_COLORS.offTrack },
   ];
 
   const budgetByCategory = (Object.entries(budgetPeriod.budget) as [string, BudgetItem][])

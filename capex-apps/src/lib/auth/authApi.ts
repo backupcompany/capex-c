@@ -9,6 +9,7 @@ import { updateSessionMeta, clearSessionMeta } from './sessionMetaStore';
 import { clearSupabaseSessionAfterExchange } from './signInForExchange';
 import { readCachedAuthUser } from '../authSessionCache';
 import { mergeAuthIdentityUser } from './mergeAuthIdentityUser';
+import { normalizeAuthEmail, normalizeAuthPassword } from './normalizeAuthInput';
 
 export type AuthSessionMeta = {
   accessExpiresAt: number;
@@ -190,10 +191,12 @@ async function loginWithServerPassword(
   email: string,
   password: string,
 ): Promise<{ user: User | null; roles: string[]; error: string | null }> {
+  const cleanEmail = normalizeAuthEmail(email);
+  const cleanPassword = normalizeAuthPassword(password);
   try {
     const res = await authFetch('/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as {
@@ -246,7 +249,7 @@ export async function requestPasswordResetBackend(
   try {
     const res = await authFetch('/forgot-password', {
       method: 'POST',
-      body: JSON.stringify({ email, redirectTo }),
+      body: JSON.stringify({ email: normalizeAuthEmail(email), redirectTo }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as {
@@ -272,7 +275,11 @@ export async function changePasswordBackend(
   try {
     const res = await authFetch('/change-password', {
       method: 'POST',
-      body: JSON.stringify({ userId, currentPassword, newPassword }),
+      body: JSON.stringify({
+        userId,
+        currentPassword: normalizeAuthPassword(currentPassword),
+        newPassword: normalizeAuthPassword(newPassword),
+      }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as {

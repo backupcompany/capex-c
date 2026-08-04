@@ -39,6 +39,11 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
           >
             {value}
           </p>
+          {detailValue && detailValue !== value ? (
+            <p className="text-[11px] sm:text-xs text-siloam-text-secondary tabular-nums mt-0.5 leading-snug">
+              {detailValue}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

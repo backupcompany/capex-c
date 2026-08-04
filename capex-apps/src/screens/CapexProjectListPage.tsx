@@ -543,22 +543,13 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     resolveInitialPreloadScope,
   });
 
-  const handleSearchSubmit = useCallback(() => {
-    commitSearchTerm(searchTerm);
-    setSelectedAssetId(null);
-    resetTableForFilterChange();
-    if (currentUser?.id) {
-      void queryClient.invalidateQueries({
-        queryKey: ['screen', 'capex-project-list', 'table'],
-      });
-    }
-  }, [
-    searchTerm,
-    commitSearchTerm,
-    resetTableForFilterChange,
-    currentUser?.id,
-    queryClient,
-  ]);
+  const handleSearchSubmit = useCallback(
+    (term?: string) => {
+      commitSearchTerm(term ?? searchTerm);
+      setSelectedAssetId(null);
+    },
+    [searchTerm, commitSearchTerm],
+  );
 
   const handleSearchReset = useCallback(() => {
     clearSearch();

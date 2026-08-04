@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import type { Archetype, User } from '../types';
 import { useExecutiveDashboard } from '../hooks/useExecutiveDashboard';
 import { useWhenVisible } from '../hooks/useWhenVisible';
@@ -17,9 +17,7 @@ import {
 import {
   ExecutiveDashboardAlertsSkeleton,
   ExecutiveDashboardAnalysisSkeleton,
-  ExecutiveDashboardChartsRowSkeleton,
-  ExecutiveDashboardFilterLoadingBanner,
-  ExecutiveDashboardKpiSkeleton,
+  ExecutiveDashboardSkeleton,
 } from '../components/organisms/ExecutiveSummary/ExecutiveDashboardSkeletons';
 import { EXECUTIVE_SUMMARY_COLORS } from '../lib/executiveSummary/constants';
 
@@ -40,10 +38,78 @@ function SectionReveal({
 }) {
   return (
     <div
-      className="animate-fade-in"
-      style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'backwards' }}
+      className="animate-dashboard-drop-in"
+      style={{ animationDelay: `${delayMs}ms` }}
     >
       {children}
+    </div>
+  );
+}
+
+function DashboardBody({
+  metrics,
+  filtersKey,
+}: {
+  metrics: ReturnType<typeof useExecutiveDashboard>['metrics'];
+  filtersKey: string;
+}) {
+  const analysisMount = useWhenVisible();
+  const alertsMount = useWhenVisible();
+
+  const wrap = (delayMs: number, child: React.ReactNode) => (
+    <SectionReveal delayMs={delayMs}>{child}</SectionReveal>
+  );
+
+  return (
+    <div key={`dashboard-${filtersKey}`} className="space-y-8">
+      {wrap(
+        0,
+        <section aria-label="Ringkasan KPI">
+          <ExecutiveDashboardKpiRow metrics={metrics} />
+        </section>,
+      )}
+
+      {wrap(
+        80,
+        <section
+          aria-label="Grafik utama"
+          className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch"
+        >
+          <ExecutiveDashboardTrendChart data={metrics.monthlyTrend} />
+          <ExecutiveDashboardUnitBarChart units={metrics.budgetByUnit} />
+          <ExecutiveDashboardCapexStatusChart status={metrics.capexStatus} />
+        </section>,
+      )}
+
+      <div ref={analysisMount.ref}>
+        {!analysisMount.visible ? (
+          <ExecutiveDashboardAnalysisSkeleton />
+        ) : (
+          wrap(
+            160,
+            <section aria-label="Analisis detail">
+              <ExecutiveDashboardAnalysisSection
+                categories={metrics.categoryBreakdown}
+                topInvestments={metrics.topInvestments}
+                topUnits={metrics.topUnits}
+              />
+            </section>,
+          )
+        )}
+      </div>
+
+      <div ref={alertsMount.ref}>
+        {!alertsMount.visible ? (
+          <ExecutiveDashboardAlertsSkeleton />
+        ) : (
+          wrap(
+            240,
+            <section aria-label="Peringatan">
+              <ExecutiveDashboardAlerts alerts={metrics.alerts} />
+            </section>,
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -55,11 +121,18 @@ export const ExecutiveSummaryPage = memo(function ExecutiveSummaryPage({
   onArchetypeChange,
   visibleArchetypes,
 }: ExecutiveSummaryPageProps) {
+  const filterLabel = useMemo(() => {
+    if (!selectedArchetypeId) return 'Semua Network';
+    const match = visibleArchetypes?.find((a) => String(a.id) === String(selectedArchetypeId));
+    return match?.name ?? 'Network terpilih';
+  }, [selectedArchetypeId, visibleArchetypes]);
+
   const {
     periodHeader,
     metrics,
-    showMetricsSkeleton,
-    isRefreshing,
+    showDashboardSkeleton,
+    showMetricsContent,
+    isMetricsLoading,
     errorMessage,
     hasPeriod,
     hasNoDashboardData,
@@ -70,13 +143,10 @@ export const ExecutiveSummaryPage = memo(function ExecutiveSummaryPage({
     selectedArchetypeId,
   });
 
-  const analysisMount = useWhenVisible();
-  const alertsMount = useWhenVisible();
-
   if (!hasPeriod) return <ExecutiveSummarySelectPeriod />;
   if (errorMessage) return <ExecutiveSummaryError message={errorMessage} />;
 
-  const showEmpty = !showMetricsSkeleton && hasNoDashboardData;
+  const showEmpty = showMetricsContent && hasNoDashboardData;
 
   const updatedLabel = metrics.updatedAt
     ? new Intl.DateTimeFormat('id-ID', {
@@ -95,75 +165,22 @@ export const ExecutiveSummaryPage = memo(function ExecutiveSummaryPage({
         visibleArchetypes={visibleArchetypes}
         selectedArchetypeId={selectedArchetypeId}
         onArchetypeChange={onArchetypeChange}
-        isRefreshing={isRefreshing}
-        isMetricsLoading={showMetricsSkeleton}
+        isFilterLoading={isMetricsLoading}
       />
 
-      {showEmpty && <ExecutiveSummaryEmptyPeriod />}
+      {showDashboardSkeleton ? <ExecutiveDashboardSkeleton filterLabel={filterLabel} /> : null}
 
-      <div className="space-y-8">
-        {showMetricsSkeleton ? <ExecutiveDashboardFilterLoadingBanner /> : null}
+      {showEmpty ? <ExecutiveSummaryEmptyPeriod /> : null}
 
-        {showMetricsSkeleton ? (
-          <ExecutiveDashboardKpiSkeleton />
-        ) : (
-          <SectionReveal delayMs={0}>
-            <section key={`kpi-${filtersKey}`} aria-label="Ringkasan KPI">
-              <ExecutiveDashboardKpiRow metrics={metrics} />
-            </section>
-          </SectionReveal>
-        )}
-
-        {showMetricsSkeleton ? (
-          <ExecutiveDashboardChartsRowSkeleton />
-        ) : (
-          <SectionReveal delayMs={60}>
-            <section
-              key={`charts-${filtersKey}`}
-              aria-label="Grafik utama"
-              className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch"
-            >
-              <ExecutiveDashboardTrendChart data={metrics.monthlyTrend} />
-              <ExecutiveDashboardUnitBarChart units={metrics.budgetByUnit} />
-              <ExecutiveDashboardCapexStatusChart status={metrics.capexStatus} />
-            </section>
-          </SectionReveal>
-        )}
-
-        <div ref={analysisMount.ref}>
-          {showMetricsSkeleton || !analysisMount.visible ? (
-            <ExecutiveDashboardAnalysisSkeleton />
-          ) : (
-            <SectionReveal delayMs={120}>
-              <section key={`analysis-${filtersKey}`} aria-label="Analisis detail">
-                <ExecutiveDashboardAnalysisSection
-                  categories={metrics.categoryBreakdown}
-                  topInvestments={metrics.topInvestments}
-                  topUnits={metrics.topUnits}
-                />
-              </section>
-            </SectionReveal>
-          )}
-        </div>
-
-        <div ref={alertsMount.ref}>
-          {showMetricsSkeleton || !alertsMount.visible ? (
-            <ExecutiveDashboardAlertsSkeleton />
-          ) : (
-            <SectionReveal delayMs={180}>
-              <section key={`alerts-${filtersKey}`} aria-label="Peringatan">
-                <ExecutiveDashboardAlerts alerts={metrics.alerts} />
-              </section>
-            </SectionReveal>
-          )}
-        </div>
-      </div>
+      {showMetricsContent ? (
+        <DashboardBody metrics={metrics} filtersKey={filtersKey} />
+      ) : null}
 
       <footer className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t border-siloam-border text-xs font-bold text-siloam-text-secondary">
         <span className="uppercase tracking-widest" style={{ color: EXECUTIVE_SUMMARY_COLORS.header }}>
           Executive Dashboard · {periodHeader?.periodName ?? periodName}
         </span>
-        {!showMetricsSkeleton ? <span>Terakhir diperbarui: {updatedLabel}</span> : null}
+        {showMetricsContent ? <span>Terakhir diperbarui: {updatedLabel}</span> : null}
       </footer>
     </div>
   );

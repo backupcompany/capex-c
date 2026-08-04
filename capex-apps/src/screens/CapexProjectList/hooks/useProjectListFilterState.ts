@@ -101,9 +101,11 @@ export function useProjectListFilterState(
     setAppliedSearchTerm(searchTerm.trim());
   }, [searchTerm]);
 
-  /** Apply an explicit term (e.g. on Cari click) without waiting for draft state. */
+  /** Apply an explicit term (e.g. on Cari / Enter) — sync draft + applied together. */
   const commitSearchTerm = useCallback((term: string) => {
-    setAppliedSearchTerm(term.trim());
+    const t = term.trim();
+    setSearchTerm(t);
+    setAppliedSearchTerm(t);
   }, []);
 
   const clearSearch = useCallback(() => {

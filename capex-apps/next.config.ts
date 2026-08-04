@@ -32,6 +32,13 @@ const devSecurityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Public tunnel hostnames (cloudflared/ngrok/devtunnels) — required for Next 16 dev over HTTPS proxy.
+  allowedDevOrigins: [
+    '*.trycloudflare.com',
+    '*.ngrok-free.app',
+    '*.ngrok.io',
+    '*.devtunnels.ms',
+  ],
   // Monorepo: Turbopack + output tracing share the same root (repo root has tailwindcss).
   turbopack: {
     root: monorepoRoot,

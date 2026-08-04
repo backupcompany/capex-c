@@ -7,6 +7,13 @@ function num(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Merge split KPI + charts payloads into one view-model. */
+export function mergeExecutiveDashboardPayload(
+  raw: Partial<ExecutiveDashboardMetrics> | null | undefined,
+): ExecutiveDashboardMetrics {
+  return normalizeExecutiveDashboardMetrics(raw);
+}
+
 /** Coerce API payload (incl. legacy summary keys) into a complete dashboard view-model. */
 export function normalizeExecutiveDashboardMetrics(
   raw: Partial<ExecutiveDashboardMetrics> | null | undefined,

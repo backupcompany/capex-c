@@ -24,7 +24,14 @@ import { BudgetSummary } from '../components/organisms/BudgetSummary/BudgetSumma
 import { BudgetSummaryCard } from '../components/molecules/BudgetSummaryCard/BudgetSummaryCard';
 import { EditPlanModal } from '../components/organisms/EditPlanModal/EditPlanModal';
 import { queryKeys } from '../lib/query-keys';
-import { fetchBudgetSiloamFullNetworkBundle } from '../hooks/queries/fetchBudgetSiloamPeriod';
+import {
+  fetchBudgetSiloamShellBundle,
+  fetchBudgetSiloamCategorySlice,
+} from '../hooks/queries/fetchBudgetSiloamPeriod';
+import {
+  mergeBudgetNetworkCategorySlice,
+  resolveDefaultBudgetCategoryId,
+} from '../lib/budgetSiloamCategoryMerge';
 import { cloneDeep } from '../lib/clone';
 import { invalidateRequestCache } from '../lib/requestCache';
 import { invalidateBudgetHuBackendCache } from '../services/budgetHuPageApi';
@@ -43,6 +50,26 @@ import { fetchBudgetArchetypeProjectsForExport } from '../services/fetchBudgetAr
 const STALE_MS = 120_000;
 const GC_MS = 1000 * 60 * 30;
 const QUERY_HYDRATE_BLOCK_MS = 3_000;
+
+function CategoryTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="h-10 rounded bg-siloam-border/50" />
+      ))}
+    </div>
+  );
+}
+
+function CategoryCardsSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="h-24 rounded-xl bg-siloam-border/50" />
+      ))}
+    </div>
+  );
+}
 
 interface BudgetArchetypePageProps {
   periodName: string;
@@ -108,52 +135,102 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
     [setIsPageDirty],
   );
 
-  const periodQuery = useQuery({
-    queryKey: queryKeys.budgetSiloamPeriod.detail(periodName),
-    queryFn: () => fetchBudgetSiloamFullNetworkBundle(periodName, currentUser.id),
+  const [loadedCategoryIds, setLoadedCategoryIds] = useState<Set<string>>(() => new Set());
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
+
+  const shellQuery = useQuery({
+    queryKey: queryKeys.budgetSiloamPeriod.shell(periodName),
+    queryFn: () => fetchBudgetSiloamShellBundle(periodName, currentUser.id),
     enabled: !!periodName.trim() && canView && !!currentUser?.id,
     staleTime: STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    placeholderData: (prev) => prev,
   });
 
-  const budgetPeriod = periodQuery.data?.budgetPeriod ?? null;
-  const allCategories = periodQuery.data?.categories ?? [];
-  const isInitialLoad = periodQuery.isPending && !periodQuery.data;
-  const isBackgroundRefresh = periodQuery.isFetching && !!periodQuery.data;
+  const categoryQuery = useQuery({
+    queryKey: queryKeys.budgetSiloamPeriod.category(periodName, selectedCategoryId ?? ''),
+    queryFn: () =>
+      fetchBudgetSiloamCategorySlice(periodName, selectedCategoryId as string, currentUser.id),
+    enabled: !!periodName.trim() && canView && !!currentUser?.id && !!selectedCategoryId,
+    staleTime: STALE_MS,
+    gcTime: GC_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  const budgetPeriod = shellQuery.data?.budgetPeriod ?? null;
+  const allCategories = shellQuery.data?.categories ?? [];
+  const isInitialLoad = shellQuery.isPending && !shellQuery.data;
+  const isBackgroundRefresh = shellQuery.isFetching && !!shellQuery.data;
+  const isCategoryLoading =
+    !!selectedCategoryId &&
+    (categoryQuery.isFetching || categoryQuery.isPending) &&
+    !loadedCategoryIds.has(selectedCategoryId);
 
   useEffect(() => {
     if (Date.now() < blockQueryHydrateUntilRef.current) return;
-    if (!periodQuery.data?.budgetPeriod) {
-      if (!periodQuery.isPending && !serverPeriodRef.current) {
+    if (!shellQuery.data?.budgetPeriod) {
+      if (!shellQuery.isPending && !serverPeriodRef.current) {
         setEditedData(null);
       }
       return;
     }
     if (isDirty) return;
 
-    const next = recalculateBudgets(cloneDeep(periodQuery.data.budgetPeriod));
-    serverPeriodRef.current = cloneDeep(next);
-    setEditedData(cloneDeep(next));
+    const next = recalculateBudgets(cloneDeep(shellQuery.data.budgetPeriod));
+    serverPeriodRef.current = cloneDeep(shellQuery.data.budgetPeriod);
+    setEditedData(next);
     setSaveError(null);
-    setSelectedCategoryId((prev) => {
-      const cats = periodQuery.data!.categories;
-      if (cats.length === 0) return prev;
-      if (prev && cats.some((c) => c.id === prev)) return prev;
-      return cats[0]?.id ?? null;
-    });
+    setLoadedCategoryIds(new Set());
     updateIsDirty(false);
-  }, [periodQuery.data, periodQuery.isPending, isDirty, updateIsDirty]);
+  }, [shellQuery.data, shellQuery.isPending, isDirty, updateIsDirty]);
+
+  useEffect(() => {
+    if (!selectedCategoryId || !categoryQuery.data || isDirty) return;
+    setEditedData((prev) => {
+      if (!prev) return prev;
+      return mergeBudgetNetworkCategorySlice(prev, categoryQuery.data!, selectedCategoryId);
+    });
+    setLoadedCategoryIds((prev) => new Set(prev).add(selectedCategoryId));
+    setPendingCategoryId(null);
+  }, [categoryQuery.data, selectedCategoryId, isDirty]);
+
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    if (categoryQuery.isError) {
+      setPendingCategoryId(null);
+    }
+  }, [categoryQuery.isError, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!allCategories.length || selectedCategoryId) return;
+    const defaultId = resolveDefaultBudgetCategoryId(allCategories);
+    if (defaultId) {
+      setSelectedCategoryId(defaultId);
+      setPendingCategoryId(defaultId);
+    }
+  }, [allCategories, selectedCategoryId]);
 
   useEffect(() => {
     setSaveError(null);
     updateIsDirty(false);
     if (!periodName.trim()) {
       setEditedData(null);
+      setSelectedCategoryId(null);
+      setLoadedCategoryIds(new Set());
+      setPendingCategoryId(null);
     }
   }, [periodName, updateIsDirty]);
+
+  const handleCategorySelect = useCallback(
+    (categoryId: string) => {
+      if (categoryId === selectedCategoryId) return;
+      setPendingCategoryId(categoryId);
+      setSelectedCategoryId(categoryId);
+    },
+    [selectedCategoryId],
+  );
 
   const selectedArchetype = useMemo(() => {
     if (!editedData || !archetypeId) return null;
@@ -167,8 +244,8 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
 
   const archetypeSummaryTableData: BudgetSummaryRow[] = useMemo(() => {
     if (!selectedArchetype) return [];
-    return buildBudgetArchetypeSummaryRows(selectedArchetype, allCategories);
-  }, [selectedArchetype, allCategories]);
+    return buildBudgetArchetypeSummaryRows(selectedArchetype, allCategories, loadedCategoryIds);
+  }, [selectedArchetype, allCategories, loadedCategoryIds]);
 
   const handleExportExcel = useCallback(async () => {
     if (!selectedArchetype || !periodName.trim() || isExporting) return;
@@ -342,21 +419,40 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
       invalidateRequestCache('budget-siloam:');
       await invalidateBudgetHuBackendCache(periodName, currentUser.id);
 
-      const fresh = await fetchBudgetSiloamFullNetworkBundle(periodName, currentUser.id, {
+      const freshShell = await fetchBudgetSiloamShellBundle(periodName, currentUser.id, {
         skipCache: true,
       });
-      const confirmed = fresh.budgetPeriod
-        ? recalculateBudgets(cloneDeep(fresh.budgetPeriod))
+      let confirmed = freshShell.budgetPeriod
+        ? recalculateBudgets(cloneDeep(freshShell.budgetPeriod))
         : next;
-      const categories = fresh.categories.length ? fresh.categories : allCategories;
+      let freshCat: BudgetPeriod | null = null;
+      if (selectedCategoryId) {
+        freshCat = await fetchBudgetSiloamCategorySlice(
+          periodName,
+          selectedCategoryId,
+          currentUser.id,
+          { skipCache: true },
+        );
+        if (freshCat) {
+          confirmed = mergeBudgetNetworkCategorySlice(confirmed, freshCat, selectedCategoryId);
+        }
+      }
+      const categories = freshShell.categories.length ? freshShell.categories : allCategories;
 
       serverPeriodRef.current = cloneDeep(confirmed);
       setEditedData(cloneDeep(confirmed));
+      setLoadedCategoryIds(selectedCategoryId ? new Set([selectedCategoryId]) : new Set());
       setTableRevision((v) => v + 1);
-      queryClient.setQueryData(queryKeys.budgetSiloamPeriod.detail(periodName), {
-        budgetPeriod: confirmed,
+      queryClient.setQueryData(queryKeys.budgetSiloamPeriod.shell(periodName), {
+        budgetPeriod: freshShell.budgetPeriod,
         categories,
       });
+      if (selectedCategoryId && freshCat) {
+        queryClient.setQueryData(
+          queryKeys.budgetSiloamPeriod.category(periodName, selectedCategoryId),
+          freshCat,
+        );
+      }
 
       onBudgetPeriodSaved?.(confirmed);
       showToast('Network budget plan saved successfully!', 'success');
@@ -375,6 +471,7 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
     editedData,
     periodName,
     archetypeId,
+    selectedCategoryId,
     allCategories,
     currentUser,
     onBudgetPeriodSaved,
@@ -531,7 +628,7 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
     );
   }
 
-  if (periodQuery.isError && !periodQuery.data) {
+  if (shellQuery.isError && !shellQuery.data) {
     return (
       <div className="text-center p-8 text-danger" role="alert">
         Failed to load budget data for the Archetype.
@@ -625,20 +722,29 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
 
         <div className="hidden md:block border-b border-siloam-border overflow-x-auto mb-4">
           <nav className="-mb-px flex space-x-6" aria-label="Budget categories">
-            {activeCategories.map((cat) => (
+            {activeCategories.map((cat) => {
+              const isSelected = selectedCategoryId === cat.id;
+              const isPending = pendingCategoryId === cat.id && isCategoryLoading;
+              const isDimmed = selectedCategoryId != null && !isSelected;
+              return (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setSelectedCategoryId(cat.id)}
-                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
-                  selectedCategoryId === cat.id
-                    ? 'border-siloam-blue text-siloam-blue'
-                    : 'border-transparent text-siloam-text-secondary hover:text-siloam-text-primary hover:border-gray-300'
+                onClick={() => handleCategorySelect(cat.id)}
+                disabled={isCategoryLoading && isPending}
+                className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm transition-opacity duration-200 ${
+                  isSelected
+                    ? 'border-siloam-blue text-siloam-blue opacity-100'
+                    : isDimmed
+                      ? 'border-transparent text-siloam-text-secondary opacity-40 hover:opacity-70'
+                      : 'border-transparent text-siloam-text-secondary opacity-100 hover:text-siloam-text-primary hover:border-gray-300'
                 }`}
               >
                 {cat.name}
+                {isPending ? ' …' : ''}
               </button>
-            ))}
+            );
+            })}
           </nav>
         </div>
 
@@ -647,31 +753,35 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
             label="Select Budget Category"
             options={activeCategories.map((c) => c.name)}
             selectedValue={allCategories.find((c) => c.id === selectedCategoryId)?.name || ''}
-            onSelect={(name) =>
-              setSelectedCategoryId(allCategories.find((c) => c.name === name)?.id || null)
-            }
+            onSelect={(name) => {
+              const id = allCategories.find((c) => c.name === name)?.id;
+              if (id) handleCategorySelect(id);
+            }}
             className="w-full"
           />
         </div>
 
+        <div
+          className={`transition-opacity duration-200 ${
+            isCategoryLoading ? 'opacity-45 pointer-events-none' : 'opacity-100'
+          }`}
+        >
         <div className="hidden md:block">
-          {selectedCategoryId ? (
+          {selectedCategoryId && !isCategoryLoading ? (
             <SpreadsheetTable
-              key={`hu-table-${selectedCategoryId}-${tableRevision}`}
+              key={`hu-table-${periodName}-${selectedCategoryId}-${tableRevision}`}
               columns={columns}
               data={huTableData}
               onDataChange={handleHuDataChange}
               rowHeaderAccessor="name"
             />
           ) : (
-            <div className="text-center p-8 text-siloam-text-secondary">
-              Please select a budget category.
-            </div>
+            <CategoryTableSkeleton />
           )}
         </div>
 
         <div className="md:hidden space-y-4">
-          {selectedCategoryId ? (
+          {selectedCategoryId && !isCategoryLoading ? (
             huTableData.length > 0 ? (
               huTableData.map((hu) => {
                 const budgetForSelectedCategory = hu.budget[selectedCategoryId];
@@ -698,10 +808,9 @@ const BudgetArchetypePageInner: React.FC<BudgetArchetypePageProps> = ({
               </p>
             )
           ) : (
-            <p className="text-center p-8 text-siloam-text-secondary">
-              Please select a budget category.
-            </p>
+            <CategoryCardsSkeleton />
           )}
+        </div>
         </div>
       </div>
 

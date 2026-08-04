@@ -13,7 +13,8 @@ import {
 } from './executive-summary.dto';
 import { loadExecutiveSummaryProjectsPage } from './executive-summary-projects.loader';
 import { loadExecutiveSummaryStats } from './executive-summary-stats.loader';
-import { loadExecutiveDashboardMetrics } from './executive-summary-dashboard.loader';
+import { loadExecutiveDashboardMetrics, loadExecutiveDashboardCharts } from './executive-summary-dashboard.loader';
+import { loadExecutiveDashboardKpi } from './executive-summary-dashboard-kpi.loader';
 
 const EXEC_DASHBOARD_CACHE_TTL_MS = CACHE_TTL_MS.DASHBOARD;
 
@@ -80,6 +81,32 @@ export class ExecutiveSummaryService {
     return loadExecutiveSummaryProjectsPage(client, query);
   }
 
+  /** Fast KPI row — SQL aggregate, no asset pipeline scan. */
+  async loadDashboardKpi(accessToken: string, body: unknown) {
+    const { userId, periodName } = parsePeriodUserBody(body);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Executive Summary', 'view');
+    const filters = parseListFilters(body);
+    const pn = periodName.trim();
+    const cacheKey = cacheKeys.executiveDashboardKpi(userId, pn, filtersCacheKey(filters));
+
+    return this.cacheAside.getOrLoad(cacheKey, EXEC_DASHBOARD_CACHE_TTL_MS, () =>
+      this.computeDashboardKpi(accessToken, userId, pn, filters),
+    );
+  }
+
+  /** Charts, alerts, top lists — heavy project/asset pipeline. */
+  async loadDashboardCharts(accessToken: string, body: unknown) {
+    const { userId, periodName } = parsePeriodUserBody(body);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Executive Summary', 'view');
+    const filters = parseListFilters(body);
+    const pn = periodName.trim();
+    const cacheKey = cacheKeys.executiveDashboardCharts(userId, pn, filtersCacheKey(filters));
+
+    return this.cacheAside.getOrLoad(cacheKey, EXEC_DASHBOARD_CACHE_TTL_MS, () =>
+      this.computeDashboardCharts(accessToken, userId, pn, filters),
+    );
+  }
+
   /** CEO dashboard aggregates — KPI, charts, alerts (archetype-scoped). */
   async loadDashboardMetrics(accessToken: string, body: unknown) {
     const { userId, periodName } = parsePeriodUserBody(body);
@@ -93,6 +120,49 @@ export class ExecutiveSummaryService {
     );
   }
 
+  private async periodMetaFromClient(
+    client: Awaited<ReturnType<FsAuthService['getAuthenticatedRlsClient']>>['client'],
+    pn: string,
+  ) {
+    const periodRow = await client
+      .from('budget_periods')
+      .select('period_name, start_date, end_date, multi_year_name')
+      .eq('period_name', pn)
+      .maybeSingle();
+    return periodRow.data
+      ? {
+          periodName: String(periodRow.data.period_name ?? pn),
+          startDate: periodRow.data.start_date ?? '',
+          endDate: periodRow.data.end_date ?? '',
+          multiYearName: periodRow.data.multi_year_name ?? '',
+        }
+      : null;
+  }
+
+  private async computeDashboardKpi(
+    accessToken: string,
+    userId: number,
+    pn: string,
+    filters: ExecutiveSummaryListFilters,
+  ) {
+    const { client } = await this.fsAuth.getAuthenticatedRlsClient(accessToken, userId);
+    const [summary, periodMeta] = await Promise.all([
+      loadExecutiveDashboardKpi(client, pn, filters),
+      this.periodMetaFromClient(client, pn),
+    ]);
+    return { summary, periodMeta, updatedAt: new Date().toISOString() };
+  }
+
+  private async computeDashboardCharts(
+    accessToken: string,
+    userId: number,
+    pn: string,
+    filters: ExecutiveSummaryListFilters,
+  ) {
+    const { client } = await this.fsAuth.getAuthenticatedRlsClient(accessToken, userId);
+    return loadExecutiveDashboardCharts(client, pn, filters);
+  }
+
   private async computeDashboardMetrics(
     accessToken: string,
     userId: number,
@@ -101,23 +171,10 @@ export class ExecutiveSummaryService {
   ) {
     const { client } = await this.fsAuth.getAuthenticatedRlsClient(accessToken, userId);
 
-    const [metrics, periodRow] = await Promise.all([
+    const [metrics, periodMeta] = await Promise.all([
       loadExecutiveDashboardMetrics(client, pn, filters),
-      client
-        .from('budget_periods')
-        .select('period_name, start_date, end_date, multi_year_name')
-        .eq('period_name', pn)
-        .maybeSingle(),
+      this.periodMetaFromClient(client, pn),
     ]);
-
-    const periodMeta = periodRow.data
-      ? {
-          periodName: String(periodRow.data.period_name ?? pn),
-          startDate: periodRow.data.start_date ?? '',
-          endDate: periodRow.data.end_date ?? '',
-          multiYearName: periodRow.data.multi_year_name ?? '',
-        }
-      : null;
 
     return { ...metrics, periodMeta };
   }

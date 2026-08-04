@@ -122,25 +122,32 @@ function tableShellKey(periodName: string, userId: number): string {
 
 export function readProjectListFilterSelection(periodName?: string): ProjectListFilterSelection | null {
   if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(FILTER_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as ProjectListFilterSelection;
-    if (!parsed) return null;
-    const legacyPeriod = periodName?.trim();
-    if (legacyPeriod && parsed.periodName && parsed.periodName !== legacyPeriod) return null;
-    return parsed;
-  } catch {
-    return null;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = storage.getItem(FILTER_KEY);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as ProjectListFilterSelection;
+      if (!parsed) continue;
+      const legacyPeriod = periodName?.trim();
+      if (legacyPeriod && parsed.periodName && parsed.periodName !== legacyPeriod) continue;
+      return parsed;
+    } catch {
+      /* corrupt / quota */
+    }
   }
+  return null;
 }
 
 export function writeProjectListFilterSelection(selection: ProjectListFilterSelection): void {
   if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(FILTER_KEY, JSON.stringify(selection));
-  } catch {
-    /* quota */
+  const payload = JSON.stringify(selection);
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      storage.setItem(FILTER_KEY, payload);
+      return;
+    } catch {
+      /* quota */
+    }
   }
 }
 

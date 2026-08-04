@@ -3,6 +3,7 @@ import React, { useState, useMemo, memo } from 'react';
 import { User, UserRole, HIERARCHY_LEVELS } from '../types';
 import { usePermissions } from '../hooks/usePermissions';
 import { updatePassword } from '../lib/authSupabase';
+import { normalizeAuthPassword } from '@/lib/auth/normalizeAuthInput';
 import { useToast } from '../contexts/ToastContext';
 
 interface ProfilePageProps {
@@ -48,21 +49,24 @@ export const ProfilePage = memo(function ProfilePage({
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         setChangePwError('');
-        if (newPassword.length < 6) {
+        const cleanCurrent = normalizeAuthPassword(currentPassword);
+        const cleanNew = normalizeAuthPassword(newPassword);
+        const cleanConfirm = normalizeAuthPassword(confirmPassword);
+        if (cleanNew.length < 6) {
             setChangePwError('Password baru minimal 6 karakter.');
             return;
         }
-        if (newPassword !== confirmPassword) {
+        if (cleanNew !== cleanConfirm) {
             setChangePwError('Konfirmasi password tidak cocok.');
             return;
         }
-        if (!currentPassword.trim()) {
+        if (!cleanCurrent) {
             setChangePwError('Masukkan password saat ini.');
             return;
         }
         setChangePwLoading(true);
         try {
-            const { error } = await updatePassword(newPassword, currentPassword, currentUser.id);
+            const { error } = await updatePassword(cleanNew, cleanCurrent, currentUser.id);
             if (error) {
                 setChangePwError(error.message || 'Gagal mengubah password.');
             } else {

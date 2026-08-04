@@ -51,6 +51,8 @@ import { hydrateCapexProjectListTableFromDisk } from '../../../lib/prefetchCapex
 import {
   logProjectListPipelineStage,
   PROJECT_LIST_DATA_POLICY,
+  readProjectListDataPolicyMarker,
+  writeProjectListDataPolicyMarker,
   isStaleProjectListBundle,
 } from '../../../lib/projectListPipelineDebug';
 import { invalidateAllCapexProjectListDiskCache } from '../../../lib/capexProjectListDiskCache';
@@ -1278,12 +1280,11 @@ export function useProjectListTablePipeline(
 
   useEffect(() => {
     if (pipelineDiskPurgedRef.current || typeof window === 'undefined') return;
-    const markerKey = 'capex.projectList.dataPolicy';
-    const stored = window.localStorage.getItem(markerKey);
+    const stored = readProjectListDataPolicyMarker();
     if (stored !== PROJECT_LIST_DATA_POLICY) {
       invalidateAllCapexProjectListDiskCache();
       if (currentUser?.id) clearSessionClientPoolsForUser(currentUser.id);
-      window.localStorage.setItem(markerKey, PROJECT_LIST_DATA_POLICY);
+      writeProjectListDataPolicyMarker(PROJECT_LIST_DATA_POLICY);
       logProjectListPipelineStage('disk-cache-purge', { policy: PROJECT_LIST_DATA_POLICY });
     }
     pipelineDiskPurgedRef.current = true;

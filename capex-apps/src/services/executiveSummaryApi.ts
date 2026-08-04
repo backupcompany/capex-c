@@ -5,8 +5,19 @@ import type {
   ExecutiveSummaryStats,
 } from '../lib/executiveSummary/types';
 import type { ExecutiveDashboardMetrics } from '../lib/executiveSummary/dashboardTypes';
-import { normalizeExecutiveDashboardMetrics } from '../lib/executiveSummary/normalizeDashboardMetrics';
+import { mergeExecutiveDashboardPayload } from '../lib/executiveSummary/normalizeDashboardMetrics';
 import { postBackend } from '../lib/backendApiClient';
+
+export type ExecutiveDashboardKpiResponse = {
+  summary: ExecutiveDashboardMetrics['summary'];
+  periodMeta?: ExecutiveDashboardMetrics['periodMeta'];
+  updatedAt?: string;
+};
+
+export type ExecutiveDashboardChartsResponse = Pick<
+  ExecutiveDashboardMetrics,
+  'budgetByUnit' | 'capexStatus' | 'categoryBreakdown' | 'monthlyTrend' | 'topInvestments' | 'alerts' | 'updatedAt'
+>;
 
 export async function fetchExecutiveSummaryPageMetaFromBackend(
   periodName: string,
@@ -71,6 +82,57 @@ export async function fetchExecutiveSummaryProjectsPageFromBackend(
   );
 }
 
+export async function fetchExecutiveDashboardKpiFromBackend(
+  periodName: string,
+  userId: number,
+  filters: {
+    archetypeId?: string | null;
+    capexType?: string;
+    status?: string;
+    huCodes?: string[];
+  },
+): Promise<ExecutiveDashboardKpiResponse | null> {
+  if (!periodName.trim()) return null;
+  return postBackend<ExecutiveDashboardKpiResponse>(
+    '/executive-summary/dashboard-kpi',
+    {
+      periodName: periodName.trim(),
+      userId,
+      archetypeId: filters.archetypeId ?? undefined,
+      capexType: filters.capexType ?? 'all',
+      status: filters.status ?? 'all',
+      huCodes: filters.huCodes ?? [],
+    },
+    { source: 'executiveSummary.dashboardKpi', timeoutMs: 30_000 },
+  );
+}
+
+export async function fetchExecutiveDashboardChartsFromBackend(
+  periodName: string,
+  userId: number,
+  filters: {
+    archetypeId?: string | null;
+    capexType?: string;
+    status?: string;
+    huCodes?: string[];
+  },
+): Promise<ExecutiveDashboardChartsResponse | null> {
+  if (!periodName.trim()) return null;
+  return postBackend<ExecutiveDashboardChartsResponse>(
+    '/executive-summary/dashboard-charts',
+    {
+      periodName: periodName.trim(),
+      userId,
+      archetypeId: filters.archetypeId ?? undefined,
+      capexType: filters.capexType ?? 'all',
+      status: filters.status ?? 'all',
+      huCodes: filters.huCodes ?? [],
+    },
+    { source: 'executiveSummary.dashboardCharts', timeoutMs: 120_000 },
+  );
+}
+
+/** @deprecated Use dashboard-kpi + dashboard-charts. */
 export async function fetchExecutiveDashboardMetricsFromBackend(
   periodName: string,
   userId: number,
@@ -94,5 +156,5 @@ export async function fetchExecutiveDashboardMetricsFromBackend(
     },
     { source: 'executiveSummary.dashboardMetrics', timeoutMs: 120_000 },
   );
-  return data ? normalizeExecutiveDashboardMetrics(data) : null;
+  return data ? mergeExecutiveDashboardPayload(data) : null;
 }

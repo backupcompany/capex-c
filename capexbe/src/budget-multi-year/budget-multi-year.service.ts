@@ -16,6 +16,7 @@ import {
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import {
   buildMultiYearsFromRows,
+  buildPeriodSummariesFromRows,
   loadPeriodCategoryBudgetsForMultiYear,
 } from './budget-multi-year.util';
 
@@ -103,7 +104,7 @@ export class BudgetMultiYearService {
     const [multiYearRows, categories, periodRows] = await Promise.all([
       fetchAllRecords(client, 'budget_multi_years', MULTI_YEAR_SHELL_COLUMNS),
       getActiveBudgetCategories(client),
-      fetchAllRecords(client, 'budget_periods', 'period_name,multi_year_name'),
+      fetchAllRecords(client, 'budget_periods', 'period_name,multi_year_name,start_date,end_date'),
     ]);
 
     const periodNames = (periodRows ?? [])
@@ -122,6 +123,7 @@ export class BudgetMultiYearService {
     return {
       multiYears: buildMultiYearsFromRows(multiYearRows, periodRows ?? [], categoryBudgets),
       categories,
+      periodSummaries: buildPeriodSummariesFromRows(periodRows ?? []),
     };
   }
 
@@ -129,7 +131,7 @@ export class BudgetMultiYearService {
     await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'view');
     const key = cacheKeys.budgetMultiYearPage(userId);
 
-    const processHit = this.getFromProcessCache<{ multiYears: any[]; categories: any[] }>(key);
+    const processHit = this.getFromProcessCache<{ multiYears: any[]; categories: any[]; periodSummaries?: any[] }>(key);
     if (processHit) return processHit;
 
     const sharedHit = await perfCacheGet<{ multiYears: any[]; categories: any[] }>(key);

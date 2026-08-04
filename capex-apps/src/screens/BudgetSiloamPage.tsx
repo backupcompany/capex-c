@@ -39,6 +39,26 @@ const STALE_MS = 120_000;
 const GC_MS = 1000 * 60 * 30;
 const QUERY_HYDRATE_BLOCK_MS = 3_000;
 
+function CategoryTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="h-10 rounded bg-siloam-border/50" />
+      ))}
+    </div>
+  );
+}
+
+function CategoryCardsSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="h-24 rounded-xl bg-siloam-border/50" />
+      ))}
+    </div>
+  );
+}
+
 function emptyBudgetItem(): BudgetItem {
   return {
     budgetPlan: 0,
@@ -626,14 +646,7 @@ const BudgetPeriodPageInner: React.FC<BudgetPeriodPageProps> = ({
           }`}
         >
         <div className="hidden md:block">
-          {selectedCategoryId ? (
-            isCategoryLoading ? (
-              <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-10 rounded bg-siloam-border/50" />
-                ))}
-              </div>
-            ) : (
+          {selectedCategoryId && !isCategoryLoading ? (
             <SpreadsheetTable
               key={`${periodName}-${selectedCategoryId}-${tableRevision}`}
               columns={columns}
@@ -641,25 +654,13 @@ const BudgetPeriodPageInner: React.FC<BudgetPeriodPageProps> = ({
               onDataChange={handleArchetypeDataChange}
               rowHeaderAccessor="name"
             />
-            )
           ) : (
-            <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-10 rounded bg-siloam-border/50" />
-              ))}
-            </div>
+            <CategoryTableSkeleton />
           )}
         </div>
 
         <div className="md:hidden space-y-4">
-          {selectedCategoryId ? (
-            isCategoryLoading ? (
-              <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
-                {Array.from({ length: 4 }, (_, i) => (
-                  <div key={i} className="h-24 rounded-xl bg-siloam-border/50" />
-                ))}
-              </div>
-            ) : (
+          {selectedCategoryId && !isCategoryLoading ? (
             archetypeTableData.map((arch) => {
               const budgetForCategory = arch.budget[selectedCategoryId];
               return (
@@ -676,13 +677,8 @@ const BudgetPeriodPageInner: React.FC<BudgetPeriodPageProps> = ({
                 />
               );
             })
-            )
           ) : (
-            <div className="space-y-3 py-4 animate-pulse" aria-busy="true">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className="h-24 rounded-xl bg-siloam-border/50" />
-              ))}
-            </div>
+            <CategoryCardsSkeleton />
           )}
         </div>
         </div>

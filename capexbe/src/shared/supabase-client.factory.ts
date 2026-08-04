@@ -1,4 +1,3 @@
-import './preload';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabaseHttpsFetch } from './supabase-https-fetch';
 

@@ -17,6 +17,7 @@ import {
 export type BudgetMultiYearPageBundle = {
   multiYears: BudgetMultiYear[];
   categories: BudgetCategoryConfig[];
+  periodSummaries: BudgetPeriod[];
 };
 
 const PAGE_STALE_MS = 120_000;
@@ -63,7 +64,7 @@ export function buildBudgetMultiYearPageSeedFromCache(
   const bootstrap = queryClient?.getQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap]);
   const multiYears = bootstrap?.multiYears?.length ? bootstrap.multiYears : [];
   const categories = readCategoriesFromLocalCache(queryClient, userId);
-  return { multiYears, categories };
+  return { multiYears, categories, periodSummaries: [] };
 }
 
 async function loadActiveCategories(
@@ -92,6 +93,7 @@ async function fetchPageBundleFromNetwork(
 ): Promise<BudgetMultiYearPageBundle | null> {
   const bootstrap = queryClient?.getQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap]);
   const cachedMultiYears = bootstrap?.multiYears?.length ? bootstrap.multiYears : null;
+  const cachedPeriodSummaries = bootstrap?.allPeriods?.length ? bootstrap.allPeriods : [];
 
   if (userId != null && isCapexBeConfigured()) {
     const fromBe = await fetchBudgetMultiYearPageBundleFromBackend(userId);
@@ -102,6 +104,7 @@ async function fetchPageBundleFromNetwork(
       return {
         multiYears: pickMultiYears(fromBe.multiYears, cachedMultiYears ?? undefined),
         categories,
+        periodSummaries: fromBe.periodSummaries.length ? fromBe.periodSummaries : cachedPeriodSummaries,
       };
     }
   }
@@ -114,6 +117,7 @@ async function fetchPageBundleFromNetwork(
   return {
     multiYears: pickMultiYears(multiYears, cachedMultiYears ?? undefined),
     categories,
+    periodSummaries: cachedPeriodSummaries,
   };
 }
 

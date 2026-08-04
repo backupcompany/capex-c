@@ -24,6 +24,16 @@ export class ExecutiveSummaryController {
     return this.executiveSummaryService.loadProjectsPage(requireAccessTokenFromRequest(req), body);
   }
 
+  @Post('dashboard-kpi')
+  async dashboardKpi(@Req() req: Request, @Body() body: unknown) {
+    return this.executiveSummaryService.loadDashboardKpi(requireAccessTokenFromRequest(req), body);
+  }
+
+  @Post('dashboard-charts')
+  async dashboardCharts(@Req() req: Request, @Body() body: unknown) {
+    return this.executiveSummaryService.loadDashboardCharts(requireAccessTokenFromRequest(req), body);
+  }
+
   @Post('dashboard-metrics')
   async dashboardMetrics(@Req() req: Request, @Body() body: unknown) {
     return this.executiveSummaryService.loadDashboardMetrics(requireAccessTokenFromRequest(req), body);

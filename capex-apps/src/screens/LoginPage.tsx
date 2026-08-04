@@ -14,6 +14,7 @@ import {
 import { writeCachedAuthUser } from '../lib/authSessionCache';
 import { consumeOAuthError, signInWithAzure } from '../lib/authAzure';
 import { POST_LOGIN_PATH } from '@/lib/auth/loginRoute';
+import { normalizeAuthEmail, normalizeAuthPassword } from '@/lib/auth/normalizeAuthInput';
 import { ExternalLink } from '@/components/atoms/ExternalLink/ExternalLink';
 
 const ADMIN_WHATSAPP = '6282230353419';
@@ -88,11 +89,13 @@ export const LoginPage = memo(function LoginPage() {
     e.preventDefault();
     setError('');
 
-    if (!email.trim()) {
+    const cleanEmail = normalizeAuthEmail(email);
+    const cleanPassword = normalizeAuthPassword(password);
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       setError('Masukkan email Anda.');
       return;
     }
-    if (!password) {
+    if (!cleanPassword) {
       setError('Masukkan password Anda.');
       return;
     }
@@ -103,7 +106,7 @@ export const LoginPage = memo(function LoginPage() {
 
     setIsLoading(true);
     try {
-      const result = await loginWithBackend(email.trim().toLowerCase(), password);
+      const result = await loginWithBackend(cleanEmail, cleanPassword);
       if (!result.user) {
         setError(result.error || 'Email atau password salah.');
         return;
@@ -199,6 +202,7 @@ export const LoginPage = memo(function LoginPage() {
                     autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => setEmail((v) => normalizeAuthEmail(v))}
                     disabled={isLoading}
                     className="w-full rounded-xl border border-[#b8d4e8] bg-white/90 px-4 py-2.5 text-sm text-[#1e4a7a] focus:outline-none focus:ring-2 focus:ring-[#3485B4] disabled:opacity-60"
                     placeholder="nama@siloamhospitals.com"
@@ -216,6 +220,7 @@ export const LoginPage = memo(function LoginPage() {
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => setPassword((v) => normalizeAuthPassword(v))}
                       disabled={isLoading}
                       className="w-full rounded-xl border border-[#b8d4e8] bg-white/90 px-4 py-2.5 pr-11 text-sm text-[#1e4a7a] focus:outline-none focus:ring-2 focus:ring-[#3485B4] disabled:opacity-60"
                       placeholder="••••••••"

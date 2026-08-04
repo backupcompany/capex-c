@@ -6,7 +6,7 @@ import {
   fetchRecordsInBatches,
 } from '../project-list/supabase-helpers';
 import { loadProjectMetricsForPeriod } from '../project-list/project-metrics.loader';
-const DONUT_COLORS = ['#28A745', '#FFC107', '#DC3545'];
+const DONUT_COLORS = ['#9FD4A9', '#F7D794', '#F5A9A9'];
 
 export type DashboardSnapshotDto = {
   totalBudget: number;

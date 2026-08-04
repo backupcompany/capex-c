@@ -11,6 +11,7 @@ import { getSlimTasksForPipeline, getWorkflowSetsByIds } from '../project-list/m
 import { calculateRates, groupLogsByAsset, groupStatusesByAsset } from '../project-list/progress-aggregate';
 import type { ExecutiveSummaryListFilters } from './executive-summary.dto';
 import { applyExecutiveSummaryFilters } from './executive-summary-query.util';
+import { loadExecutiveDashboardKpi } from './executive-summary-dashboard-kpi.loader';
 
 export type ExecutiveDashboardUnitRow = {
   unitCode: string;
@@ -642,7 +643,7 @@ function buildCapexPipelineStatus(
     poSentCount,
     readyToUseCount,
     cancelledCount,
-    cancelledAssets: cancelledAssets.slice(0, 50),
+    cancelledAssets: cancelledAssets.slice(0, 10),
     donutSlices: buildCapexDonutSlices(stageCounts),
     avgApprovalDays: null,
     overdueSlaCount: 0,
@@ -1034,11 +1035,17 @@ function buildAlerts(
   return alerts.slice(0, 6);
 }
 
-export async function loadExecutiveDashboardMetrics(
+export type ExecutiveDashboardCharts = Pick<
+  ExecutiveDashboardMetrics,
+  'budgetByUnit' | 'capexStatus' | 'categoryBreakdown' | 'monthlyTrend' | 'topInvestments' | 'alerts' | 'updatedAt'
+>;
+
+/** Heavy charts/alerts — projects + assets + task pipeline (no KPI summary). */
+export async function loadExecutiveDashboardCharts(
   client: SupabaseClient,
   periodName: string,
   filters: ExecutiveSummaryListFilters,
-): Promise<ExecutiveDashboardMetrics> {
+): Promise<ExecutiveDashboardCharts> {
   const pn = periodName.trim();
   const scoped = hasScopeFilter(filters);
 
@@ -1082,35 +1089,6 @@ export async function loadExecutiveDashboardMetrics(
     : null;
 
   const totalBudget = scoped ? (scopedTotals?.totalBudget ?? 0) : periodTotals.totalBudget;
-  const budgetAllocationToProject = scoped
-    ? (scopedTotals?.budgetAllocated ?? 0)
-    : periodTotals.budgetAllocated;
-  const budgetApproval = scoped ? (scopedTotals?.budgetApproved ?? 0) : periodTotals.budgetApproved;
-  const budgetConsumed = scoped ? (scopedTotals?.budgetConsumed ?? 0) : periodTotals.budgetConsumed;
-
-  let budgetRevenuePerMonth = 0;
-  let approvedValue = 0;
-  let pendingApprovalValue = 0;
-  let rejectedCount = 0;
-  let waitingApprovalCount = 0;
-
-  for (const row of projects) {
-    const pid = String(row.id);
-    const assets = assetsByProject.get(pid) ?? [];
-    const fs = fsByProject.get(pid);
-    const statusKey = classifyCapexStatus(row, fs, assets);
-
-    const approved = rowNum(row as Record<string, unknown>, 'approved_budget', 'approvedBudget');
-    const plan = projectPlanBudget(row);
-    approvedValue += approved;
-    budgetRevenuePerMonth += rowNum(row as Record<string, unknown>, 'budget_revenue_permonth', 'budgetRevenuePermonth');
-
-    if (statusKey === 'menungguApproval') {
-      waitingApprovalCount += 1;
-      pendingApprovalValue += plan;
-    }
-    if (statusKey === 'ditolak') rejectedCount += 1;
-  }
 
   const fsStats = computePendingFsStats(fsByProject);
   const monthlyRealization = buildConsumptionByMonthFromLogs(logsRaw, assetsByProject, projectIds);
@@ -1138,8 +1116,6 @@ export async function loadExecutiveDashboardMetrics(
   const allUnitRows = buildHuUnitRows(projects, assetsByProject, huBudgetRows);
   const budgetByUnit = allUnitRows.slice(0, 10);
   const priorYearMonthly = new Array(12).fill(0) as number[];
-
-  const capexTotal = capexStatus.projectCount;
 
   const topInvestments: ExecutiveDashboardTopInvestment[] = [...projects]
     .sort((a, b) => {
@@ -1169,29 +1145,37 @@ export async function loadExecutiveDashboardMetrics(
       };
     });
 
-  const utilizationPct = totalBudget > 0 ? Math.round((budgetConsumed / totalBudget) * 1000) / 10 : 0;
-
   return {
-    summary: {
-      totalBudget,
-      budgetAllocationToProject,
-      budgetApproval,
-      budgetConsumed,
-      budgetRevenuePerMonth,
-      utilizationPct,
-      totalCapexSubmission: capexTotal,
-      pendingApprovalValue,
-      approvedValue,
-      rejectedCount,
-      waitingApprovalCount,
-    },
     budgetByUnit,
     capexStatus,
     categoryBreakdown,
     monthlyTrend: buildMonthlyTrend(monthlyRealization, totalBudget, priorYearMonthly),
     topInvestments,
-    topUnits: allUnitRows.slice(0, 5),
     alerts: buildAlerts(allUnitRows, projects, fsByProject, assetsByProject, fsStats.overdueCount),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/** @deprecated Prefer dashboard-kpi + dashboard-charts (parallel). */
+export async function loadExecutiveDashboardMetrics(
+  client: SupabaseClient,
+  periodName: string,
+  filters: ExecutiveSummaryListFilters,
+): Promise<ExecutiveDashboardMetrics> {
+  const [kpi, charts] = await Promise.all([
+    loadExecutiveDashboardKpi(client, periodName, filters),
+    loadExecutiveDashboardCharts(client, periodName, filters),
+  ]);
+  return {
+    summary: {
+      ...kpi,
+      totalCapexSubmission: charts.capexStatus.projectCount,
+      pendingApprovalValue: 0,
+      approvedValue: kpi.budgetApproval,
+      rejectedCount: 0,
+      waitingApprovalCount: 0,
+    },
+    topUnits: charts.budgetByUnit.slice(0, 5),
+    ...charts,
   };
 }

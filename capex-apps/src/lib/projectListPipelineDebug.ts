@@ -1,6 +1,33 @@
 /** Must match capexbe PROJECT_LIST_DATA_POLICY — bump invalidates FE disk caches. */
 export const PROJECT_LIST_DATA_POLICY = 'v8-slim-wire-payload';
 
+export const PROJECT_LIST_DATA_POLICY_MARKER_KEY = 'capex.projectList.dataPolicy';
+
+export function readProjectListDataPolicyMarker(): string | null {
+  if (typeof window === 'undefined') return null;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const value = storage.getItem(PROJECT_LIST_DATA_POLICY_MARKER_KEY);
+      if (value) return value;
+    } catch {
+      /* quota / private mode */
+    }
+  }
+  return null;
+}
+
+export function writeProjectListDataPolicyMarker(value: string): void {
+  if (typeof window === 'undefined') return;
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      storage.setItem(PROJECT_LIST_DATA_POLICY_MARKER_KEY, value);
+      return;
+    } catch {
+      /* quota — try other storage */
+    }
+  }
+}
+
 export const PROJECT_LIST_DISK_CACHE_VERSION = 'capexProjectListTableCache:v2';
 
 export type ProjectListPipelineDebug = {

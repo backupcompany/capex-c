@@ -19,7 +19,6 @@ import {
   prefetchBudgetHuPage,
 } from '@/hooks/queries/warmBudgetHuCache';
 import { prefetchDashboardBundle } from '@/lib/prefetchDashboardBundle';
-import { prefetchExecutiveDashboard } from '@/lib/prefetchExecutiveDashboard';
 import { prefetchBudgetSiloamPeriod } from '@/lib/prefetchBudgetSiloamPeriod';
 import { prefetchBudgetMultiYearPage } from '@/lib/prefetchBudgetMultiYearPage';
 import {
@@ -109,7 +108,6 @@ export function prefetchRouteNetwork(ctx: RouteWarmContext): void {
       warm(() => prefetchDashboardBundle(queryClient, periodName, uid));
       break;
     case Page.ExecutiveSummary:
-      warm(() => prefetchExecutiveDashboard(queryClient, periodName, uid, selectedArchetypeId ?? null));
       break;
     case Page.BudgetPeriod:
     case Page.BudgetArchetype:
@@ -266,11 +264,6 @@ export function prefetchRouteOnIntent(ctx: RouteIntentPrefetchContext): void {
     scheduleRouteIntentPrefetch(`cfg:${uid}`, () => prefetchConfigurationPageCritical(queryClient, uid));
   }
 
-  if (routePage === Page.ExecutiveSummary && periodName.trim()) {
-    scheduleRouteIntentPrefetch(`exec:${uid}:${periodName}`, () =>
-      prefetchExecutiveDashboard(queryClient, periodName, uid, selectedArchetypeId ?? null),
-    );
-  }
 
   if (routePage === Page.Dashboard && periodName.trim()) {
     scheduleRouteIntentPrefetch(`dash:${uid}:${periodName}`, () =>

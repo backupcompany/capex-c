@@ -1,3 +1,5 @@
+import { normalizeAuthEmail } from '../auth-input.util';
+
 export class ForgotPasswordDto {
   email!: string;
   redirectTo?: string;
@@ -8,7 +10,7 @@ export function validateForgotPasswordDto(body: unknown): ForgotPasswordDto {
     throw new Error('Invalid body');
   }
   const o = body as Record<string, unknown>;
-  const email = typeof o.email === 'string' ? o.email.trim().toLowerCase() : '';
+  const email = typeof o.email === 'string' ? normalizeAuthEmail(o.email) : '';
   const redirectTo =
     typeof o.redirectTo === 'string' && o.redirectTo.trim()
       ? o.redirectTo.trim()

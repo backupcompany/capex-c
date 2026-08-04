@@ -32,6 +32,10 @@ export const queryKeys = {
     ) => ['screen', 'executive-summary', 'projects', periodName, userId, filtersKey, search, sortKey] as const,
     dashboard: (periodName: string, userId: number, filtersKey: string) =>
       ['screen', 'executive-summary', 'dashboard', periodName, userId, filtersKey] as const,
+    dashboardKpi: (periodName: string, userId: number, filtersKey: string) =>
+      ['screen', 'executive-summary', 'dashboard-kpi', periodName, userId, filtersKey] as const,
+    dashboardCharts: (periodName: string, userId: number, filtersKey: string) =>
+      ['screen', 'executive-summary', 'dashboard-charts', periodName, userId, filtersKey] as const,
     /** @deprecated use meta */
     bundle: (periodName: string, userId: number) => ['screen', 'executive-summary', periodName, userId] as const,
   },

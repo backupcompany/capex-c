@@ -7,6 +7,7 @@ import { trackBackendFetch } from '@/lib/backendFetchTelemetry';
 export type BudgetMultiYearPageBundle = {
   multiYears: BudgetMultiYear[];
   categories: BudgetCategoryConfig[];
+  periodSummaries: BudgetPeriod[];
 };
 
 async function resolveAccessToken(): Promise<string | null> {
@@ -57,6 +58,7 @@ export async function fetchBudgetMultiYearPageBundleFromBackend(
   return {
     multiYears: Array.isArray(result.multiYears) ? result.multiYears : [],
     categories: Array.isArray(result.categories) ? result.categories : [],
+    periodSummaries: Array.isArray(result.periodSummaries) ? result.periodSummaries : [],
   };
 }
 

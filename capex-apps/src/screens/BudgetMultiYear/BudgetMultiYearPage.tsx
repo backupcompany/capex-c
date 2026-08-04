@@ -22,8 +22,8 @@ import {
   fetchMultiYearPeriodBudgets,
 } from '@/hooks/queries/fetchBudgetMultiYearPage';
 import { fetchConfigurationSlicesForUser } from '@/hooks/queries/fetchConfigurationSlices';
-import type { AppBootstrapPayload } from '@/hooks/queries/fetchAppBootstrapData';
 import { cloneDeep } from '@/lib/clone';
+import { isCapexBeConfigured } from '@/lib/capexBeClient';
 import { MultiSegmentProgressBar } from '@/components/molecules/MultiSegmentProgressBar/MultiSegmentProgressBar';
 import { BudgetMultiYearPageSkeleton } from './BudgetMultiYearPageSkeleton';
 import { PeriodDetailCard } from './PeriodDetailCard';
@@ -56,6 +56,52 @@ const EditPlanModal = lazy(() =>
 
 const STALE_MS = 120_000;
 const GC_MS = 1000 * 60 * 30;
+
+type BudgetUsageMetricsProps = {
+  budget: BudgetMultiYear['budget'];
+  barClassName?: string;
+  layout?: 'inline' | 'stacked';
+};
+
+const BudgetUsageMetrics = memo(function BudgetUsageMetrics({
+  budget,
+  barClassName = 'mb-2.5 h-2',
+  layout = 'inline',
+}: BudgetUsageMetricsProps) {
+  const total = budget.budgetPlan + budget.budgetCarryForward;
+  const metrics = [
+    { label: 'Allocated', value: budget.budgetAllocated, dotClass: 'bg-warning' },
+    { label: 'FS Budget', value: budget.approvedBudget, dotClass: 'bg-siloam-green' },
+    { label: 'Realization', value: budget.consumedBudget, dotClass: 'bg-siloam-blue' },
+  ] as const;
+
+  return (
+    <div className={layout === 'inline' ? 'min-w-[280px]' : undefined}>
+      <MultiSegmentProgressBar
+        total={total}
+        allocated={budget.budgetAllocated}
+        approved={budget.approvedBudget}
+        consumed={budget.consumedBudget}
+        className={barClassName}
+      />
+      <div
+        className={
+          layout === 'inline'
+            ? 'flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs'
+            : 'grid grid-cols-2 gap-y-2 gap-x-4 text-xs'
+        }
+      >
+        {metrics.map(({ label, value, dotClass }) => (
+          <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
+            <span className="text-siloam-text-secondary">{label}</span>
+            <span className="font-bold text-siloam-text-primary">{formatAbbreviatedCurrency(value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
 
 export interface BudgetMultiYearPageProps {
   allPeriods: BudgetPeriod[];
@@ -137,30 +183,8 @@ const MultiYearDesktopRow = React.memo<MultiYearRowProps>(function MultiYearDesk
         <td className="px-4 py-3 text-right font-medium text-siloam-text-primary">
           {formatCurrency(my.budget.budgetCarryForward)}
         </td>
-        <td className="px-4 py-3">
-          <div className="w-full">
-            <MultiSegmentProgressBar
-              total={my.budget.budgetPlan + my.budget.budgetCarryForward}
-              allocated={my.budget.budgetAllocated}
-              approved={my.budget.approvedBudget}
-              consumed={my.budget.consumedBudget}
-              className="mb-2 h-2"
-            />
-            <div className="grid grid-cols-3 gap-1 text-[10px] leading-tight">
-              <div>
-                <div className="text-siloam-text-secondary mb-0.5">Allocated</div>
-                <div className="font-bold text-siloam-text-primary">{formatAbbreviatedCurrency(my.budget.budgetAllocated)}</div>
-              </div>
-              <div>
-                <div className="text-siloam-text-secondary mb-0.5">FS Budget</div>
-                <div className="font-bold text-siloam-text-primary">{formatAbbreviatedCurrency(my.budget.approvedBudget)}</div>
-              </div>
-              <div>
-                <div className="text-siloam-text-secondary mb-0.5">Realization Budget</div>
-                <div className="font-bold text-siloam-text-primary">{formatAbbreviatedCurrency(my.budget.consumedBudget)}</div>
-              </div>
-            </div>
-          </div>
+        <td className="px-4 py-3 align-top">
+          <BudgetUsageMetrics budget={my.budget} />
         </td>
         <td className="px-4 py-3 text-right font-medium text-siloam-green">
           {formatCurrency(my.budget.budgetPlan + my.budget.budgetCarryForward - my.budget.consumedBudget)}
@@ -279,40 +303,11 @@ const MultiYearMobileCard = React.memo<MultiYearRowProps>(function MultiYearMobi
 
       <div>
         <p className="text-xs text-siloam-text-secondary mb-2 font-semibold">USAGE OVERVIEW</p>
-        <MultiSegmentProgressBar
-          total={my.budget.budgetPlan + my.budget.budgetCarryForward}
-          allocated={my.budget.budgetAllocated}
-          approved={my.budget.approvedBudget}
-          consumed={my.budget.consumedBudget}
-          className="mb-3 h-3"
-        />
-        <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs">
-          <div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="w-2 h-2 bg-warning rounded-full" />
-              <span className="text-siloam-text-secondary">Allocated</span>
-            </div>
-            <div className="font-semibold pl-3.5">{formatAbbreviatedCurrency(my.budget.budgetAllocated)}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="w-2 h-2 bg-siloam-green rounded-full" />
-              <span className="text-siloam-text-secondary">FS Budget</span>
-            </div>
-            <div className="font-semibold pl-3.5">{formatAbbreviatedCurrency(my.budget.approvedBudget)}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="w-2 h-2 bg-siloam-blue rounded-full" />
-              <span className="text-siloam-text-secondary">Realization Budget</span>
-            </div>
-            <div className="font-semibold pl-3.5">{formatAbbreviatedCurrency(my.budget.consumedBudget)}</div>
-          </div>
-          <div>
-            <div className="text-siloam-text-secondary mb-0.5">Remaining</div>
-            <div className="font-bold text-siloam-green pl-3.5">
-              {formatAbbreviatedCurrency(my.budget.budgetPlan + my.budget.budgetCarryForward - my.budget.consumedBudget)}
-            </div>
+        <BudgetUsageMetrics budget={my.budget} barClassName="mb-3 h-3" layout="stacked" />
+        <div className="mt-2 text-xs">
+          <div className="text-siloam-text-secondary mb-0.5">Remaining</div>
+          <div className="font-bold text-siloam-green">
+            {formatAbbreviatedCurrency(my.budget.budgetPlan + my.budget.budgetCarryForward - my.budget.consumedBudget)}
           </div>
         </div>
       </div>
@@ -384,8 +379,6 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   showToast,
 }: BudgetMultiYearPageProps) {
   const queryClient = useQueryClient();
-  const bootstrapSeed = queryClient.getQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap]);
-  const bootstrapUpdatedAt = queryClient.getQueryState([...queryKeys.app.bootstrap])?.dataUpdatedAt;
   const initialPageBundle = useMemo(
     () => buildBudgetMultiYearPageSeedFromCache(queryClient, currentUser.id),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed sekali saat mount
@@ -426,6 +419,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   );
 
   const hasInstantSeed = initialPageBundle.multiYears.length > 0;
+  const useBackend = isCapexBeConfigured();
 
   const pageQuery = useQuery({
     queryKey: queryKeys.budgetMultiYear.page(currentUser.id),
@@ -435,7 +429,6 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
-    placeholderData: (prev) => prev ?? (hasInstantSeed ? initialPageBundle : undefined),
   });
 
   const serverMultiYears = pageQuery.data?.multiYears ?? serverMultiYearsRef.current;
@@ -461,11 +454,22 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
     if (pageQuery.data.categories.length) {
       setAllCategories(pageQuery.data.categories.filter((c) => c.isActive));
     }
+    if (pageQuery.data.periodSummaries.length) {
+      setEditedPeriods((prev) =>
+        mergePeriodSummariesPreservingBudgets(pageQuery.data!.periodSummaries, prev),
+      );
+      if (!isDirty) {
+        serverPeriodsRef.current = mergePeriodSummariesPreservingBudgets(
+          pageQuery.data.periodSummaries,
+          serverPeriodsRef.current,
+        );
+      }
+    }
     updateIsDirty(false);
   }, [pageQuery.data, isDirty, editedData.length, updateIsDirty]);
 
   useEffect(() => {
-    if (!allPeriods.length || isDirty) return;
+    if (!allPeriods.length || isDirty || pageQuery.data?.periodSummaries.length) return;
     const hasAnyBudget = allPeriods.some(periodHasCategoryBudgets);
     if (hasAnyBudget) {
       serverPeriodsRef.current = allPeriods;
@@ -473,7 +477,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
       return;
     }
     setEditedPeriods((prev) => mergePeriodSummariesPreservingBudgets(allPeriods, prev));
-  }, [allPeriods, isDirty]);
+  }, [allPeriods, isDirty, pageQuery.data?.periodSummaries.length]);
 
   const periodsByMultiYear = useMemo(() => indexPeriodsByMultiYear(editedPeriods), [editedPeriods]);
   const categoryIds = useMemo(
@@ -557,6 +561,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
       queryClient.setQueryData(queryKeys.budgetMultiYear.page(currentUser.id), (old: typeof pageQuery.data) => ({
         multiYears: nextMultiYears,
         categories: old?.categories ?? allCategories,
+        periodSummaries: old?.periodSummaries ?? [],
       }));
     },
     [queryClient, currentUser.id, allCategories],
@@ -807,7 +812,10 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
     setIsCreatePeriodModalOpen(true);
   }, []);
 
-  const showShell = canView && !pageQuery.isFetched && !pageQuery.isError;
+  const showShell =
+    canView &&
+    !pageQuery.isError &&
+    (useBackend ? !pageQuery.isSuccess : !pageQuery.isFetched && !hasInstantSeed);
   const showLoadError = pageQuery.isError && editedData.length === 0;
 
   const existingPeriodsForModal = useMemo(
@@ -888,17 +896,17 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
           </div>
 
           <div className="hidden md:block overflow-x-auto border border-siloam-border rounded-xl shadow-sm">
-            <table className="w-full text-left text-sm border-collapse">
+            <table className="w-full min-w-[1080px] text-left text-sm border-collapse">
               <thead className="text-xs text-siloam-text-secondary bg-siloam-sidebar border-b border-siloam-border">
                 <tr>
                   <th className="w-10 px-4 py-3" />
-                  <th className="px-4 py-3 font-bold">MULTI-YEAR PLAN</th>
-                  <th className="px-4 py-3 font-bold">PERIOD</th>
-                  <th className="px-4 py-3 font-bold text-right w-40">BUDGET PLAN</th>
-                  <th className="px-4 py-3 font-bold text-right w-40">BUDGET CARRY FORWARD</th>
-                  <th className="px-4 py-3 font-bold w-72">BUDGET USAGE</th>
-                  <th className="px-4 py-3 font-bold text-right">REMAINING BUDGET</th>
-                  <th className="px-4 py-3 font-bold text-center">ACTIONS</th>
+                  <th className="px-4 py-3 font-bold whitespace-nowrap">MULTI-YEAR PLAN</th>
+                  <th className="px-4 py-3 font-bold whitespace-nowrap">PERIOD</th>
+                  <th className="px-4 py-3 font-bold text-right w-36 whitespace-nowrap">BUDGET PLAN</th>
+                  <th className="px-4 py-3 font-bold text-right w-40 whitespace-nowrap">BUDGET CARRY FORWARD</th>
+                  <th className="min-w-[300px] px-4 py-3 font-bold whitespace-nowrap">BUDGET USAGE</th>
+                  <th className="px-4 py-3 font-bold text-right whitespace-nowrap">REMAINING BUDGET</th>
+                  <th className="px-4 py-3 font-bold text-center whitespace-nowrap">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>

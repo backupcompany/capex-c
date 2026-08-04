@@ -33,20 +33,25 @@ export const parseCurrency = (value: string): number => {
     return parseInt(numericString, 10) || 0;
 };
 
-/** Scaled amount for display (max 1 decimal, trailing .0 removed). */
+/** Scaled amount with Indonesian grouping (e.g. 2248860.4 → "2.248.860,4"). */
 function formatScaledAmount(scaled: number): string {
   const rounded = Math.round(scaled * 10) / 10;
-  if (Number.isInteger(rounded)) {
-    return String(rounded);
-  }
-  return rounded.toFixed(1);
+  return new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(rounded);
 }
 
+const ABBREVIATED_CURRENCY_TIERS = [
+  { threshold: 1_000_000_000_000, divisor: 1_000_000_000_000, suffix: ' T' },
+  { threshold: 1_000_000_000, divisor: 1_000_000_000, suffix: ' M' },
+  { threshold: 1_000_000, divisor: 1_000_000, suffix: ' Jt' },
+  { threshold: 1_000, divisor: 1_000, suffix: ' Rb' },
+] as const;
+
 /**
- * Budget view format with international scale suffix (IDR).
- * - >= 1_000_000 → Rp 75Mn (including billions, e.g. Rp 1500Mn)
- * - >= 1_000 → Rp 500K
- * - < 1_000 → full Rp format
+ * Compact IDR for KPI cards and chart axes.
+ * Uses Indonesian scale: Rb (ribu), Jt (juta), M (miliar), T (triliun).
  */
 export const formatAbbreviatedCurrency = (value: number | null | undefined): string => {
   if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) {
@@ -60,17 +65,12 @@ export const formatAbbreviatedCurrency = (value: number | null | undefined): str
     return formatCurrency(value);
   }
 
-  let scaled: number;
-  let suffix: string;
-  if (absValue >= 1_000_000) {
-    scaled = absValue / 1_000_000;
-    suffix = 'Mn';
-  } else {
-    scaled = absValue / 1_000;
-    suffix = 'K';
-  }
+  const tier =
+    ABBREVIATED_CURRENCY_TIERS.find((t) => absValue >= t.threshold) ??
+    ABBREVIATED_CURRENCY_TIERS[ABBREVIATED_CURRENCY_TIERS.length - 1];
 
-  return `${sign}Rp ${formatScaledAmount(scaled)}${suffix}`;
+  const scaled = absValue / tier.divisor;
+  return `${sign}Rp ${formatScaledAmount(scaled)}${tier.suffix}`;
 };
 
 /** Alias for table/view budget display (abbreviated scale). */

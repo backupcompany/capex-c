@@ -33,6 +33,7 @@ import { CsrfService } from './csrf.service';
 import { validateLoginDto } from './dto/login.dto';
 
 import { validateForgotPasswordDto } from './dto/forgot-password.dto';
+import { normalizeAuthPassword } from './auth-input.util';
 
 import { parseLogoutDto } from './dto/logout.dto';
 
@@ -265,8 +266,10 @@ export class AuthController {
       throw new UnauthorizedException('Missing access token');
     }
     const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    const currentPassword = typeof o.currentPassword === 'string' ? o.currentPassword : '';
-    const newPassword = typeof o.newPassword === 'string' ? o.newPassword : '';
+    const currentPassword =
+      typeof o.currentPassword === 'string' ? normalizeAuthPassword(o.currentPassword) : '';
+    const newPassword =
+      typeof o.newPassword === 'string' ? normalizeAuthPassword(o.newPassword) : '';
     const ctx = await this.authContext.resolve(token);
     return this.auth.changePassword(token, ctx.userId, currentPassword, newPassword);
   }

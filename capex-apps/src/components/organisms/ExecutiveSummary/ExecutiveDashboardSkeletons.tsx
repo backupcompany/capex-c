@@ -2,19 +2,33 @@ import React, { memo } from 'react';
 
 const pulse = 'animate-pulse bg-siloam-border/40 rounded';
 
-/** Shown above KPI/charts while a new network filter is loading. */
-export const ExecutiveDashboardFilterLoadingBanner = memo(function ExecutiveDashboardFilterLoadingBanner() {
+/** Full dashboard skeleton — first load & filter change. */
+export const ExecutiveDashboardSkeleton = memo(function ExecutiveDashboardSkeleton({
+  filterLabel,
+}: {
+  filterLabel?: string;
+}) {
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border border-siloam-blue/25 bg-siloam-blue/5 px-4 py-3 text-sm font-semibold text-siloam-blue animate-fade-in"
-      role="status"
+      className="relative min-h-[480px] animate-fade-in"
+      aria-busy="true"
       aria-live="polite"
+      aria-label={filterLabel ? `Memuat dashboard untuk ${filterLabel}` : 'Memuat dashboard'}
     >
-      <span className="relative flex h-5 w-5 shrink-0">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-siloam-blue/30" />
-        <span className="relative inline-flex h-5 w-5 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-      </span>
-      <span>Memuat data dashboard untuk filter yang dipilih…</span>
+      <div className="space-y-8 pointer-events-none select-none opacity-50 saturate-75">
+        <ExecutiveDashboardKpiSkeleton />
+        <ExecutiveDashboardChartsRowSkeleton />
+        <ExecutiveDashboardAnalysisSkeleton />
+        <ExecutiveDashboardAlertsSkeleton />
+      </div>
+
+      <div className="absolute inset-0 z-10 flex items-center justify-center">
+        <span
+          className="inline-flex h-10 w-10 rounded-full border-4 border-siloam-blue border-t-transparent animate-spin"
+          role="status"
+          aria-label={filterLabel ? `Memuat ${filterLabel}` : 'Memuat dashboard'}
+        />
+      </div>
     </div>
   );
 });

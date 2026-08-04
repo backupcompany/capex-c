@@ -69,6 +69,10 @@ export const cacheKeys = {
     `app:table:fs-realization:page:${userId}:${normPeriod(periodName)}`,
   executiveDashboardMetrics: (userId: number, periodName: string, filtersKey: string) =>
     `app:dashboard:executive:${userId}:${normPeriod(periodName)}:${filtersKey}`,
+  executiveDashboardKpi: (userId: number, periodName: string, filtersKey: string) =>
+    `app:dashboard:executive:kpi:${userId}:${normPeriod(periodName)}:${filtersKey}`,
+  executiveDashboardCharts: (userId: number, periodName: string, filtersKey: string) =>
+    `app:dashboard:executive:charts:${userId}:${normPeriod(periodName)}:${filtersKey}`,
   momDailySummary: (userId: number, periodName: string, summaryDate: string) =>
     `app:table:mom-daily-summary:${userId}:${normPeriod(periodName)}:${summaryDate.trim()}`,
   bddConstructionScan: (userId: number, periodName: string, filterHash: string) =>

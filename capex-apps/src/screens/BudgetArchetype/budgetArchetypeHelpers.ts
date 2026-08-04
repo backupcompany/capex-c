@@ -4,6 +4,7 @@ import {
   sumHuCategoryLiveAggregates,
   sumHuCategoryProjectBudgetPlan,
 } from '@/lib/budgetCategoryAggregates';
+import { shellSummaryUsesStoredAggregates } from '@/lib/budgetSiloamCategoryMerge';
 
 export function emptyBudgetItem(): BudgetItem {
   return {
@@ -23,6 +24,7 @@ export function computeHuAllocatedForCategory(hu: HospitalUnit, categoryId: stri
 export function buildBudgetArchetypeSummaryRows(
   archetype: Archetype,
   categories: BudgetCategoryConfig[],
+  loadedCategoryIds: ReadonlySet<string> = new Set(),
 ): BudgetSummaryRow[] {
   return categories.map((cat) => {
     const categoryId = cat.id;
@@ -31,7 +33,14 @@ export function buildBudgetArchetypeSummaryRows(
       (sum, hu) => sum + (hu.budget[categoryId]?.budgetPlan || 0),
       0,
     );
-    const live = sumArchetypeCategoryLiveAggregates(archetype, categoryId);
+    const useStored = shellSummaryUsesStoredAggregates(categoryId, loadedCategoryIds);
+    const live = useStored
+      ? {
+          budgetCarryForward: archBudget?.budgetCarryForward ?? 0,
+          approvedBudget: archBudget?.approvedBudget ?? 0,
+          consumedBudget: archBudget?.consumedBudget ?? 0,
+        }
+      : sumArchetypeCategoryLiveAggregates(archetype, categoryId);
 
     return {
       categoryId,

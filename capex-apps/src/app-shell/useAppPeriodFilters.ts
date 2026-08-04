@@ -23,6 +23,12 @@ import {
   prefetchBudgetHuUnitsIdle,
 } from '@/hooks/queries/warmBudgetHuCache';
 import { routeNeedsPeriodStructure } from '@/components/app-shell/appShellPagesWithFilters';
+import { pathnameToPage } from '@/lib/pageRoutes';
+import { readCachedAuthUser } from '@/lib/authSessionCache';
+import {
+  readExecutiveDashboardFilter,
+  writeExecutiveDashboardFilter,
+} from '@/lib/executiveDashboardDiskCache';
 
 const initialPeriodShell = readInitialPeriodShellState();
 
@@ -67,7 +73,15 @@ export function useAppPeriodFilters({
   const [isLoadingBudgetPeriod, setIsLoadingBudgetPeriod] = useState(false);
   const [selectedArchetypeId, setSelectedArchetypeId] = useState<string | null>(() => {
     const pn = initialPeriodShell.selectedPeriodName;
-    return pn ? (readBudgetHuFilterSelection(pn)?.archetypeId ?? null) : null;
+    if (typeof window !== 'undefined' && pn) {
+      const onExecutive = pathnameToPage(window.location.pathname) === Page.ExecutiveSummary;
+      const uid = readCachedAuthUser()?.id;
+      if (onExecutive && uid) {
+        return readExecutiveDashboardFilter(pn, uid)?.archetypeId ?? null;
+      }
+      return readBudgetHuFilterSelection(pn)?.archetypeId ?? null;
+    }
+    return null;
   });
   const [selectedHuId, setSelectedHuId] = useState<string | null>(() => {
     const pn = initialPeriodShell.selectedPeriodName;
@@ -82,14 +96,20 @@ export function useAppPeriodFilters({
 
   useEffect(() => {
     const enteredCeo =
-      routePage === Page.ExecutiveSummary && prevRoutePageRef.current !== Page.ExecutiveSummary;
+      routePage === Page.ExecutiveSummary &&
+      prevRoutePageRef.current !== null &&
+      prevRoutePageRef.current !== Page.ExecutiveSummary;
     if (enteredCeo) {
-      ceoDashboardAllNetworksRef.current = true;
       filterUserTouchedRef.current = false;
-      setSelectedArchetypeId(null);
+      const saved =
+        currentUser?.id && selectedPeriodName.trim()
+          ? readExecutiveDashboardFilter(selectedPeriodName, currentUser.id)
+          : null;
+      ceoDashboardAllNetworksRef.current = !saved?.archetypeId;
+      setSelectedArchetypeId(saved?.archetypeId ?? null);
     }
     prevRoutePageRef.current = routePage;
-  }, [routePage]);
+  }, [routePage, currentUser?.id, selectedPeriodName]);
 
   const syncPeriodSelectionFromLists = useCallback((multiYears: BudgetMultiYear[], periods: BudgetPeriod[]) => {
     const currentYear = new Date().getFullYear();
@@ -192,9 +212,13 @@ export function useAppPeriodFilters({
       setSelectedPeriodName(name);
       filterUserTouchedRef.current = false;
       if (routePage === Page.ExecutiveSummary) {
-        ceoDashboardAllNetworksRef.current = true;
+        const saved =
+          currentUser?.id && name.trim()
+            ? readExecutiveDashboardFilter(name, currentUser.id)
+            : null;
+        ceoDashboardAllNetworksRef.current = !saved?.archetypeId;
         pinnedFilterRef.current = null;
-        setSelectedArchetypeId(null);
+        setSelectedArchetypeId(saved?.archetypeId ?? null);
         setSelectedHuId(null);
       } else {
         ceoDashboardAllNetworksRef.current = false;
@@ -432,17 +456,24 @@ export function useAppPeriodFilters({
     visibleHUs,
   ]);
 
-  const handleExecutiveArchetypeChange = useCallback((archetypeId: string) => {
-    filterUserTouchedRef.current = true;
-    const trimmed = archetypeId.trim();
-    if (!trimmed) {
-      ceoDashboardAllNetworksRef.current = true;
-      setSelectedArchetypeId(null);
-      return;
-    }
-    ceoDashboardAllNetworksRef.current = false;
-    setSelectedArchetypeId(trimmed);
-  }, []);
+  const handleExecutiveArchetypeChange = useCallback(
+    (archetypeId: string) => {
+      filterUserTouchedRef.current = true;
+      const trimmed = archetypeId.trim();
+      const nextId = trimmed || null;
+      if (currentUser?.id && selectedPeriodName.trim()) {
+        writeExecutiveDashboardFilter(selectedPeriodName, currentUser.id, nextId);
+      }
+      if (!trimmed) {
+        ceoDashboardAllNetworksRef.current = true;
+        setSelectedArchetypeId(null);
+        return;
+      }
+      ceoDashboardAllNetworksRef.current = false;
+      setSelectedArchetypeId(trimmed);
+    },
+    [currentUser?.id, selectedPeriodName],
+  );
 
   const handleArchetypeChange = useCallback(
     (archetypeName: string) => {

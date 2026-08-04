@@ -24,6 +24,7 @@
   --shadow-soft: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 
   --animate-fade-in: fadeIn 0.5s ease-in-out;
+  --animate-dashboard-drop-in: dashboardDropIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 
   @keyframes fadeIn {
     0% {
@@ -31,6 +32,17 @@
     }
     100% {
       opacity: 1;
+    }
+  }
+
+  @keyframes dashboardDropIn {
+    0% {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 }
