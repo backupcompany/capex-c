@@ -1,7 +1,10 @@
-import { Body, Controller, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Logger, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { RequireAnyPermission } from '../auth/decorators/any-permission.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { ConfigurationService } from './configuration.service';
 
 const CONFIG_READ = RequireAnyPermission(
@@ -61,21 +64,13 @@ export class ConfigurationController {
   private readonly logger = new Logger(ConfigurationController.name);
   constructor(private readonly configurationService: ConfigurationService) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
-    return userId;
-  }
-
   @CONFIG_READ
   @Post('pack')
   async configurationPack(@Req() req: Request, @Body() body: ConfigurationPackBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.configurationService.loadConfigurationPack(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body?.slices,
       !!body?.skipCache,
     );
@@ -85,7 +80,7 @@ export class ConfigurationController {
   @Post('save')
   async configurationSave(@Req() req: Request, @Body() body: ConfigurationSaveBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = this.parseUserId(body);
+    const userId = getCallerUserId(req);
     const entity = body?.entity as any;
     const payload = body?.payload || {};
     if (entity === 'user') {
@@ -107,7 +102,7 @@ export class ConfigurationController {
     const token = requireAccessTokenFromRequest(req);
     return this.configurationService.migrateAssetTypeWorkflow(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.fromWorkflowSetId,
       body.toWorkflowSetId,
     );
@@ -119,7 +114,7 @@ export class ConfigurationController {
     const token = requireAccessTokenFromRequest(req);
     return this.configurationService.getAssetTypeUsageCount(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.assetTypeId,
     );
   }
@@ -130,7 +125,7 @@ export class ConfigurationController {
     const token = requireAccessTokenFromRequest(req);
     return this.configurationService.migrateAssetTypeUsage(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.fromAssetTypeId,
       body.toAssetTypeId,
     );
@@ -142,7 +137,7 @@ export class ConfigurationController {
     const token = requireAccessTokenFromRequest(req);
     return this.configurationService.deleteConfigurationEntity(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body?.entity as any,
       body?.id,
     );
@@ -152,6 +147,6 @@ export class ConfigurationController {
   @Post('app-config-get')
   async appConfigGet(@Req() req: Request, @Body() body: AppConfigGetBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.configurationService.getAppConfigByKey(token, this.parseUserId(body), body.key);
+    return this.configurationService.getAppConfigByKey(token, getCallerUserId(req), body.key);
   }
 }

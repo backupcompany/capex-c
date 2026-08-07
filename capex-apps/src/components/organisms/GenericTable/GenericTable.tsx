@@ -11,6 +11,8 @@ export interface Column<T> {
   sortable?: boolean;
   sortDirection?: 'asc' | 'desc' | null;
   onSort?: () => void;
+  /** Initial width for table-fixed layouts (e.g. '18%', 160). */
+  width?: string | number;
 }
 
 interface GenericTableProps<T> {
@@ -24,6 +26,8 @@ interface GenericTableProps<T> {
   virtualizeRows?: boolean | 'auto';
   estimatedRowHeight?: number;
   virtualizeThreshold?: number;
+  /** Pin last column on horizontal scroll (default true). */
+  stickyLastColumn?: boolean;
 }
 
 const DEFAULT_ROW_HEIGHT = GENERIC_TABLE_VIRTUAL_DEFAULTS.estimatedRowHeight;
@@ -50,6 +54,7 @@ function GenericTableInner<T extends object>({
   virtualizeRows = 'auto',
   estimatedRowHeight = DEFAULT_ROW_HEIGHT,
   virtualizeThreshold = DEFAULT_VIRTUAL_THRESHOLD,
+  stickyLastColumn = true,
 }: GenericTableProps<T>) {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const activeResizer = useRef<string | null>(null);
@@ -119,6 +124,7 @@ function GenericTableInner<T extends object>({
         onRowMouseEnter={onRowMouseEnter}
         measureRef={measureRef}
         dataIndex={dataIndex}
+        stickyLastColumn={stickyLastColumn}
       />
     );
   };
@@ -132,8 +138,8 @@ function GenericTableInner<T extends object>({
               <th
                 key={String(col.header)}
                 scope="col"
-                className={`px-4 py-3 font-semibold relative select-none whitespace-normal border-b border-siloam-border bg-siloam-sidebar ${index === columns.length - 1 ? 'sticky right-0 border-l border-siloam-border' : ''}`}
-                style={{ width: columnWidths[col.header] || 'auto' }}
+                className={`px-4 py-3 font-semibold relative select-none whitespace-normal border-b border-siloam-border bg-siloam-sidebar ${index === columns.length - 1 && stickyLastColumn ? 'sticky right-0 border-l border-siloam-border' : ''}`}
+                style={{ width: columnWidths[col.header] || col.width || 'auto' }}
               >
                 <div className="flex items-center gap-1 pr-2 min-w-0">
                   <span className="truncate">{col.header}</span>

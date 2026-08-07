@@ -23,7 +23,6 @@ export async function postOfficeListDiff(
   appUserId: number,
 ): Promise<OfficeListDiffResponse> {
   const fd = new FormData();
-  fd.append('userId', String(appUserId));
   fd.append('file', file, file.name);
 
   const bff = useBeBffProxy();

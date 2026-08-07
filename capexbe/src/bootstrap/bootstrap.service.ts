@@ -52,6 +52,7 @@ export class BootstrapService {
       [selfUser as Record<string, unknown>],
       userId,
       includePii,
+      false,
     );
     const self = sanitizedSelf[0];
     const multiYears = buildMultiYearsShellFromRows(multiYearRows);
@@ -91,6 +92,7 @@ export class BootstrapService {
         users as Record<string, unknown>[],
         userId,
         includePii,
+        true,
       ),
     };
   }

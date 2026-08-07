@@ -1,5 +1,6 @@
 import type { User, UserAssignment, UserRole } from '../../types';
 import { readCachedAuthUser } from '../authSessionCache';
+import { formatUserPublicId, decodeUserPublicId } from '../publicUserId';
 import {
   findRoleForAssignment,
   isUserSuperAdmin,
@@ -54,7 +55,7 @@ function assignmentScopeCount(assignments: UserAssignment[]): number {
  * (atau assignments dari response auth) — mencegah flicker "No Role".
  */
 export function mergeAuthIdentityUser(
-  identity: { id: number; username: string; email: string },
+  identity: { id?: number; publicId?: string; username: string; email: string },
   options?: {
     sessionAssignments?: AuthSessionAssignment[] | null;
     roleSlugs?: string[] | null;
@@ -63,9 +64,9 @@ export function mergeAuthIdentityUser(
 ): User {
   const cached = readCachedAuthUser();
   const previous =
-    options?.previous?.id === identity.id
+    options?.previous?.publicId === identity.publicId || options?.previous?.id === identity.id
       ? options.previous
-      : cached?.id === identity.id
+      : cached?.publicId === identity.publicId || cached?.id === identity.id
         ? cached
         : null;
 
@@ -87,8 +88,19 @@ export function mergeAuthIdentityUser(
     }
   }
 
+  const resolvedId =
+    (identity.id != null && Number.isFinite(identity.id) ? identity.id : null) ??
+    (identity.publicId ? decodeUserPublicId(identity.publicId) : null) ??
+    previous?.id ??
+    (cached?.id != null && cached.publicId === identity.publicId ? cached.id : null);
+
+  if (resolvedId == null || !Number.isFinite(resolvedId)) {
+    throw new Error('Invalid session identity: missing publicId');
+  }
+
   return {
-    id: identity.id,
+    id: resolvedId,
+    publicId: identity.publicId ?? previous?.publicId ?? formatUserPublicId(resolvedId),
     username: identity.username,
     email: identity.email,
     phoneNumber: previous?.phoneNumber,

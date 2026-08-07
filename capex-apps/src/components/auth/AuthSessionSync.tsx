@@ -22,7 +22,7 @@ import { clearCachedAuthUser } from '../../lib/authSessionCache';
 import { subscribeSessionRefreshed } from '../../lib/auth/tabSessionBroadcast';
 import { updateSessionMeta, getSessionMeta } from '../../lib/auth/sessionMetaStore';
 import { resetActivityTimestamp } from '../../lib/auth/userActivityTracker';
-import { isBackendSessionValid } from '../../lib/auth/sessionValidity';
+import { isBackendSessionValid, isDefinitiveUnauthenticated } from '../../lib/auth/sessionValidity';
 import { mergeAuthIdentityUser } from '../../lib/auth/mergeAuthIdentityUser';
 
 export type ForceLogoutOptions = {
@@ -60,15 +60,20 @@ export function AuthSessionSync({ onForceLogout }: Props) {
 
   const confirmSessionOrLogout = useCallback(async () => {
     const stillValid = await isBackendSessionValid();
-    if (!stillValid) {
-      authDebug('session invalid after refresh failure — logout');
-      handleIdleTimeout();
+    if (stillValid) {
+      const me = await fetchAuthSession();
+      if (me?.user?.session) {
+        updateSessionMeta(me.user.session);
+      }
       return;
     }
     const me = await fetchAuthSession();
-    if (me?.user?.session) {
-      updateSessionMeta(me.user.session);
+    if (!isDefinitiveUnauthenticated(me)) {
+      authDebug('refresh failed — transient session probe, keep session');
+      return;
     }
+    authDebug('session invalid after refresh failure — logout');
+    handleIdleTimeout();
   }, [handleIdleTimeout]);
 
   const tryRefreshSession = useCallback(async () => {
@@ -129,6 +134,7 @@ export function AuthSessionSync({ onForceLogout }: Props) {
           const prev = useAuthStore.getState().user;
           const merged = mergeAuthIdentityUser(
             {
+              publicId: me.user!.publicId?.trim() || undefined,
               id: me.user!.id,
               username: me.user!.username,
               email: me.user!.email,

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 export type PeriodUserBody = {
   userId: number;
@@ -47,17 +48,13 @@ function requireNumber(value: unknown, field: string): number {
 
 export function parsePeriodUserBody(body: unknown): PeriodUserBody {
   const b = (body ?? {}) as Record<string, unknown>;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
+  const userId = parseUserIdBody(body);
   const periodName = requireString(b.periodName, 'periodName');
   return { userId, periodName };
 }
 
 export function parseUserIdBody(body: unknown): number {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
-  return userId;
+  return resolveBodyActorUserId(body);
 }
 
 export function parseFsIdBody(body: unknown): { userId: number; id: string } {

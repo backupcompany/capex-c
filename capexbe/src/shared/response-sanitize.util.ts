@@ -1,4 +1,5 @@
 import { maskEmail, maskPhone, maskTaxId } from './pii-hash.util';
+import { encodeUserPublicId } from './public-id.util';
 
 /** DB columns safe to load for user directory (never auth_id / password). */
 export const USER_DIRECTORY_COLUMNS = 'id,username,email,phone_number';
@@ -38,7 +39,9 @@ function maskPiiNode(value: unknown): unknown {
 }
 
 export type DirectoryUser = {
-  id: number;
+  /** Omitted in API egress unless viewer manages users (config admin). */
+  id?: number;
+  publicId: string;
   username: string;
   email?: string;
   phoneNumber?: string;
@@ -66,6 +69,7 @@ export function sanitizeUserForDirectory(
   user: Record<string, unknown>,
   viewerUserId: number,
   includePii: boolean,
+  exposeNumericId = false,
 ): DirectoryUser {
   const base = stripInternalUserFields(user);
   const id = Number(base.id);
@@ -73,10 +77,13 @@ export function sanitizeUserForDirectory(
   const isSelf = Number(viewerUserId) === id;
 
   const out: DirectoryUser = {
-    id,
+    publicId: encodeUserPublicId(id),
     username: String(base.username ?? ''),
     assignments: assignments as DirectoryUser['assignments'],
   };
+  if (exposeNumericId) {
+    out.id = id;
+  }
 
   const email = String(base.email ?? '').trim();
   const phoneRaw = base.phoneNumber ?? base.phone_number;
@@ -97,6 +104,7 @@ export function sanitizeUsersForDirectory(
   users: Record<string, unknown>[],
   viewerUserId: number,
   includePii: boolean,
+  exposeNumericId = false,
 ): DirectoryUser[] {
-  return users.map((u) => sanitizeUserForDirectory(u, viewerUserId, includePii));
+  return users.map((u) => sanitizeUserForDirectory(u, viewerUserId, includePii, exposeNumericId));
 }

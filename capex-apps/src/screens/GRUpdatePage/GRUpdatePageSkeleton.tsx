@@ -1,4 +1,12 @@
 import React from 'react';
+import { Spinner } from '../../components/atoms/Spinner/Spinner';
+
+export const GRUpdateContentSkeleton: React.FC = () => (
+  <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
+    <Spinner size={20} className="text-siloam-blue" />
+    <span>Memuat data aset…</span>
+  </div>
+);
 
 export const GRUpdatePageSkeleton: React.FC = () => (
   <div className="space-y-6 animate-pulse" aria-busy="true" aria-label="Loading goods received data">

@@ -10,7 +10,7 @@ import {
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import { requireAccessTokenFromRequest, getCallerUserId } from '../auth/request-access-token.util';
 import { UserAdminService } from './user-admin.service';
 
 /** Multer in-memory upload (no @types/multer required). */
@@ -35,13 +35,9 @@ export class UserAdminController {
   async officeListDiff(
     @Req() req: Request,
     @UploadedFile() file: UploadedMemoryFile | undefined,
-    @Body('userId') userIdRaw: string | undefined,
   ) {
     const token = requireAccessTokenFromRequest(req);
-    const appUserId = Number(userIdRaw);
-    if (!Number.isFinite(appUserId)) {
-      throw new BadRequestException('Invalid or missing userId (form field)');
-    }
+    const appUserId = getCallerUserId(req);
     if (!file?.buffer) {
       throw new BadRequestException('Missing file (form field "file")');
     }
@@ -54,10 +50,7 @@ export class UserAdminController {
   @Post('bulk-delete')
   async bulkDelete(@Req() req: Request, @Body() body: BulkDeleteBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const appUserId = Number(body?.userId);
-    if (!Number.isFinite(appUserId)) {
-      throw new BadRequestException('Invalid userId');
-    }
+    const appUserId = getCallerUserId(req);
     const ids = Array.isArray(body?.ids) ? body.ids : [];
     return this.userAdminService.bulkDeleteUsers(token, appUserId, ids);
   }
@@ -65,10 +58,7 @@ export class UserAdminController {
   @Post('sync-to-auth')
   async syncToAuth(@Req() req: Request, @Body() body: BulkDeleteBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const appUserId = Number(body?.userId);
-    if (!Number.isFinite(appUserId)) {
-      throw new BadRequestException('Invalid userId');
-    }
+    const appUserId = getCallerUserId(req);
     return this.userAdminService.syncUsersToAuth(token, appUserId);
   }
 }

@@ -15,6 +15,7 @@ import {
   buildScopedArchetypeOptions,
   buildScopedHuOptions,
 } from '../../lib/scopedFilterOptions';
+import { isCapexBeConfigured } from '../../lib/capexBeClient';
 import {
   fetchPoUpdatePageData,
   hydratePoUpdatePageFromDisk,
@@ -23,12 +24,17 @@ import {
   type PoUpdatePageData,
 } from '../../hooks/queries/fetchPoUpdatePageData';
 import { cloneDeep } from '../../lib/clone';
+import { Spinner } from '../../components/atoms/Spinner/Spinner';
+import {
+  usePoUpdateWindowQuery,
+} from '../../hooks/queries/usePoUpdateWindowQuery';
 import { useDebouncedValue } from '../BudgetHU/useDebouncedValue';
 import {
   type PoSortOption,
   type PoStatusFilter,
   buildPoFilterMaps,
   buildPoChangeSummaryRows,
+  buildPoWindowFilters,
   diffChangedPoAssets,
   filterAndSortPoAssets,
   preparePoAssetsForSave,
@@ -46,7 +52,7 @@ const PoSmartMigrationModal = lazy(() =>
 
 const STALE_MS = 120_000;
 const GC_MS = 1000 * 60 * 30;
-const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_DEBOUNCE_MS = 150;
 
 interface POUpdatePageProps {
   currentUser: User;
@@ -205,6 +211,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
 
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
+  const isSearchStaging = searchTerm.trim() !== debouncedSearch.trim();
   const [selectedHUs, setSelectedHUs] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [selectedFinishedTasks, setSelectedFinishedTasks] = useState<string[]>([]);
@@ -280,7 +287,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
   const poQuery = useQuery({
     queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
     queryFn: () => fetchPoUpdatePageData(currentUser.id, periodName),
-    enabled: canView,
+    enabled: canView && !isCapexBeConfigured(),
     staleTime: STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
@@ -290,9 +297,63 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
     placeholderData: (prev) => prev,
   });
 
+  const windowFilters = useMemo(
+    () =>
+      buildPoWindowFilters({
+        debouncedSearch,
+        poStatusFilter,
+        focusNeedingPO,
+        focusNotReceived,
+        selectedHUs,
+        selectedPriorities,
+        selectedFinishedTasks,
+        selectedBudgetFilter,
+        completionRange,
+        meetingFilters,
+        sortBy,
+      }),
+    [
+      debouncedSearch,
+      poStatusFilter,
+      focusNeedingPO,
+      focusNotReceived,
+      selectedHUs,
+      selectedPriorities,
+      selectedFinishedTasks,
+      selectedBudgetFilter,
+      completionRange,
+      meetingFilters,
+      sortBy,
+    ],
+  );
+
+  const windowQuery = usePoUpdateWindowQuery({
+    userId: currentUser.id,
+    periodName,
+    filters: windowFilters,
+    enabled: canView,
+  });
+
+  const useWindow = windowQuery.useWindow;
+  const sourceAssets = useWindow
+    ? windowQuery.merged.assets
+    : (poQuery.data?.assets ?? []);
+  const sourceProjects = useWindow
+    ? windowQuery.merged.projects
+    : (poQuery.data?.masterData.projects ?? []);
+  const sourceArchetypes = useWindow
+    ? (windowQuery.masterQuery.data?.archetypes ?? [])
+    : (poQuery.data?.masterData.archetypes ?? []);
+  const sourceHus = useWindow
+    ? (windowQuery.masterQuery.data?.hus ?? [])
+    : (poQuery.data?.masterData.hus ?? []);
+  const sourcePriorities = useWindow
+    ? (windowQuery.masterQuery.data?.priorities ?? [])
+    : (poQuery.data?.masterData.priorities ?? []);
+
   const displayAssets = useMemo(
-    () => (editedData.length > 0 ? editedData : (poQuery.data?.assets ?? [])),
-    [editedData, poQuery.data?.assets],
+    () => (editedData.length > 0 ? editedData : sourceAssets),
+    [editedData, sourceAssets],
   );
 
   const isDirty = useMemo(() => {
@@ -305,60 +366,83 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
     setIsPageDirty(isDirty);
   }, [isDirty, setIsPageDirty]);
 
-  const masterData = poQuery.data?.masterData ?? {
-    archetypes: [],
-    hus: [],
-    projects: [],
-    priorities: [],
-  };
-
-  const assetLastTaskMap = useMemo(
-    () => new Map(Object.entries(poQuery.data?.assetLastTaskMap ?? {})),
-    [poQuery.data?.assetLastTaskMap],
+  const masterData = useMemo(
+    () => ({
+      archetypes: sourceArchetypes,
+      hus: sourceHus,
+      projects: sourceProjects,
+      priorities: sourcePriorities,
+    }),
+    [sourceArchetypes, sourceHus, sourceProjects, sourcePriorities],
   );
 
-  const assetHasPOMap = useMemo(
-    () => new Map(Object.entries(poQuery.data?.assetHasPOMap ?? {})),
-    [poQuery.data?.assetHasPOMap],
-  );
+  const assetLastTaskMap = useMemo(() => {
+    const raw = useWindow
+      ? windowQuery.merged.assetLastTaskMap
+      : (poQuery.data?.assetLastTaskMap ?? {});
+    return new Map(Object.entries(raw));
+  }, [useWindow, windowQuery.merged.assetLastTaskMap, poQuery.data?.assetLastTaskMap]);
 
-  const showTableLoading = displayAssets.length === 0 && poQuery.isLoading;
-  const isBackgroundRefresh = poQuery.isFetching && displayAssets.length > 0;
+  const assetHasPOMap = useMemo(() => {
+    const raw = useWindow
+      ? windowQuery.merged.assetHasPOMap
+      : (poQuery.data?.assetHasPOMap ?? {});
+    return new Map(Object.entries(raw));
+  }, [useWindow, windowQuery.merged.assetHasPOMap, poQuery.data?.assetHasPOMap]);
+
+  const showTableLoading = useWindow
+    ? windowQuery.showContentSkeleton
+    : displayAssets.length === 0 && poQuery.isLoading;
+  const isBackgroundRefresh = useWindow
+    ? windowQuery.isBackgroundRefetch || isSearchStaging
+    : poQuery.isFetching && displayAssets.length > 0;
+  const isContentRefreshing = isBackgroundRefresh;
+  const loadingLabel = isSearchStaging ? 'Mencari…' : 'Memuat data terbaru…';
 
   useEffect(() => {
-    if (poQuery.isError) {
-      console.error('Error loading PO update data:', poQuery.error);
+    const err = useWindow ? windowQuery.windowQuery.error : poQuery.error;
+    const isError = useWindow ? windowQuery.windowQuery.isError : poQuery.isError;
+    if (isError) {
+      console.error('Error loading PO update data:', err);
       showToast('Failed to load asset data.', 'error');
     }
-  }, [poQuery.isError, poQuery.error, showToast]);
+  }, [
+    useWindow,
+    windowQuery.windowQuery.isError,
+    windowQuery.windowQuery.error,
+    poQuery.isError,
+    poQuery.error,
+    showToast,
+  ]);
 
   useEffect(() => {
-    if (!poQuery.data?.assets?.length || isDirty) return;
-    serverAssetsRef.current = cloneDeep(poQuery.data.assets);
-  }, [poQuery.data?.assets, isDirty]);
+    const assets = useWindow ? windowQuery.merged.assets : poQuery.data?.assets;
+    if (!assets?.length || isDirty) return;
+    serverAssetsRef.current = cloneDeep(assets);
+  }, [useWindow, windowQuery.merged.assets, poQuery.data?.assets, isDirty]);
 
   const handleDataChange = useCallback(
     (newData: EnrichedAsset[]) => {
       const changesMap = new Map(newData.map((item) => [item.id, item]));
       setEditedData((prev) => {
-        const base = prev.length > 0 ? prev : cloneDeep(poQuery.data?.assets ?? []);
+        const base = prev.length > 0 ? prev : cloneDeep(sourceAssets);
         if (prev.length === 0) {
-          serverAssetsRef.current = cloneDeep(poQuery.data?.assets ?? []);
+          serverAssetsRef.current = cloneDeep(sourceAssets);
         }
         return base.map((originalItem) =>
           changesMap.has(originalItem.id) ? changesMap.get(originalItem.id)! : originalItem,
         );
       });
     },
-    [poQuery.data?.assets],
+    [sourceAssets],
   );
 
   const handlePOSentToVendorChange = useCallback(
     (assetId: string, isChecked: boolean) => {
       setEditedData((prev) => {
-        const base = prev.length > 0 ? prev : cloneDeep(poQuery.data?.assets ?? []);
+        const base = prev.length > 0 ? prev : cloneDeep(sourceAssets);
         if (prev.length === 0) {
-          serverAssetsRef.current = cloneDeep(poQuery.data?.assets ?? []);
+          serverAssetsRef.current = cloneDeep(sourceAssets);
         }
         const next = base.map((asset) => {
           if (asset.id !== assetId) return asset;
@@ -376,7 +460,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
         return next;
       });
     },
-    [poQuery.data?.assets],
+    [sourceAssets],
   );
 
   const handleSave = useCallback(async () => {
@@ -417,7 +501,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
       serverAssetsRef.current = cloneDeep(preparedData);
       setEditedData([]);
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
+        queryKey: ['screen', 'po-update'],
       });
     } catch (error) {
       console.error('Failed to save PO updates:', error);
@@ -465,26 +549,9 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
     [masterData.projects, masterData.priorities],
   );
 
-  const filteredAndSortedData = useMemo(
-    () =>
-      filterAndSortPoAssets(displayAssets, {
-        poStatusFilter,
-        assetHasPOMap,
-        focusNeedingPO,
-        focusNotReceived,
-        debouncedSearch,
-        selectedHUs,
-        selectedPriorities,
-        selectedFinishedTasks,
-        selectedBudgetFilter,
-        completionRange,
-        sortBy,
-        meetingFilters,
-        assetLastTaskMap,
-        filterMaps,
-      }),
-    [
-      displayAssets,
+  const filteredAndSortedData = useMemo(() => {
+    if (useWindow) return displayAssets;
+    return filterAndSortPoAssets(displayAssets, {
       poStatusFilter,
       assetHasPOMap,
       focusNeedingPO,
@@ -499,8 +566,27 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
       meetingFilters,
       assetLastTaskMap,
       filterMaps,
-    ],
-  );
+      priorities: masterData.priorities,
+    });
+  }, [
+    useWindow,
+    displayAssets,
+    poStatusFilter,
+    assetHasPOMap,
+    focusNeedingPO,
+    focusNotReceived,
+    debouncedSearch,
+    selectedHUs,
+    selectedPriorities,
+    selectedFinishedTasks,
+    selectedBudgetFilter,
+    completionRange,
+    sortBy,
+    meetingFilters,
+    assetLastTaskMap,
+    filterMaps,
+    masterData.priorities,
+  ]);
 
   const columns: SpreadsheetColumn<EnrichedAsset>[] = useMemo(
     () => [
@@ -578,13 +664,15 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
   );
 
   const assetTypeGroupOptions = useMemo(() => {
+    const fromMaster = windowQuery.masterQuery.data?.assetTypeGroupOptions ?? [];
+    if (fromMaster.length > 0) return fromMaster;
     const names = new Set<string>();
     displayAssets.forEach((asset) => {
       const name = asset.assetTypeGroupName?.trim();
       if (name) names.add(name);
     });
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [displayAssets]);
+  }, [windowQuery.masterQuery.data?.assetTypeGroupOptions, displayAssets]);
 
   useEffect(() => {
     if (
@@ -631,10 +719,11 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
     [masterData.priorities],
   );
 
-  const finishedTaskOptions = useMemo(
-    () => Array.from(new Set(assetLastTaskMap.values())).sort((a, b) => a.localeCompare(b)),
-    [assetLastTaskMap],
-  );
+  const finishedTaskOptions = useMemo(() => {
+    const fromMaster = windowQuery.masterQuery.data?.finishedTaskOptions ?? [];
+    if (fromMaster.length > 0) return fromMaster;
+    return Array.from(new Set(assetLastTaskMap.values())).sort((a, b) => a.localeCompare(b));
+  }, [windowQuery.masterQuery.data?.finishedTaskOptions, assetLastTaskMap]);
 
   const huOptions = useMemo(() => {
     let hus = masterData.hus;
@@ -805,9 +894,14 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
   ]);
 
   const lookupAssets = useMemo(
-    () => (isDirty ? editedData : (poQuery.data?.assets ?? [])),
-    [isDirty, editedData, poQuery.data?.assets],
+    () => (isDirty ? editedData : sourceAssets),
+    [isDirty, editedData, sourceAssets],
   );
+
+  const handleNearTableEnd = useCallback(() => {
+    if (!useWindow || !windowQuery.hasNextWindow || windowQuery.isFetchingNextWindow) return;
+    void windowQuery.fetchNextWindow();
+  }, [useWindow, windowQuery.hasNextWindow, windowQuery.isFetchingNextWindow, windowQuery.fetchNextWindow]);
 
   if (!canView) {
     return <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>;
@@ -818,10 +912,14 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold">Purchase Order & Goods Received Updates</h2>
-          {!showTableLoading && displayAssets.length > 0 ? (
+          {!showTableLoading && (useWindow ? windowQuery.merged.totalAssetCount : displayAssets.length) > 0 ? (
             <p className="text-xs text-siloam-text-secondary mt-1">
-              {displayAssets.length} asset{displayAssets.length === 1 ? '' : 's'}
-              {filteredAndSortedData.length !== displayAssets.length
+              {useWindow
+                ? `${filteredAndSortedData.length} / ${windowQuery.merged.totalAssetCount} asset${
+                    windowQuery.merged.totalAssetCount === 1 ? '' : 's'
+                  }`
+                : `${displayAssets.length} asset${displayAssets.length === 1 ? '' : 's'}`}
+              {!useWindow && filteredAndSortedData.length !== displayAssets.length
                 ? ` · ${filteredAndSortedData.length} ditampilkan setelah filter`
                 : ''}
             </p>
@@ -908,8 +1006,8 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
         </div>
       </div>
 
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[12rem]">
-        {isBackgroundRefresh ? (
+      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[12rem]" aria-busy={showTableLoading || isContentRefreshing}>
+        {isBackgroundRefresh && !showTableLoading ? (
           <>
             <div
               className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden rounded-full bg-siloam-border"
@@ -917,17 +1015,17 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
             >
               <div className="h-full w-1/3 rounded-full bg-siloam-blue/70 animate-pulse" />
             </div>
-            <div className="pointer-events-none absolute right-3 top-2 z-10 rounded border border-siloam-border bg-siloam-bg/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-siloam-text-secondary">
-              Sinkron
+            <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-siloam-surface/60 backdrop-blur-[1px]">
+              <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+                <Spinner size={18} className="text-siloam-blue" />
+                <span>{loadingLabel}</span>
+              </div>
             </div>
           </>
         ) : null}
         {showTableLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
-            <span
-              className="inline-block h-5 w-5 rounded-full border-2 border-siloam-border border-t-siloam-blue animate-spin"
-              aria-hidden
-            />
+            <Spinner size={20} className="text-siloam-blue" />
             <span>Memuat data aset…</span>
           </div>
         ) : filteredAndSortedData.length === 0 ? (
@@ -951,14 +1049,26 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
             data={filteredAndSortedData}
             onDataChange={handleDataChange}
             rowHeaderAccessor="assetName"
-            virtualizeRows="auto"
+            forceVirtualize
+            dimWhileScrolling
+            onNearEnd={handleNearTableEnd}
+            virtualizeRows
           />
         )}
+        {useWindow && windowQuery.isFetchingNextWindow ? (
+          <div className="pt-3 text-center text-xs text-siloam-text-secondary">
+            Memuat baris berikutnya…
+          </div>
+        ) : null}
       </div>
 
       {filteredAndSortedData.length > 0 && (
         <div className="pt-4 border-t border-siloam-border text-sm text-siloam-text-secondary">
-          {filteredAndSortedData.length} assets — scroll inside the table to browse all rows
+          {filteredAndSortedData.length}
+          {useWindow && windowQuery.merged.totalAssetCount > 0
+            ? ` / ${windowQuery.merged.totalAssetCount}`
+            : ''}{' '}
+          assets — scroll untuk muat baris berikutnya
         </div>
       )}
 
@@ -971,9 +1081,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
               const n = assetIds.length;
               showToast(n === 1 ? '1 PO berhasil diperbarui.' : `${n} PO berhasil diperbarui.`, 'success');
               onDataChange();
-              void queryClient.invalidateQueries({
-                queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
-              });
+              void queryClient.invalidateQueries({ queryKey: ['screen', 'po-update'] });
             }}
             currentUser={currentUser}
             lookupAssets={lookupAssets}
@@ -989,9 +1097,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
             onClose={() => setIsPoMigrationOpen(false)}
             onSuccess={() => {
               onDataChange();
-              void queryClient.invalidateQueries({
-                queryKey: queryKeys.poUpdate.page(periodName, currentUser.id),
-              });
+              void queryClient.invalidateQueries({ queryKey: ['screen', 'po-update'] });
             }}
             currentUser={currentUser}
             showToast={showToast}

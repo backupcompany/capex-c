@@ -85,19 +85,23 @@ export function rollupMultiYearFromPeriods(
   let totalApproved = 0;
   let totalConsumed = 0;
   let totalCarryForward = 0;
+  let totalBudgetPlan = 0;
 
   for (const period of periods) {
     const totals = computePeriodTotals(period.budget, activeCategoryIds);
+    totalBudgetPlan += totals.plan;
     totalAllocated += totals.allocated;
     totalApproved += totals.approved;
     totalConsumed += totals.consumed;
     totalCarryForward += totals.carryForward;
   }
 
+  const shellPlan = my.budget.budgetPlan ?? 0;
   return {
     ...my,
     budget: {
       ...my.budget,
+      budgetPlan: shellPlan > 0 ? shellPlan : totalBudgetPlan,
       budgetCarryForward: totalCarryForward,
       budgetAllocated: totalAllocated,
       approvedBudget: totalApproved,

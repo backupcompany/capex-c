@@ -37,11 +37,23 @@ export function pathnameToPage(pathname: string): Page {
   const trimmed = pathname.replace(/^\/+|\/+$/g, '');
   const first = trimmed.split('/').filter(Boolean)[0] ?? '';
   if (!first) return Page.Dashboard;
+  if (first === PAGE_TO_SLUG[Page.Profile]) return Page.Profile;
   return SLUG_TO_PAGE[first] ?? Page.Dashboard;
 }
 
+/** Segmen public id di `/profile/{publicId}` — null jika `/profile` saja. */
+export function profilePublicIdFromPathname(pathname: string): string | null {
+  const segments = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  if (segments[0] !== PAGE_TO_SLUG[Page.Profile] || segments.length < 2) return null;
+  return segments[1]?.trim() || null;
+}
+
 /** Screen → href untuk `router.push` / `<Link href>` */
-export function pageToHref(page: Page): string {
+export function pageToHref(page: Page, userPublicId?: string): string {
+  if (page === Page.Profile) {
+    const token = userPublicId?.trim();
+    return token ? `/profile/${token}` : '/profile';
+  }
   const slug = PAGE_TO_SLUG[page];
   return slug ? `/${slug}` : '/';
 }

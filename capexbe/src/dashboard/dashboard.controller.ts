@@ -1,7 +1,10 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { DashboardService } from './dashboard.service';
 
 class DashboardBodyDto {
@@ -17,10 +20,7 @@ export class DashboardController {
   @Post('snapshot')
   async snapshot(@Req() req: Request, @Body() body: DashboardBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.dashboardService.loadSnapshot(token, userId, body.periodName);
   }
 }

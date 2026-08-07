@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuthContextService } from '../../../capexbe/src/auth/auth-context.service';
 import { AuthZService } from '../../../capexbe/src/auth/auth-z.service';
 import { toCamelCase } from './to-camel-case.util';
+import { resolveBodyActorUserId } from '../../../capexbe/src/shared/public-id.util';
 
 const NOTIFICATION_COLUMNS =
   'id,user_id,message,type,is_read,created_at,link_to_page';
@@ -36,9 +37,7 @@ export class NotificationsService {
   ) {}
 
   private parseUserId(body: unknown): number {
-    const userId = Number((body as Record<string, unknown>)?.userId);
-    if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
-    return userId;
+    return resolveBodyActorUserId(body);
   }
 
   async list(accessToken: string, body: unknown) {

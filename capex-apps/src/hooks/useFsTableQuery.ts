@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { EnrichedFS } from '@/hooks/queries/fetchFsApprovalPageData';
 import {
   fetchFsApprovalQueryFromBackend,
@@ -15,8 +15,11 @@ export type FsTableQueryParams = {
   canView: boolean;
   page: number;
   pageSize: number;
-  search: string;
+  /** Pass debounced value from filter hook; omit to debounce `search` internally. */
+  debouncedSearch?: string;
+  search?: string;
   searchDebounceMs?: number;
+  isSearchStaging?: boolean;
   archetypes: string[];
   hus: string[];
   categories?: string[];
@@ -36,8 +39,10 @@ export function useFsTableQuery({
   canView,
   page,
   pageSize,
+  debouncedSearch: debouncedSearchProp,
   search,
   searchDebounceMs = 200,
+  isSearchStaging: isSearchStagingProp,
   archetypes,
   hus,
   categories = [],
@@ -48,8 +53,11 @@ export function useFsTableQuery({
   screen,
   staleTime = DEFAULT_STALE_MS,
 }: FsTableQueryParams) {
-  const debouncedSearch = useDebouncedValue(search, searchDebounceMs);
-  const isSearchStaging = search.trim() !== debouncedSearch.trim();
+  const internalDebounced = useDebouncedValue(search ?? '', searchDebounceMs);
+  const debouncedSearch = debouncedSearchProp ?? internalDebounced;
+  const isSearchStaging =
+    isSearchStagingProp ??
+    (search !== undefined && search.trim() !== debouncedSearch.trim());
 
   const queryKey = useMemo(
     () => [
@@ -95,7 +103,7 @@ export function useFsTableQuery({
         userId,
         page,
         pageSize,
-        search: debouncedSearch,
+        search: debouncedSearch.trim(),
         archetypes,
         hus,
         categories,
@@ -116,7 +124,7 @@ export function useFsTableQuery({
     enabled: !!periodName.trim() && canView,
     staleTime,
     refetchOnWindowFocus: false,
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
   });
 
   const rows = (tableQuery.data?.rows ?? []) as EnrichedFS[];
@@ -124,11 +132,14 @@ export function useFsTableQuery({
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const filterOptions = tableQuery.data?.filterOptions ?? { archetypes: [], hus: [], categories: [] };
 
-  const isBlockingLoad = tableQuery.isPending && rows.length === 0;
-  const isBackgroundRefresh =
-    rows.length > 0 && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
-  const isFilterRefreshing =
-    isSearchStaging || (debouncedSearch.trim().length > 0 && (tableQuery.isFetching || tableQuery.isPending));
+  const isBlockingLoad =
+    tableQuery.isPending && rows.length === 0 && !tableQuery.isPlaceholderData;
+  const isTableFetching = tableQuery.isFetching && !tableQuery.isPending;
+  const showTableBusy = !isBlockingLoad && (isTableFetching || isSearchStaging);
+  /** @deprecated Prefer showTableBusy — kept for FS Realization until refactored */
+  const isBackgroundRefresh = isTableFetching && !isSearchStaging;
+  /** @deprecated Prefer showTableBusy + isSearchStaging */
+  const isFilterRefreshing = isSearchStaging || showTableBusy;
 
   return {
     tableQuery,
@@ -136,9 +147,10 @@ export function useFsTableQuery({
     totalCount,
     totalPages,
     filterOptions,
-    debouncedSearch,
     isSearchStaging,
     isBlockingLoad,
+    isTableFetching,
+    showTableBusy,
     isBackgroundRefresh,
     isFilterRefreshing,
   };

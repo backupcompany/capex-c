@@ -54,11 +54,13 @@ export const cacheKeys = {
     `app:table:my-tasks:page:${userId}:${normPeriod(periodName)}`,
   configurationSlice: (userId: number, slice: string) =>
     `app:table:configuration:slice:${userId}:${slice}`,
-  budgetMultiYearPage: (userId: number) => `app:table:budget-multi-year:page:${userId}`,
+  budgetMultiYearPage: (userId: number) => `app:table:budget-multi-year:page:v2:${userId}`,
   budgetMultiYearPeriodBudgets: (userId: number, multiYearName: string) =>
     `app:table:budget-multi-year:period-budgets:${userId}:${multiYearName.trim().toLowerCase()}`,
   poUpdatePage: (userId: number, periodName: string) =>
     `app:table:po-update:page:${userId}:${normPeriod(periodName || 'all')}`,
+  poUpdateFilteredIds: (userId: number, periodName: string, filterHash: string) =>
+    `app:table:po-update:filtered-ids:${userId}:${normPeriod(periodName)}:${filterHash}`,
   grUpdatePage: (userId: number, periodName: string) =>
     `app:table:gr-update:page:${userId}:${normPeriod(periodName || 'all')}`,
   fsUpdatePage: (userId: number, periodName: string) =>

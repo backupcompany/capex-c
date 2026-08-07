@@ -1,7 +1,14 @@
-import { BadRequestException, Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  BUDGET_STACK_CREATE,
+  BUDGET_STACK_UPDATE,
+  BUDGET_STACK_VIEW,
+} from '../auth/budget-permission.constants';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { BudgetHuService } from './budget-hu.service';
 
 class BudgetHuBundleBodyDto {
@@ -117,21 +124,13 @@ class BudgetHuProjectAssetsDto {
 export class BudgetHuController {
   constructor(private readonly budgetHuService: BudgetHuService) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
-    return userId;
-  }
-
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('page-bundle')
   async pageBundle(@Req() req: Request, @Body() body: BudgetHuBundleBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadPageBundle(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       !!body.skipCache,
       {
@@ -143,52 +142,52 @@ export class BudgetHuController {
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('period')
   async periodOnly(@Req() req: Request, @Body() body: BudgetHuBundleBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadBudgetPeriodOnly(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       !!body.skipCache,
       { networkView: !!body.networkView, networkShell: !!body.networkShell, categoryId: body.categoryId },
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('period-structure')
   async periodStructure(@Req() req: Request, @Body() body: BudgetHuBundleBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadBudgetPeriodStructure(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       !!body.skipCache,
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('config-bundle')
   async configBundle(@Req() req: Request, @Body() body: BudgetHuBundleBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.loadConfigBundle(token, this.parseUserId(body), !!body.skipCache);
+    return this.budgetHuService.loadConfigBundle(token, getCallerUserId(req), !!body.skipCache);
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('project-asset-counts')
   async projectAssetCounts(@Req() req: Request, @Body() body: BudgetHuBundleBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadProjectAssetCounts(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       !!body.skipCache,
       { hospitalUnitId: body.hospitalUnitId },
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('hu-projects-page')
   async huProjectsPage(@Req() req: Request, @Body() body: BudgetHuProjectsPageDto) {
     const token = requireAccessTokenFromRequest(req);
@@ -196,7 +195,7 @@ export class BudgetHuController {
     if (!huId) throw new BadRequestException('hospitalUnitId is required');
     return this.budgetHuService.loadHuProjectsPage(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       huId,
       Number(body.page ?? 1),
@@ -206,117 +205,117 @@ export class BudgetHuController {
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('project-assets')
   async projectAssets(@Req() req: Request, @Body() body: BudgetHuProjectAssetsDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadProjectAssets(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.projectId,
       !!body.skipCache,
     );
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('invalidate-cache')
   async invalidateCache(@Req() req: Request, @Body() body: BudgetHuInvalidateBodyDto) {
     const token = requireAccessTokenFromRequest(req);
     await this.budgetHuService.invalidateForPeriod(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
     );
     return { ok: true };
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('allocate-project-code')
   async allocateProjectCode(@Req() req: Request, @Body() body: BudgetHuAllocateProjectCodeDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.allocateProjectCode(token, this.parseUserId(body), body);
+    return this.budgetHuService.allocateProjectCode(token, getCallerUserId(req), body);
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('allocate-asset-code')
   async allocateAssetCode(@Req() req: Request, @Body() body: BudgetHuAllocateAssetCodeDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.allocateAssetCode(token, this.parseUserId(body), body);
+    return this.budgetHuService.allocateAssetCode(token, getCallerUserId(req), body);
   }
 
   /** Lightweight peer-change detector — uncached; polled while Budget HU is open. */
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('hu-sync-stamp')
   async huSyncStamp(@Req() req: Request, @Body() body: BudgetHuSyncStampDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.getHuSyncStamp(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.hospitalUnitId,
     );
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save')
   async save(@Req() req: Request, @Body() body: BudgetHuSaveBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.savePeriod(token, this.parseUserId(body), body);
+    return this.budgetHuService.savePeriod(token, getCallerUserId(req), body);
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-period')
   async savePeriod(@Req() req: Request, @Body() body: BudgetHuSaveBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.savePeriod(token, this.parseUserId(body), body);
+    return this.budgetHuService.savePeriod(token, getCallerUserId(req), body);
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-project')
   async saveProject(@Req() req: Request, @Body() body: BudgetHuSaveProjectDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.saveSingleProject(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.project ?? {},
     );
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-asset')
   async saveAsset(@Req() req: Request, @Body() body: BudgetHuSaveAssetDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.saveSingleAsset(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.asset ?? {},
     );
   }
 
-  @RequirePermission('Budget HU', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-purchase-order')
   async savePurchaseOrder(@Req() req: Request, @Body() body: BudgetHuSavePurchaseOrderDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.savePurchaseOrder(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.purchaseOrder ?? {},
       body.action === 'update' ? 'update' : 'create',
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('purchase-order/get')
   async getPurchaseOrder(@Req() req: Request, @Body() body: BudgetHuPurchaseOrderGetDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetHuService.getPurchaseOrder(token, this.parseUserId(body), body.poId);
+    return this.budgetHuService.getPurchaseOrder(token, getCallerUserId(req), body.poId);
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('purchase-orders/for-project')
   async getPurchaseOrdersForProject(
     @Req() req: Request,
@@ -325,18 +324,18 @@ export class BudgetHuController {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.getPurchaseOrdersForProject(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.projectId,
     );
   }
 
-  @RequirePermission('Budget HU', 'view')
+  @BUDGET_STACK_VIEW
   @Post('projects-for-period')
   async projectsForPeriod(@Req() req: Request, @Body() body: BudgetHuProjectsForPeriodDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetHuService.loadProjectsForPeriod(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
     );
   }

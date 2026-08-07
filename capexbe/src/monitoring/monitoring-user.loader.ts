@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { BATCH_SIZE } from '../project-list/supabase-helpers';
 import {
   getAllArchetypesConfig,
   getAllHospitalUnitsConfig,
@@ -9,6 +8,7 @@ import type {
   MonitoringListFilters,
   MonitoringPageBundleDto,
   MonitoringScopeSummaryRow,
+  MonitoringScreenDto,
   MonitoringUserRowDto,
   MonitoringUsersPageDto,
   MonitoringUsersQuery,
@@ -22,17 +22,22 @@ import {
 
 const ONLINE_WINDOW_MS = 15 * 60 * 1000;
 const ACTIVE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-const RECENT_ACTIVITY_DAYS = 365;
 
-type ActivityStats = {
-  lastActiveMs: number;
-  completedTasks: number;
-  createdAdhoc: number;
-  isOnline: boolean;
+type ActivitySnapshot = {
+  lastTaskMs: number;
+  lastAdhocMs: number;
+  lastSessionMs: number;
+  lastLoginMs: number;
 };
 
 function maxMs(...values: number[]): number {
   return values.reduce((m, v) => (v > m ? v : m), 0);
+}
+
+function toMs(value: unknown): number {
+  if (value == null || value === '') return 0;
+  const ms = new Date(String(value)).getTime();
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 function emptySummaryRow(key: string, label: string): MonitoringScopeSummaryRow {
@@ -54,187 +59,41 @@ function deriveStatus(lastActiveMs: number, nowMs: number, isOnline: boolean): U
   return 'Dormant';
 }
 
-function calcEngagementScore(stats: ActivityStats, nowMs: number): number {
-  const totalActions = stats.completedTasks + stats.createdAdhoc;
-  let baseScore = Math.min(100, totalActions * 5);
-  if (stats.lastActiveMs > 0) {
-    const daysSince = (nowMs - stats.lastActiveMs) / (1000 * 60 * 60 * 24);
-    if (daysSince > 30) baseScore *= 0.5;
-    else if (daysSince > 7) baseScore *= 0.8;
-  } else {
-    baseScore = 0;
-  }
-  if (stats.isOnline) baseScore = Math.min(100, baseScore + 10);
-  return Math.round(baseScore);
-}
-
-async function fetchRecentRows(
-  admin: SupabaseClient,
-  tableName: string,
-  selectQuery: string,
-  dateColumn: string,
-  sinceIso: string,
-): Promise<Record<string, unknown>[]> {
-  let allRows: Record<string, unknown>[] = [];
-  let from = 0;
-  let hasMore = true;
-  while (hasMore) {
-    const { data, error } = await admin
-      .from(tableName)
-      .select(selectQuery)
-      .gte(dateColumn, sinceIso)
-      .range(from, from + BATCH_SIZE - 1);
-    if (error) throw new Error(`${tableName}: ${error.message}`);
-    const chunk = (data ?? []) as unknown as Record<string, unknown>[];
-    if (chunk.length > 0) {
-      allRows = [...allRows, ...chunk];
-      from += BATCH_SIZE;
-      hasMore = chunk.length === BATCH_SIZE;
-    } else {
-      hasMore = false;
-    }
-  }
-  return allRows;
-}
-
-async function loadRecentTaskActivity(admin: SupabaseClient): Promise<Map<number, { lastMs: number; count: number }>> {
-  const since = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const rows = await fetchRecentRows(
-    admin,
-    'task_logs',
-    'completed_by_user_id, completed_at',
-    'completed_at',
-    since,
-  );
-  const map = new Map<number, { lastMs: number; count: number }>();
-  for (const row of rows ?? []) {
-    const uid = Number((row as { completed_by_user_id?: unknown }).completed_by_user_id);
+async function loadActivitySnapshot(admin: SupabaseClient): Promise<Map<number, ActivitySnapshot>> {
+  const { data, error } = await admin.rpc('monitoring_user_activity_snapshot');
+  if (error) throw new Error(`monitoring_user_activity_snapshot: ${error.message}`);
+  const map = new Map<number, ActivitySnapshot>();
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const uid = Number(row.user_id);
     if (!Number.isFinite(uid)) continue;
-    const at = new Date(String((row as { completed_at?: unknown }).completed_at ?? '')).getTime();
-    if (!Number.isFinite(at)) continue;
-    const cur = map.get(uid) ?? { lastMs: 0, count: 0 };
-    cur.count += 1;
-    if (at > cur.lastMs) cur.lastMs = at;
-    map.set(uid, cur);
+    map.set(uid, {
+      lastTaskMs: toMs(row.last_task_at),
+      lastAdhocMs: toMs(row.last_adhoc_at),
+      lastSessionMs: toMs(row.last_session_at),
+      lastLoginMs: toMs(row.last_login_at),
+    });
   }
   return map;
-}
-
-async function loadRecentAdhocActivity(admin: SupabaseClient): Promise<Map<number, { lastMs: number; count: number }>> {
-  const since = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const rows = await fetchRecentRows(
-    admin,
-    'adhoc_tasks',
-    'created_by_user_id, created_at',
-    'created_at',
-    since,
-  );
-  const map = new Map<number, { lastMs: number; count: number }>();
-  for (const row of rows ?? []) {
-    const uid = Number((row as { created_by_user_id?: unknown }).created_by_user_id);
-    if (!Number.isFinite(uid)) continue;
-    const at = new Date(String((row as { created_at?: unknown }).created_at ?? '')).getTime();
-    if (!Number.isFinite(at)) continue;
-    const cur = map.get(uid) ?? { lastMs: 0, count: 0 };
-    cur.count += 1;
-    if (at > cur.lastMs) cur.lastMs = at;
-    map.set(uid, cur);
-  }
-  return map;
-}
-
-type SessionActivity = { lastMs: number; isOnline: boolean };
-
-async function loadSessionActivity(admin: SupabaseClient): Promise<Map<number, SessionActivity>> {
-  const map = new Map<number, SessionActivity>();
-  const nowMs = Date.now();
-  const onlineCutoff = nowMs - ONLINE_WINDOW_MS;
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await admin
-      .from('auth_sessions')
-      .select('user_id, last_active_at')
-      .is('revoked_at', null)
-      .range(from, from + BATCH_SIZE - 1);
-    if (error) break;
-    const chunk = data ?? [];
-    for (const row of chunk) {
-      const uid = Number(row.user_id);
-      if (!Number.isFinite(uid)) continue;
-      const at = new Date(String(row.last_active_at ?? '')).getTime();
-      if (!Number.isFinite(at)) continue;
-      const prev = map.get(uid);
-      const lastMs = maxMs(prev?.lastMs ?? 0, at);
-      map.set(uid, {
-        lastMs,
-        isOnline: lastMs >= onlineCutoff || Boolean(prev?.isOnline),
-      });
-    }
-    if (chunk.length > 0) {
-      from += BATCH_SIZE;
-      hasMore = chunk.length === BATCH_SIZE;
-    } else {
-      hasMore = false;
-    }
-  }
-  return map;
-}
-
-async function loadLoginAuditActivity(admin: SupabaseClient): Promise<Map<number, number>> {
-  try {
-    const since = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const rows = await fetchRecentRows(
-      admin,
-      'login_audit_logs',
-      'user_id, created_at, success',
-      'created_at',
-      since,
-    );
-    const map = new Map<number, number>();
-    for (const row of rows) {
-      if (row.success === false) continue;
-      const uid = Number(row.user_id);
-      if (!Number.isFinite(uid)) continue;
-      const at = new Date(String(row.created_at ?? '')).getTime();
-      if (!Number.isFinite(at)) continue;
-      map.set(uid, maxMs(map.get(uid) ?? 0, at));
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
 }
 
 function buildUserMetrics(
-  users: ReturnType<typeof getAllUsers> extends Promise<infer T> ? T : never,
+  users: Awaited<ReturnType<typeof getAllUsers>>,
   scopeMaps: ReturnType<typeof buildScopeResolutionMaps>,
-  taskActivity: Map<number, { lastMs: number; count: number }>,
-  adhocActivity: Map<number, { lastMs: number; count: number }>,
-  sessionActivity: Map<number, SessionActivity>,
-  loginActivity: Map<number, number>,
+  activityByUser: Map<number, ActivitySnapshot>,
 ): MonitoringUserRowDto[] {
   const nowMs = Date.now();
+  const onlineCutoff = nowMs - ONLINE_WINDOW_MS;
   return users.map((user) => {
     const uid = Number(user.id);
-    const task = taskActivity.get(uid);
-    const adhoc = adhocActivity.get(uid);
-    const session = sessionActivity.get(uid);
-    const loginLast = loginActivity.get(uid) ?? 0;
+    const activity = activityByUser.get(uid);
+    const lastSessionMs = activity?.lastSessionMs ?? 0;
     const lastActiveMs = maxMs(
-      task?.lastMs ?? 0,
-      adhoc?.lastMs ?? 0,
-      session?.lastMs ?? 0,
-      loginLast,
+      activity?.lastTaskMs ?? 0,
+      activity?.lastAdhocMs ?? 0,
+      lastSessionMs,
+      activity?.lastLoginMs ?? 0,
     );
-    const isOnline = Boolean(session?.isOnline);
-    const stats: ActivityStats = {
-      lastActiveMs,
-      completedTasks: task?.count ?? 0,
-      createdAdhoc: adhoc?.count ?? 0,
-      isOnline,
-    };
+    const isOnline = lastSessionMs >= onlineCutoff;
     const scope = resolveUserScopes(user.assignments, scopeMaps);
     return {
       userId: uid,
@@ -244,10 +103,6 @@ function buildUserMetrics(
       unitNames: Array.from(scope.unitNames).sort((a, b) => a.localeCompare(b)),
       archetypeNames: Array.from(scope.archetypeNames).sort((a, b) => a.localeCompare(b)),
       lastActiveAt: lastActiveMs > 0 ? new Date(lastActiveMs).toISOString() : null,
-      totalActions: stats.completedTasks + stats.createdAdhoc,
-      taskCompletionCount: stats.completedTasks,
-      adhocTaskCreatedCount: stats.createdAdhoc,
-      engagementScore: calcEngagementScore(stats, nowMs),
       status: deriveStatus(lastActiveMs, nowMs, isOnline),
       isOnline,
     };
@@ -264,13 +119,7 @@ function applyFilters(rows: MonitoringUserRowDto[], filters: MonitoringListFilte
     if (filters.archetypeName && !row.archetypeNames.includes(filters.archetypeName)) return false;
     if (filters.unitName && !row.unitNames.includes(filters.unitName)) return false;
     if (!search) return true;
-    const hay = [
-      row.username,
-      row.email,
-      row.roleName,
-      ...row.unitNames,
-      ...row.archetypeNames,
-    ]
+    const hay = [row.username, row.email, row.roleName, ...row.unitNames, ...row.archetypeNames]
       .join(' ')
       .toLowerCase();
     return hay.includes(search);
@@ -309,17 +158,31 @@ function buildScopeSummaries(
   };
 }
 
+export function buildPageBundleFromContext(
+  ctx: Awaited<ReturnType<typeof loadMonitoringContext>>,
+): MonitoringPageBundleDto {
+  const { archetypeSummary, unitSummary } = buildScopeSummaries(ctx.allRows, ctx.archetypes, ctx.hospitalUnits);
+  return {
+    summary: {
+      totalUsers: ctx.allRows.length,
+      onlineNow: ctx.allRows.filter((r) => r.isOnline).length,
+      activeUsers: ctx.allRows.filter((r) => r.status === 'Active').length,
+      dormantUsers: ctx.allRows.filter((r) => r.status === 'Dormant').length,
+      inactiveUsers: ctx.allRows.filter((r) => r.status === 'Inactive').length,
+    },
+    archetypeSummary,
+    unitSummary,
+    unitNames: ctx.hospitalUnits.map((hu) => hu.name).filter(Boolean),
+  };
+}
+
 export async function loadMonitoringContext(admin: SupabaseClient) {
-  const [users, archetypesRaw, husRaw, taskActivity, adhocActivity, sessionActivity, loginActivity] =
-    await Promise.all([
-      getAllUsers(admin),
-      getAllArchetypesConfig(admin),
-      getAllHospitalUnitsConfig(admin),
-      loadRecentTaskActivity(admin),
-      loadRecentAdhocActivity(admin),
-      loadSessionActivity(admin),
-      loadLoginAuditActivity(admin),
-    ]);
+  const [users, archetypesRaw, husRaw, activityByUser] = await Promise.all([
+    getAllUsers(admin),
+    getAllArchetypesConfig(admin),
+    getAllHospitalUnitsConfig(admin),
+    loadActivitySnapshot(admin),
+  ]);
 
   const archetypes = archetypesRaw
     .map((a) => ({
@@ -336,35 +199,14 @@ export async function loadMonitoringContext(admin: SupabaseClient) {
     .filter((hu) => hu.name);
 
   const scopeMaps = buildScopeResolutionMaps(archetypes, hospitalUnits);
-  const allRows = buildUserMetrics(
-    users,
-    scopeMaps,
-    taskActivity,
-    adhocActivity,
-    sessionActivity,
-    loginActivity,
-  );
+  const allRows = buildUserMetrics(users, scopeMaps, activityByUser);
 
   return { allRows, archetypes, hospitalUnits };
 }
 
 export async function loadMonitoringPageBundle(admin: SupabaseClient): Promise<MonitoringPageBundleDto> {
-  const { allRows, archetypes, hospitalUnits } = await loadMonitoringContext(admin);
-  const { archetypeSummary, unitSummary } = buildScopeSummaries(allRows, archetypes, hospitalUnits);
-
-  return {
-    summary: {
-      totalUsers: allRows.length,
-      onlineNow: allRows.filter((r) => r.isOnline).length,
-      activeUsers: allRows.filter((r) => r.status === 'Active').length,
-      dormantUsers: allRows.filter((r) => r.status === 'Dormant').length,
-      inactiveUsers: allRows.filter((r) => r.status === 'Inactive').length,
-    },
-    archetypeSummary,
-    unitSummary,
-    archetypes,
-    hospitalUnits,
-  };
+  const ctx = await loadMonitoringContext(admin);
+  return buildPageBundleFromContext(ctx);
 }
 
 export async function loadMonitoringUsersPage(
@@ -380,6 +222,8 @@ export async function loadMonitoringUsersPage(
       const order: Record<UserActivityStatus, number> = { Active: 0, Dormant: 1, Inactive: 2 };
       return order[a.status] - order[b.status];
     }
+    const roleCmp = a.roleName.localeCompare(b.roleName, 'id');
+    if (roleCmp !== 0) return roleCmp;
     const aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
     const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
     return bTime - aTime;
@@ -393,5 +237,18 @@ export async function loadMonitoringUsersPage(
     pageSize: query.pageSize,
     totalCount: filtered.length,
     hasMore: from + query.pageSize < filtered.length,
+  };
+}
+
+export async function loadMonitoringScreen(
+  admin: SupabaseClient,
+  query: MonitoringUsersQuery,
+  preloadedCtx?: Awaited<ReturnType<typeof loadMonitoringContext>>,
+): Promise<MonitoringScreenDto> {
+  const ctx = preloadedCtx ?? (await loadMonitoringContext(admin));
+  const usersPage = await loadMonitoringUsersPage(admin, query, ctx.allRows);
+  return {
+    bundle: buildPageBundleFromContext(ctx),
+    usersPage,
   };
 }

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo, startTransition } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, startTransition } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { Page } from '@/types';
@@ -25,7 +25,8 @@ import { type ShowToastOptions } from '@/contexts/ToastContext';
 import * as taskService from '@/services/taskService';
 import * as notificationService from '@/services/notificationService';
 import { NAV_ITEMS } from '@/constants';
-import { pageToHref, pathnameToPage } from '@/lib/pageRoutes';
+import { pageToHref, pathnameToPage, profilePublicIdFromPathname } from '@/lib/pageRoutes';
+import { decodeUserPublicId, encodeUserPublicId } from '@/lib/publicUserId';
 import { resolvePostLoginLandingPage } from '@/lib/postLoginLanding';
 import { queryKeys } from '@/lib/query-keys';
 import {
@@ -49,6 +50,7 @@ import {
 import { useNotificationsState } from '@/hooks/useNotificationsState';
 import {
   readCachedAuthUser,
+  readInitialAuthUser,
   writeCachedAuthUser,
   clearCachedAuthUser,
 } from '@/lib/authSessionCache';
@@ -74,6 +76,10 @@ import {
   setSessionCookieHint,
   shouldRunAuthSessionProbe,
 } from '@/lib/auth/authApi';
+import { isDefinitiveUnauthenticated } from '@/lib/auth/sessionValidity';
+import { authDebug } from '@/lib/auth/authDebug';
+import { markAuthProbeComplete, resetAuthProbeGate } from '@/lib/auth/authProbeGate';
+import { ensureCsrfToken } from '@/lib/auth/csrfToken';
 import { clearPersistedQueryCache } from '@/lib/queryDehydrate';
 import { clearTabSessionState } from '@/lib/auth/clearTabSessionState';
 import { useBackendSession } from '@/lib/auth/authConstants';
@@ -113,14 +119,24 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     () => Boolean(initialBootstrap?.users?.length && initialBootstrap?.roles?.length),
   );
   /** false sampai probe /auth/session selesai — hindari LazyLoginPage saat reload masih memvalidasi cookie. */
-  const [authProbeComplete, setAuthProbeComplete] = useState(false);
+  const authProbeComplete = useAuthStore((s) => s.authProbeComplete);
+  const authStatus = useAuthStore((s) => s.status);
+  const sessionReady = useAuthStore((s) => s.sessionReady);
 
   // Global state for user and permissions
   const [allUsers, setAllUsers] = useState<User[]>(() => initialBootstrap?.users ?? []);
   const [allRoles, setAllRoles] = useState<UserRole[]>(
     () => initialBootstrap?.roles?.length ? initialBootstrap.roles : readCachedRoles(),
   );
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return hasSessionCookies ? readInitialAuthUser() : null;
+  });
+  const authenticatedNetworkReady =
+    authProbeComplete &&
+    sessionReady &&
+    authStatus === 'authenticated' &&
+    Boolean(currentUser?.id);
 
   const {
     notifications,
@@ -129,7 +145,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     invalidate: refreshNotifications,
     prependNotification,
   } = useNotificationsState(
-    authProbeComplete && dataInitialized ? (currentUser?.id ?? null) : null,
+    authenticatedNetworkReady && dataInitialized ? (currentUser?.id ?? null) : null,
   );
 
   // State for unsaved changes modal
@@ -160,11 +176,6 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     () => (currentUser ? `desktop-notification-enabled-${currentUser.id}` : ''),
     [currentUser],
   );
-  /**
-   * Avoid forcing logout on a single transient `/auth/session` miss
-   * (can happen right after login while cookie/session settles).
-   */
-  const backendUnauthedStreakRef = useRef(0);
   const [sidebarNavRevision, setSidebarNavRevision] = useState(0);
   /** Avoid remounting `<main>` during heavy data migration batches. */
   const activePageRef = useRef<Page>(routePage);
@@ -223,7 +234,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   const bootstrapQuery = useQuery({
     queryKey: queryKeys.app.bootstrap,
     queryFn: () => fetchAppBootstrapData(currentUser?.id),
-    enabled: typeof window !== 'undefined' && authProbeComplete && !!currentUser,
+    enabled: typeof window !== 'undefined' && authenticatedNetworkReady,
     placeholderData: initialBootstrap ?? undefined,
     staleTime: 120_000,
     gcTime: 1000 * 60 * 60,
@@ -251,7 +262,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     handleHUChange,
     handleHUHoverPrefetch,
   } = useAppPeriodFilters({
-    authProbeComplete,
+    authProbeComplete: authenticatedNetworkReady,
     currentUser,
     routePage,
     permissions,
@@ -261,7 +272,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     dataInitialized,
   });
 
-  const shellDataReady = authProbeComplete && dataInitialized && !!currentUser;
+  const shellDataReady = authenticatedNetworkReady && dataInitialized;
 
   const { resetTaskNotificationState } = useTaskNotifications({
     enabled: shellDataReady,
@@ -388,9 +399,13 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     if (typeof window === 'undefined') return;
 
     let cancelled = false;
+    resetAuthProbeGate();
+    useAuthStore.getState().setAuthProbeComplete(false);
+    useAuthStore.getState().setSessionReady(false);
 
     const finishUnauthenticated = (options?: { clearServer?: boolean }) => {
       if (cancelled) return;
+      useAuthStore.getState().setSessionReady(false);
       invalidateAuthProbeCache();
       invalidateStaleAuthCookies();
       if (options?.clearServer !== false) {
@@ -420,22 +435,25 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     const applyProbeUser = (u: User, roles?: string[], idleTimeoutMs?: number) => {
       if (cancelled) return;
       setCurrentUser((prev) => {
+        const identity = {
+          id: u.id,
+          publicId: u.publicId,
+          username: u.username,
+          email: u.email,
+        };
         const merged =
           prev?.id === u.id
-            ? mergeAuthIdentityUser(
-                { id: u.id, username: u.username, email: u.email },
-                {
-                  sessionAssignments: u.assignments,
-                  roleSlugs: roles,
-                  previous: prev,
-                },
-              )
+            ? mergeAuthIdentityUser(identity, {
+                sessionAssignments: u.assignments,
+                roleSlugs: roles,
+                previous: prev,
+              })
             : u.assignments?.length
               ? u
-              : mergeAuthIdentityUser(
-                  { id: u.id, username: u.username, email: u.email },
-                  { sessionAssignments: u.assignments, roleSlugs: roles },
-                );
+              : mergeAuthIdentityUser(identity, {
+                  sessionAssignments: u.assignments,
+                  roleSlugs: roles,
+                });
         writeCachedAuthUser(merged);
         return merged;
       });
@@ -446,7 +464,12 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
         const forStore =
           prev?.id === u.id
             ? mergeAuthIdentityUser(
-                { id: u.id, username: u.username, email: u.email },
+                {
+                  id: u.id,
+                  publicId: u.publicId,
+                  username: u.username,
+                  email: u.email,
+                },
                 {
                   sessionAssignments: u.assignments,
                   roleSlugs: roles,
@@ -481,22 +504,39 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
           let me = await probeBackendSession();
           if (cancelled) return;
+          if (!me?.authenticated && hasSessionCookies && readCachedAuthUser()) {
+            await new Promise((r) => setTimeout(r, 250));
+            if (!cancelled) me = await probeBackendSession({ force: true });
+          }
+          if (cancelled) return;
           if (me?.authenticated && me.user) {
-            applyProbeUser(
-              mergeAuthIdentityUser(
-                {
-                  id: me.user.id,
-                  username: me.user.username,
-                  email: me.user.email,
-                },
-                {
-                  sessionAssignments: me.user.assignments,
-                  roleSlugs: me.user.roles,
-                },
-              ),
-              me.user.roles,
-              me.user.idleTimeoutMs,
-            );
+            const publicId = me.user.publicId?.trim();
+            const probeUser = publicId
+              ? mergeAuthIdentityUser(
+                  {
+                    publicId,
+                    username: me.user.username,
+                    email: me.user.email,
+                  },
+                  {
+                    sessionAssignments: me.user.assignments,
+                    roleSlugs: me.user.roles,
+                  },
+                )
+              : readCachedAuthUser();
+            if (probeUser) {
+              applyProbeUser(probeUser, me.user.roles, me.user.idleTimeoutMs);
+            }
+            const csrfOk = await ensureCsrfToken();
+            if (!cancelled && csrfOk) {
+              useAuthStore.getState().setSessionReady(true);
+            }
+            if (initialBootstrap?.users?.length) {
+              setDataInitialized(true);
+            }
+            return;
+          }
+          if (me == null && hasSessionCookies) {
             if (initialBootstrap?.users?.length) {
               setDataInitialized(true);
             }
@@ -510,7 +550,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       } catch {
         if (!cancelled) setDataInitialized(true);
       } finally {
-        if (!cancelled) setAuthProbeComplete(true);
+        if (!cancelled) {
+          markAuthProbeComplete();
+          useAuthStore.getState().setAuthProbeComplete(true);
+        }
       }
     })();
 
@@ -562,7 +605,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   ]);
 
   useRouteWarm({
-    enabled: authProbeComplete && !!currentUser?.id && dataInitialized,
+    enabled: authenticatedNetworkReady && dataInitialized,
     queryClient,
     routePage,
     periodName: selectedPeriodName,
@@ -590,6 +633,12 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       sessionStorage.setItem('currentUserId', String(currentUser.id));
     }
   }, [currentUser]);
+
+  /** Warm lazy route chunk before Suspense — shell tampil tanpa skeleton konten. */
+  useLayoutEffect(() => {
+    if (!currentUser) return;
+    prefetchScreenChunk(routePage);
+  }, [currentUser, routePage]);
 
   const bumpSidebarNav = useCallback(() => {
     setSidebarNavRevision((n) => n + 1);
@@ -654,13 +703,15 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
   /** Lazy-load full user directory for admin viewers (slim bootstrap = self user only). */
   useEffect(() => {
-    if (!authProbeComplete || !dataInitialized || !currentUser?.id) return;
+    if (!authenticatedNetworkReady || !dataInitialized) return;
+    const user = currentUser;
+    if (!user) return;
     const needsDirectory =
       routePage === Page.Configuration || routePage === Page.BudgetHU;
     if (!needsDirectory) return;
 
     let cancelled = false;
-    void ensureUsersDirectoryLoaded(queryClient, currentUser.id).then((users) => {
+    void ensureUsersDirectoryLoaded(queryClient, user.id).then((users) => {
       if (cancelled || users.length <= 1) return;
       applyUsersToApp(users);
     });
@@ -668,7 +719,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       cancelled = true;
     };
   }, [
-    authProbeComplete,
+    authenticatedNetworkReady,
     dataInitialized,
     currentUser?.id,
     routePage,
@@ -697,6 +748,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   // Logout feature removed - auto-login is always active
 
   const handleNavItemPrefetch = useNavPrefetch({
+    enabled: authenticatedNetworkReady,
     queryClient,
     selectedPeriodName,
     selectedArchetypeId,
@@ -704,6 +756,19 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     currentUser,
     permissions,
   });
+
+  const hrefForPage = useCallback(
+    (page: Page) => {
+      if (page === Page.Profile && currentUser?.id) {
+        return pageToHref(
+          page,
+          currentUser.publicId?.trim() || encodeUserPublicId(currentUser.id),
+        );
+      }
+      return pageToHref(page);
+    },
+    [currentUser?.id],
+  );
 
   const handleNavigation = useCallback((targetPage: Page) => {
     setIsSidebarOpen(false);
@@ -722,16 +787,26 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     }
 
     startTransition(() => {
-      router.push(pageToHref(targetPage));
+      router.push(hrefForPage(targetPage));
     });
     setIsPageDirty(false);
-  }, [routePage, router]);
+  }, [routePage, router, hrefForPage]);
 
   useEffect(() => {
     setIsPageDirty(false);
     setPendingNavigation(null);
     setChangeSummary(null);
   }, [routePage]);
+
+  /** Profile URL pakai public id — `/profile` atau id orang lain di-redirect ke akun sendiri. */
+  useEffect(() => {
+    if (!currentUser?.id || routePage !== Page.Profile) return;
+    const canonical = encodeUserPublicId(currentUser.id);
+    const pathToken = profilePublicIdFromPathname(pathname);
+    if (!pathToken || decodeUserPublicId(pathToken) !== currentUser.id) {
+      router.replace(pageToHref(Page.Profile, canonical));
+    }
+  }, [currentUser?.id, routePage, pathname, router]);
 
   const handlePoGrDataRefresh = useCallback(() => {
     refreshBudgetData();
@@ -743,7 +818,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       await pageActionRefs.current.onSave();
       prefetchScreenChunk(pendingNavigation);
       startTransition(() => {
-        router.push(pageToHref(pendingNavigation));
+        router.push(hrefForPage(pendingNavigation));
       });
       setPendingNavigation(null);
       setChangeSummary(null);
@@ -755,7 +830,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
           pageActionRefs.current.onCancel();
           prefetchScreenChunk(pendingNavigation);
           startTransition(() => {
-            router.push(pageToHref(pendingNavigation));
+            router.push(hrefForPage(pendingNavigation));
           });
           setPendingNavigation(null);
           setChangeSummary(null);
@@ -874,9 +949,30 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
           );
           const me = await probeBackendSession();
           if (cancelled) return;
-          if (me?.authenticated && me.user) {
-            backendUnauthedStreakRef.current = 0;
-            let fromList = usersSnapshot.find((u) => u.id === me.user!.id);
+          if (me == null) {
+            authDebug('background session probe transient — keep local session');
+            return;
+          }
+          if (me.authenticated && me.user) {
+            const publicId = me.user.publicId?.trim();
+            if (!publicId) {
+              const cached = readCachedAuthUser();
+              if (cached) {
+                applyUser(cached, me.user.roles, me.user.idleTimeoutMs);
+                return;
+              }
+              clearLocalAuth();
+              return;
+            }
+            const sessionIdentity = {
+              publicId,
+              id: decodeUserPublicId(publicId) ?? undefined,
+            };
+            let fromList = usersSnapshot.find(
+              (u) =>
+                u.publicId === sessionIdentity.publicId ||
+                (sessionIdentity.id != null && u.id === sessionIdentity.id),
+            );
             if (!fromList || (fromList.assignments?.length ?? 0) === 0) {
               if (cachedBootstrap?.users?.length) {
                 fromList =
@@ -888,10 +984,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
                       periodSummaries: cachedBootstrap.allPeriods,
                       usersDirectoryAvailable: cachedBootstrap.usersDirectoryAvailable,
                     },
-                    me.user.id,
+                    sessionIdentity,
                   ) ?? fromList;
               } else {
-                const pack = await fetchAppInitPackFromBackend(null, me.user.id);
+                const pack = await fetchAppInitPackFromBackend(null, sessionIdentity.id);
                 if (pack?.users?.length) {
                   setAllUsers(pack.users);
                   setAllRoles(pack.roles);
@@ -908,7 +1004,9 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
                   queryClient.setQueryData(queryKeys.app.bootstrap, bootstrapPayload);
                   syncPeriodSelectionFromLists(pack.multiYears, pack.periodSummaries);
                   setDataInitialized(true);
-                  fromList = pickEnrichedUserFromPack(pack, me.user.id) ?? fromList;
+                  fromList =
+                    pickEnrichedUserFromPack(pack, sessionIdentity) ??
+                    fromList;
                 }
               }
             }
@@ -916,7 +1014,8 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
               fromList ??
               mergeAuthIdentityUser(
                 {
-                  id: me.user.id,
+                  publicId: sessionIdentity.publicId,
+                  id: sessionIdentity.id,
                   username: me.user.username,
                   email: me.user.email,
                 },
@@ -928,11 +1027,13 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             applyUser(user, me.user.roles, me.user.idleTimeoutMs);
             return;
           }
-          if (!me?.authenticated) {
+          if (!isDefinitiveUnauthenticated(me)) {
+            return;
+          }
+          if (!me.authenticated) {
             const cachedUserId = readCachedAuthUser()?.id ?? null;
             const hasLocalAuthContext = Boolean(savedUserId || cachedUserId);
             if (!hasLocalAuthContext) {
-              backendUnauthedStreakRef.current = 0;
               clearLocalAuth();
               return;
             }
@@ -942,10 +1043,9 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             if (!cancelled && refreshOk) {
               const meAfterRefresh = await fetchAuthSession();
               if (meAfterRefresh?.authenticated && meAfterRefresh.user) {
-                backendUnauthedStreakRef.current = 0;
                 const hydratedUser = mergeAuthIdentityUser(
                   {
-                    id: meAfterRefresh.user.id,
+                    publicId: meAfterRefresh.user.publicId?.trim() || undefined,
                     username: meAfterRefresh.user.username,
                     email: meAfterRefresh.user.email,
                   },
@@ -959,19 +1059,19 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
               }
             }
 
-            backendUnauthedStreakRef.current += 1;
-            if (backendUnauthedStreakRef.current < 2) {
-              return;
+            const recheck = await fetchAuthSession();
+            if (isDefinitiveUnauthenticated(recheck)) {
+              clearLocalAuth();
             }
-
-            clearLocalAuth();
           }
           return;
         }
 
         clearLocalAuth();
-      } catch (e) {
-        console.error('Session validation (background):', e);
+      } catch (err) {
+        authDebug('background session validation error — keep session', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     };
 
@@ -979,7 +1079,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     return () => {
       cancelled = true;
     };
-  }, [dataInitialized, allUsers.length, currentUser?.id, queryClient, syncPeriodSelectionFromLists]);
+  }, [dataInitialized, currentUser?.id, hasSessionCookies]);
 
   /** Login/buildAppUserFromRow can return empty scopes; merge from allUsers when it has richer assignments. */
   useEffect(() => {
@@ -1052,7 +1152,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       }
     }
     queueMicrotask(() => useAuthStore.getState().clearSession());
-    void queryClient.removeQueries({ queryKey: ['notifications'] });
+    useAuthStore.getState().setSessionReady(false);
     void queryClient.removeQueries({
       predicate: (q) =>
         Array.isArray(q.queryKey) &&
@@ -1077,7 +1177,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     });
   }, [handleLogout]);
 
-  /** Legacy reset links may land on `(main)` — forward hash/query to `/login`. */
+  /** Legacy reset links may land on app routes — forward hash/query to `/`. */
   useEffect(() => {
     if (typeof window === 'undefined' || !isRecoveryFromUrl()) return;
 
@@ -1090,15 +1190,13 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
     if (currentUser) {
       void handleLogout({ skipBackend: false });
-      setAuthProbeComplete(true);
+      useAuthStore.getState().setAuthProbeComplete(true);
     }
   }, [currentUser, handleLogout]);
 
-  if (!authProbeComplete || !currentUser) {
+  if (!currentUser) {
     return (
       <AppAuthGateViews
-        authProbeComplete={authProbeComplete}
-        currentUser={currentUser}
         toast={toast}
         dismissToast={dismissToast}
         showToast={showToast}

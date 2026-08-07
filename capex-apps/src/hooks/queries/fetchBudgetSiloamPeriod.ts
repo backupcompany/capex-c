@@ -134,7 +134,9 @@ export async function fetchBudgetSiloamShellBundle(
       ? `budget-siloam:shell:${uid}:${period.toLowerCase()}`
       : `budget-siloam:shell:anon:${period.toLowerCase()}`;
 
-  return withRequestCache(cacheKey, loader, PAGE_STALE_MS);
+  const result = await loader();
+  if (!result.budgetPeriod) return result;
+  return withRequestCache(cacheKey, () => Promise.resolve(result), PAGE_STALE_MS);
 }
 
 /** One budget category — projects + live aggregates (on tab click). */
@@ -195,7 +197,9 @@ export async function fetchBudgetSiloamFullNetworkBundle(
       ? `budget-siloam:full-network:${uid}:${period.toLowerCase()}`
       : `budget-siloam:full-network:anon:${period.toLowerCase()}`;
 
-  return withRequestCache(cacheKey, loader, PAGE_STALE_MS);
+  const result = await loader();
+  if (!result.budgetPeriod) return result;
+  return withRequestCache(cacheKey, () => Promise.resolve(result), PAGE_STALE_MS);
 }
 
 /** @deprecated Use fetchBudgetSiloamShellBundle + fetchBudgetSiloamCategorySlice. */

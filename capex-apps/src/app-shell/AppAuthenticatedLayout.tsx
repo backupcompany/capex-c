@@ -7,7 +7,6 @@ import { Toast } from '@/components/atoms/Toast/Toast';
 import { AuthSessionSync } from '@/components/auth/AuthSessionSync';
 import { SessionExpiryWarning } from '@/components/auth/SessionExpiryWarning';
 import { AppRouteRenderer, type AppRouteRendererProps } from '@/components/app-shell/AppRouteRenderer';
-import { RouteScreenFallback } from '@/components/app-shell/RouteScreenFallback';
 import { AppShellChrome } from '@/components/app-shell/AppShellChrome';
 import { APP_SHELL_PAGES_WITH_FILTERS } from '@/components/app-shell/appShellPagesWithFilters';
 import { ToastProvider, type ShowToastOptions } from '@/contexts/ToastContext';
@@ -148,7 +147,7 @@ export function AppAuthenticatedLayout({
           />
 
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <Suspense fallback={<RouteScreenFallback routePage={routePage} />}>
+            <Suspense fallback={null}>
               <AppRouteRenderer routePage={routePage} currentUser={currentUser} {...routeRendererProps} />
             </Suspense>
           </main>

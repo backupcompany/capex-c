@@ -1,6 +1,6 @@
 -- Fast KPI aggregates for Executive Dashboard (SECURITY INVOKER = respects RLS).
 -- Optional p_archetype_id: NULL = network-wide totals from budget_period_category_budgets.
-
+  
 CREATE OR REPLACE FUNCTION public.executive_dashboard_kpi(
   p_period_name text,
   p_archetype_id text DEFAULT NULL

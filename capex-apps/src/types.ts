@@ -165,6 +165,8 @@ export interface EnrichedAsset extends Asset {
     assetTypeGroupName?: string;
     /** From joined project row — used when page bundle omits full `projects[]`. */
     projectPriorityId?: string;
+    projectApprovedBudget?: number;
+    projectBudgetPlan?: number;
 }
 
 export interface Project {
@@ -285,6 +287,8 @@ export interface UserAssignment {
 
 export interface User {
     id: number;
+    /** Opaque account ref for UI/URL — API may still use numeric id internally. */
+    publicId?: string;
     username: string;
     password?: string; 
     email: string;
@@ -693,10 +697,6 @@ export interface UserActivityMetric {
     unitNames?: string[];
     archetypeNames?: string[];
     lastActiveAt: string | null;
-    totalActions: number;
-    taskCompletionCount: number;
-    adhocTaskCreatedCount: number;
-    engagementScore: number;
     status: 'Active' | 'Dormant' | 'Inactive';
     isOnline?: boolean;
 }
@@ -721,8 +721,12 @@ export interface UserMonitoringPageBundle {
     };
     archetypeSummary: UserMonitoringScopeSummary[];
     unitSummary: UserMonitoringScopeSummary[];
-    archetypes: { id: string; name: string }[];
-    hospitalUnits: { id: string; name: string; archetypeId: string }[];
+    unitNames: string[];
+}
+
+export interface UserMonitoringScreen {
+    bundle: UserMonitoringPageBundle;
+    usersPage: UserMonitoringUsersPage;
 }
 
 export interface UserMonitoringUsersPage {

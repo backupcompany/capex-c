@@ -9,6 +9,9 @@ import {
 import { useDebouncedValue } from './useDebouncedValue';
 import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../../../lib/table/pageSizeOptions';
 
+/** Match BDD Construction — server query follows debounced input, not Enter/Cari. */
+export const CPL_SEARCH_DEBOUNCE_MS = 150;
+
 const savedSearchOnMount = () => {
   const saved =
     typeof window !== 'undefined' ? readProjectListFilterSelection() : null;
@@ -45,10 +48,10 @@ export type ProjectListFilterState = {
   setItemsPerPage: Dispatch<SetStateAction<number>>;
   sortBy: ProjectListSortOption;
   setSortBy: Dispatch<SetStateAction<ProjectListSortOption>>;
-  /** Search applied to table/API — updated on Enter or clear, not on every keystroke. */
+  /** Debounced search sent to server (same pattern as BDD Construction). */
+  debouncedSearch: string;
+  /** @deprecated alias — use debouncedSearch */
   appliedSearchTerm: string;
-  applySearch: () => void;
-  commitSearchTerm: (term: string) => void;
   clearSearch: () => void;
   isSearchActive: boolean;
   isSearchStaging: boolean;
@@ -67,7 +70,8 @@ export function useProjectListFilterState(
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(() => initialSelectedPeriods);
   const initialSearch = savedSearchOnMount();
   const [searchTerm, setSearchTerm] = useState(() => initialSearch);
-  const [appliedSearchTerm, setAppliedSearchTerm] = useState(() => initialSearch);
+  const debouncedSearch = useDebouncedValue(searchTerm.trim(), CPL_SEARCH_DEBOUNCE_MS);
+  const appliedSearchTerm = debouncedSearch;
   const [selectedHUs, setSelectedHUs] = useState<string[]>(() => saved.current?.selectedHUs ?? []);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>(
     () => saved.current?.selectedPriorities ?? [],
@@ -97,26 +101,14 @@ export function useProjectListFilterState(
     () => saved.current?.sortBy ?? DEFAULT_PROJECT_LIST_SORT,
   );
 
-  const applySearch = useCallback(() => {
-    setAppliedSearchTerm(searchTerm.trim());
-  }, [searchTerm]);
-
-  /** Apply an explicit term (e.g. on Cari / Enter) — sync draft + applied together. */
-  const commitSearchTerm = useCallback((term: string) => {
-    const t = term.trim();
-    setSearchTerm(t);
-    setAppliedSearchTerm(t);
-  }, []);
-
   const clearSearch = useCallback(() => {
     setSearchTerm('');
-    setAppliedSearchTerm('');
   }, []);
 
-  const isSearchActive = appliedSearchTerm.trim().length > 0;
-  const isSearchStaging = searchTerm.trim() !== appliedSearchTerm.trim();
+  const isSearchActive = debouncedSearch.length > 0;
+  const isSearchStaging = searchTerm.trim() !== debouncedSearch;
 
-  /** Panel side-effects — search applies only after Enter (appliedSearchTerm). */
+  /** Panel side-effects — keyed on debounced search (BDD Construction pattern). */
   const panelFiltersKey = useMemo(
     () =>
       [
@@ -127,7 +119,7 @@ export function useProjectListFilterState(
         selectedBudgetCategoryIds.join('\u0001'),
         completionRange.min,
         completionRange.max,
-        appliedSearchTerm.trim().toLowerCase(),
+        debouncedSearch.toLowerCase(),
       ].join('\u0002'),
     [
       selectedHUs.join('\u0001'),
@@ -137,7 +129,7 @@ export function useProjectListFilterState(
       selectedBudgetCategoryIds.join('\u0001'),
       completionRange.min,
       completionRange.max,
-      appliedSearchTerm,
+      debouncedSearch,
     ],
   );
   const prevPanelFiltersKeyRef = useRef(panelFiltersKey);
@@ -145,7 +137,7 @@ export function useProjectListFilterState(
   const filterSelectionSnapshot = useMemo(
     () => ({
       selectedPeriods,
-      searchTerm: appliedSearchTerm,
+      searchTerm: debouncedSearch,
       selectedHUs,
       selectedPriorities,
       selectedFinishedTasks,
@@ -160,7 +152,7 @@ export function useProjectListFilterState(
     }),
     [
       selectedPeriods,
-      appliedSearchTerm,
+      debouncedSearch,
       selectedHUs,
       selectedPriorities,
       selectedFinishedTasks,
@@ -206,9 +198,8 @@ export function useProjectListFilterState(
     setItemsPerPage,
     sortBy,
     setSortBy,
+    debouncedSearch,
     appliedSearchTerm,
-    applySearch,
-    commitSearchTerm,
     clearSearch,
     isSearchActive,
     isSearchStaging,

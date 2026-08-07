@@ -176,9 +176,11 @@ export type ProjectListTablePipeline = {
   diskTableSeed: ProjectListBundle | undefined;
   hasListData: boolean;
   hasTableOnDisk: boolean;
-  isBackgroundRefresh: boolean;
+  showBlockingSkeleton: boolean;
+  isBackgroundRefetch: boolean;
   isFilterRefreshing: boolean;
-  isPageTransition: boolean;
+  serverPageAssets: EnrichedAsset[];
+  serverPageTotalCount: number | null;
 
   sourceDataRef: MutableRefObject<ListSource | null>;
   clientFilterPoolRef: MutableRefObject<{ periodKey: string; source: ListSource } | null>;
@@ -934,8 +936,7 @@ export function useProjectListTablePipeline(
     lastAppliedRowIdsRef.current = '';
     setTableRowsFiltersKey('');
     mustRefetchTableRef.current = true;
-    clearTableRows();
-  }, [setCurrentPage, clearTableRows]);
+  }, [setCurrentPage]);
 
   useEffect(() => {
     if (!hadActiveFiltersOnMountRef.current || mountFilterClearAppliedRef.current) return;
@@ -1424,23 +1425,7 @@ export function useProjectListTablePipeline(
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     refetchOnMount: true,
-    placeholderData: (previousData, previousQuery) => {
-      if (!previousData || !previousQuery) {
-        return mayUseDiskSeed ? diskTableSeed : undefined;
-      }
-      const prevListKey = previousQuery.queryKey[5];
-      const prevPage = previousQuery.queryKey[6];
-      const prevPageSize = previousQuery.queryKey[7];
-      // Placeholder hanya untuk refresh halaman yang sama — bukan saat ganti page/filter.
-      if (
-        prevListKey === listFiltersKey &&
-        prevPage === currentPage &&
-        prevPageSize === itemsPerPage
-      ) {
-        return previousData;
-      }
-      return undefined;
-    },
+    placeholderData: (prev) => prev ?? (mayUseDiskSeed ? diskTableSeed : undefined),
     queryFn: async ({ signal }) => {
       if (!currentUser) throw new Error('Missing user');
       const bff = useBeBffProxy();
@@ -1515,9 +1500,38 @@ export function useProjectListTablePipeline(
     showToastRef.current(msg, 'error');
   }, [tableQuery.isError, tableQuery.error, showToastRef]);
 
+  const resolvedServerBundle = useMemo((): ProjectListBundle | null => {
+    if (!needsPanelServerFetch) return null;
+    const fromQuery =
+      tableQuery.data &&
+      !isStaleProjectListBundle(tableQuery.data.totalAssetCount, tableQuery.data._debug)
+        ? tableQuery.data
+        : null;
+    if (fromQuery) return fromQuery;
+    if (
+      diskTableSeed &&
+      !isStaleProjectListBundle(diskTableSeed.totalAssetCount, diskTableSeed._debug) &&
+      bundleMatchesTableFilters(diskTableSeed)
+    ) {
+      return diskTableSeed;
+    }
+    return null;
+  }, [
+    needsPanelServerFetch,
+    tableQuery.data,
+    diskTableSeed,
+    bundleMatchesTableFilters,
+  ]);
+
+  const serverPageAssets = resolvedServerBundle?.enrichedAssets ?? [];
+  const serverPageTotalCount =
+    typeof resolvedServerBundle?.totalAssetCount === 'number'
+      ? resolvedServerBundle.totalAssetCount
+      : listTotalAssetCount;
+
   const hasListData =
+    serverPageAssets.length > 0 ||
     allAssets.length > 0 ||
-    (tableQuery.data?.enrichedAssets?.length ?? 0) > 0 ||
     (diskTableSeed?.enrichedAssets?.length ?? 0) > 0;
   const hasTableOnDisk =
     !!diskTableSeed ||
@@ -1527,27 +1541,17 @@ export function useProjectListTablePipeline(
       !!primaryPeriodName &&
       hasProjectListTableOnDisk(primaryPeriodName, currentUser.id));
 
-  const isPageTransition =
+  const showBlockingSkeleton =
     needsPanelServerFetch &&
-    Boolean(tableDisplayKey) &&
-    tableRowsFiltersKey !== tableDisplayKey &&
-    (tableQuery.isFetching || tableQuery.isPending);
+    tableQuery.isPending &&
+    !hasListData &&
+    !tableQuery.isPlaceholderData;
 
-  const isBackgroundRefresh =
-    hasListData &&
-    tableQuery.isFetching &&
-    !tableQuery.isPending &&
-    !isSearchStaging &&
-    !hasPanelTableFilters &&
-    !isPageTransition;
+  const isBackgroundRefetch =
+    hasListData && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
 
   const isFilterRefreshing =
-    needsPanelServerFetch &&
-    hasActiveTableFilters &&
-    ((isSearchActive && isSearchStaging) ||
-      (tableQuery.isFetching &&
-        !tableQuery.isPlaceholderData &&
-        tableRowsFiltersKey !== tableDisplayKey));
+    isSearchStaging || (tableQuery.isFetching && hasListData);
 
   return {
     allAssets,
@@ -1582,9 +1586,11 @@ export function useProjectListTablePipeline(
     diskTableSeed,
     hasListData,
     hasTableOnDisk,
-    isBackgroundRefresh,
+    showBlockingSkeleton,
+    isBackgroundRefetch,
     isFilterRefreshing,
-    isPageTransition,
+    serverPageAssets,
+    serverPageTotalCount,
 
     sourceDataRef,
     clientFilterPoolRef,

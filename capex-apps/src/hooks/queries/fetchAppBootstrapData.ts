@@ -1,9 +1,10 @@
 import type { BudgetMultiYear, BudgetPeriod, User, UserRole } from '@/types';
 import { getAccessTokenForBackend } from '@/lib/authSession';
+import { fetchAuthSession } from '@/lib/auth/authApi';
 import { fetchAppInitPackFromBackend } from '@/services/appBootstrapApi';
 import { useBackendSession } from '@/lib/auth/authConstants';
 import { readCachedAuthUser } from '@/lib/authSessionCache';
-import { fetchAuthSession } from '@/lib/auth/authApi';
+import { decodeUserPublicId } from '@/lib/publicUserId';
 
 /** User id for backend bootstrap — never trust local cache without a live /me in BFF mode. */
 async function resolveBootstrapUserId(): Promise<number | null> {
@@ -11,7 +12,17 @@ async function resolveBootstrapUserId(): Promise<number | null> {
 
   if (useBackendSession()) {
     const me = await fetchAuthSession();
-    if (me?.authenticated && me.user?.id) return me.user.id;
+    if (me?.authenticated && me.user?.publicId) {
+      const uid = decodeUserPublicId(me.user.publicId);
+      if (uid) return uid;
+    }
+    const fromSession = sessionStorage.getItem('currentUserId');
+    if (fromSession) {
+      const uid = parseInt(fromSession, 10);
+      if (Number.isFinite(uid)) return uid;
+    }
+    const cached = readCachedAuthUser();
+    if (cached?.id) return cached.id;
     return null;
   }
 

@@ -1,10 +1,10 @@
 import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { RequirePermission } from '../auth/decorators/permissions.decorator';
+import { BUDGET_STACK_VIEW } from '../auth/budget-permission.constants';
 import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
 import { DuplicateDetectionService } from './duplicate-detection.service';
 
-@RequirePermission('Budget HU', 'view')
+@BUDGET_STACK_VIEW
 @Controller('duplicate-detection')
 export class DuplicateDetectionController {
   constructor(private readonly duplicateDetection: DuplicateDetectionService) {}

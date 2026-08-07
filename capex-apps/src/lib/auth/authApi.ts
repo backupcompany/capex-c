@@ -25,7 +25,8 @@ export type AuthSessionAssignment = {
 export type AuthSessionResponse = {
   authenticated: boolean;
   user?: {
-    id: number;
+    publicId?: string;
+    id?: number;
     username: string;
     email: string;
     roles: string[];
@@ -84,6 +85,8 @@ export function invalidateAuthProbeCache(): void {
  * Single deduped session probe for app startup.
  * Skips refresh when no local session hint (clean login page → no session probe).
  */
+const PROBE_STALE_GRACE_MS = PROBE_CACHE_MS * 15;
+
 export async function probeBackendSession(options?: {
   force?: boolean;
 }): Promise<AuthSessionResponse | null> {
@@ -102,17 +105,39 @@ export async function probeBackendSession(options?: {
   probeInFlight = (async () => {
     const hadSessionHint = hasLocalSessionHint();
     let session = await fetchAuthSession();
-    if (!session?.authenticated && hadSessionHint && hasSessionCookieHint()) {
+
+    if (session == null) {
+      if (lastProbeResult?.authenticated && now - lastProbeAt < PROBE_STALE_GRACE_MS) {
+        return lastProbeResult;
+      }
+      return null;
+    }
+
+    if (!session.authenticated && hadSessionHint && hasSessionCookieHint()) {
       const refreshOk = await refreshBackendSessionCoordinated();
-      if (refreshOk) session = await fetchAuthSession();
-      else {
-        clearStaleClientSessionHints();
-        void clearServerAuthCookies();
+      if (refreshOk) {
+        session = await fetchAuthSession();
+        if (session == null) {
+          return lastProbeResult?.authenticated ? lastProbeResult : null;
+        }
+      } else {
+        const recheck = await fetchAuthSession();
+        if (recheck != null && !recheck.authenticated) {
+          clearStaleClientSessionHints();
+          void clearServerAuthCookies();
+          session = recheck;
+        } else if (lastProbeResult?.authenticated) {
+          return lastProbeResult;
+        }
       }
     }
+
     lastProbeAt = Date.now();
-    lastProbeResult = session ?? { authenticated: false };
-    return lastProbeResult;
+    if (session != null) {
+      lastProbeResult = session;
+      return session;
+    }
+    return lastProbeResult?.authenticated ? lastProbeResult : null;
   })().finally(() => {
     probeInFlight = null;
   });
@@ -179,12 +204,57 @@ function sessionUserToAppUser(
   data: NonNullable<AuthSessionResponse['user']>,
 ): User {
   return mergeAuthIdentityUser(
-    { id: data.id, username: data.username, email: data.email },
+    {
+      publicId: data.publicId,
+      id: data.id,
+      username: data.username,
+      email: data.email,
+    },
     {
       sessionAssignments: data.assignments,
       roleSlugs: data.roles,
     },
   );
+}
+
+function parseAuthMePayload(raw: unknown): NonNullable<AuthSessionResponse['user']> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const root = raw as Record<string, unknown>;
+  const body =
+    root.user && typeof root.user === 'object' && !Array.isArray(root.user)
+      ? (root.user as Record<string, unknown>)
+      : root;
+
+  const publicId = typeof body.publicId === 'string' ? body.publicId.trim() : '';
+  let id: number | undefined;
+  if (typeof body.id === 'number' && Number.isFinite(body.id) && body.id > 0) {
+    id = body.id;
+  } else if (typeof body.id === 'string' && /^\d+$/.test(body.id.trim())) {
+    id = Number(body.id.trim());
+  }
+  if (!publicId && id == null) return null;
+
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  if (!username) return null;
+
+  return {
+    publicId: publicId || undefined,
+    id,
+    username,
+    email: typeof body.email === 'string' ? body.email : '',
+    roles: Array.isArray(body.roles) ? (body.roles as string[]) : [],
+    assignments: Array.isArray(body.assignments)
+      ? (body.assignments as AuthSessionAssignment[])
+      : undefined,
+    idleTimeoutMs:
+      typeof body.idleTimeoutMs === 'number' && Number.isFinite(body.idleTimeoutMs)
+        ? body.idleTimeoutMs
+        : 0,
+    session:
+      body.session && typeof body.session === 'object'
+        ? (body.session as AuthSessionMeta)
+        : undefined,
+  };
 }
 
 async function loginWithServerPassword(
@@ -208,20 +278,30 @@ async function loginWithServerPassword(
         error: errorFromAuthResponse(res.status, body),
       };
     }
-    const data = (await res.json()) as NonNullable<AuthSessionResponse['user']> & {
-      session?: AuthSessionMeta;
-    };
-    if (!data?.id) {
-      return { user: null, roles: [], error: 'Login failed' };
+    const data = parseAuthMePayload(await res.json());
+    if (!data) {
+      return {
+        user: null,
+        roles: [],
+        error: 'Respons login tidak valid. Pastikan capexbe berjalan dan coba lagi.',
+      };
     }
     if (data.session) updateSessionMeta(data.session);
     clearTabSessionState();
     setSessionCookieHint(true);
-    return {
-      user: sessionUserToAppUser(data),
-      roles: Array.isArray(data.roles) ? data.roles : [],
-      error: null,
-    };
+    try {
+      return {
+        user: sessionUserToAppUser(data),
+        roles: Array.isArray(data.roles) ? data.roles : [],
+        error: null,
+      };
+    } catch (err) {
+      return {
+        user: null,
+        roles: [],
+        error: err instanceof Error ? err.message : 'Login gagal',
+      };
+    }
   } catch {
     return { user: null, roles: [], error: 'Network error ke backend login' };
   }
@@ -276,7 +356,6 @@ export async function changePasswordBackend(
     const res = await authFetch('/change-password', {
       method: 'POST',
       body: JSON.stringify({
-        userId,
         currentPassword: normalizeAuthPassword(currentPassword),
         newPassword: normalizeAuthPassword(newPassword),
       }),
@@ -335,24 +414,30 @@ export async function logoutBackend(options?: {
   clearSessionMeta();
 }
 
-export async function refreshBackendSession(): Promise<boolean> {
-  if (!useBackendSession()) return false;
-  // Refresh token is httpOnly — rely on server cookie hint, not lingering CSRF alone.
-  if (!hasSessionCookieHint()) return false;
+export type RefreshSessionStatus = 'ok' | 'invalid' | 'transient';
+
+export async function refreshBackendSessionWithStatus(): Promise<RefreshSessionStatus> {
+  if (!useBackendSession()) return 'invalid';
+  if (!hasSessionCookieHint()) return 'invalid';
   try {
     const res = await authFetch('/refresh', { method: 'POST' });
     if (res.ok) {
       const data = (await res.json().catch(() => null)) as { session?: AuthSessionMeta } | null;
       if (data?.session) updateSessionMeta(data.session);
-      return true;
+      return 'ok';
     }
     if (res.status === 401 || res.status === 403) {
       clearStaleClientSessionHints();
+      return 'invalid';
     }
-    return false;
+    return 'transient';
   } catch {
-    return false;
+    return 'transient';
   }
+}
+
+export async function refreshBackendSession(): Promise<boolean> {
+  return (await refreshBackendSessionWithStatus()) === 'ok';
 }
 
 /** Prefer this from app code — dedupes concurrent refresh across tabs. */

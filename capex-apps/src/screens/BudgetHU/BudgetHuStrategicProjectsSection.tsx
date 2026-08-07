@@ -87,8 +87,7 @@ const BudgetHuProjectsMobileList = memo(function BudgetHuProjectsMobileList({
 }: BudgetHuProjectsMobileListProps) {
   return (
     <div className="md:hidden space-y-4" key={huKey}>
-      {rows.length > 0 ? (
-        rows.map((project) => {
+      {rows.map((project) => {
           const categoryName = allCategories.find((c) => c.id === project.budgetCategoryId)?.name || 'N/A';
           const priorityName = allPriorities.find((p) => p.id === project.priorityId)?.name || 'N/A';
           return (
@@ -100,14 +99,7 @@ const BudgetHuProjectsMobileList = memo(function BudgetHuProjectsMobileList({
               onEditClick={() => onEditProject(project)}
             />
           );
-        })
-      ) : (
-        <p className="text-center text-siloam-text-secondary py-4">
-          {searchTerm
-            ? `Tidak ada project atau asset yang cocok dengan "${searchTerm}"`
-            : 'Belum ada strategic project untuk HU ini.'}
-        </p>
-      )}
+        })}
     </div>
   );
 });
@@ -236,23 +228,47 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
             </div>
           </div>
         ) : null}
-        <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
-          <BudgetHuProjectsTable
-            huKey={huKey}
-            columns={projectColumns}
-            rows={tableProjects}
-            onDataChange={onDataChange}
-          />
+        {!showTableBusy && tableProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <p className="text-sm font-medium text-siloam-text-primary">
+              {searchTerm.trim()
+                ? 'Tidak ada project yang cocok'
+                : 'Belum ada strategic project'}
+            </p>
+            <p className="text-sm text-siloam-text-secondary mt-1 max-w-md">
+              {searchTerm.trim()
+                ? `Pencarian "${searchTerm.trim()}" tidak menemukan project atau asset. Coba kata kunci lain atau hapus filter.`
+                : 'Unit hospital ini belum memiliki strategic & special project.'}
+            </p>
+            {searchTerm.trim() ? (
+              <button
+                type="button"
+                onClick={onClearSearch}
+                className="mt-4 text-sm font-semibold text-siloam-blue hover:underline"
+              >
+                Hapus pencarian
+              </button>
+            ) : null}
+          </div>
+        ) : tableProjects.length > 0 ? (
+          <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
+            <BudgetHuProjectsTable
+              huKey={huKey}
+              columns={projectColumns}
+              rows={tableProjects}
+              onDataChange={onDataChange}
+            />
 
-          <BudgetHuProjectsMobileList
-            huKey={huKey}
-            rows={tableProjects}
-            searchTerm={searchTerm}
-            allCategories={allCategories}
-            allPriorities={allPriorities}
-            onEditProject={onEditProject}
-          />
-        </div>
+            <BudgetHuProjectsMobileList
+              huKey={huKey}
+              rows={tableProjects}
+              searchTerm={searchTerm}
+              allCategories={allCategories}
+              allPriorities={allPriorities}
+              onEditProject={onEditProject}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">

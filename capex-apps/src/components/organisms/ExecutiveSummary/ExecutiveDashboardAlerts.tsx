@@ -20,7 +20,7 @@ export const ExecutiveDashboardAlerts = memo(function ExecutiveDashboardAlerts({
   return (
     <section className="space-y-4">
       <h2 className="text-xs font-bold uppercase tracking-widest text-siloam-text-secondary">Alert &amp; Risiko</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
         {alerts.map((alert, idx) => (
           <AlertCard key={`${alert.title}-${idx}`} alert={alert} />
         ))}
@@ -46,7 +46,9 @@ function AlertCard({ alert }: { alert: ExecutiveDashboardAlert }) {
         />
         <div className="min-w-0">
           <p className={`text-sm font-bold ${isRed ? 'text-red-800' : 'text-amber-800'}`}>{alert.title}</p>
-          <p className={`text-xs mt-1 leading-relaxed ${isRed ? 'text-red-700' : 'text-amber-700'}`}>{alert.detail}</p>
+          <p className={`text-xs mt-1.5 leading-relaxed line-clamp-4 ${isRed ? 'text-red-700' : 'text-amber-700'}`}>
+            {alert.detail}
+          </p>
         </div>
       </div>
     </div>

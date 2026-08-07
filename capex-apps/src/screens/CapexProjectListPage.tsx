@@ -177,7 +177,6 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     sortBy,
     setSortBy,
     appliedSearchTerm,
-    commitSearchTerm,
     clearSearch,
     isSearchActive,
     isSearchStaging,
@@ -484,9 +483,11 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     diskTableSeed,
     hasListData,
     hasTableOnDisk,
-    isBackgroundRefresh,
+    showBlockingSkeleton,
+    isBackgroundRefetch,
     isFilterRefreshing,
-    isPageTransition,
+    serverPageAssets,
+    serverPageTotalCount,
     sourceDataRef,
     clientFilterPoolRef,
     clientPoolRevision,
@@ -542,14 +543,6 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     activePreloadedProjectList,
     resolveInitialPreloadScope,
   });
-
-  const handleSearchSubmit = useCallback(
-    (term?: string) => {
-      commitSearchTerm(term ?? searchTerm);
-      setSelectedAssetId(null);
-    },
-    [searchTerm, commitSearchTerm],
-  );
 
   const handleSearchReset = useCallback(() => {
     clearSearch();
@@ -741,26 +734,24 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     });
   }, [availablePeriodOptions, resolvedBudgetPeriods]);
 
-  /** Single-period + warm pool → client filter (instant & accurate). Else server pagination. */
+  /** Single-period + warm pool + no server-only filters → client slice. Search always server-side. */
   const useClientFilteredDisplay = Boolean(
-    !isMultiPeriodView && clientFilterCanServe && clientFilteredPage,
+    !isMultiPeriodView && clientFilterCanServe && clientFilteredPage && !needsPanelServerFetch,
   );
 
   const {
     paginatedAssets,
     tableAssets,
     footerTotalCount,
-    serverTableReady,
   } = useProjectListTableDisplay({
     useClientFilteredDisplay,
     clientFilteredPage,
-    serverTableReady: tableRowsFiltersKey === tableDisplayKey,
-    allAssets,
-    listTotalAssetCount,
-    allowPreloadRows: false,
-    deferTableRows: (isSearchActive && isSearchStaging) || isFilterRefreshing,
-    isPageTransition,
+    serverPageAssets,
+    serverPageTotalCount,
+    deferTableRows: isFilterRefreshing,
   });
+
+  const isPageDataRefreshing = isFilterRefreshing || isBackgroundRefetch;
 
   /** Detail panel keyed by asset.id — resolve row from current page / cache only. */
   const selectedAsset = useMemo(() => {
@@ -1627,34 +1618,23 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     meetingFilters.assetTypeGroup,
   ]);
 
-  const showInitialTableLoading =
-    paginatedAssets.length === 0 &&
-    !tableQuery.isPlaceholderData &&
-    (tableQuery.isPending || tableQuery.isFetching) &&
-    Boolean(capexBeUrl);
-
-  const isPageLoading = isPageTransition;
+  const showInitialTableLoading = showBlockingSkeleton;
 
   const handlePageChange = useCallback(
     (page: number) => {
-      if (page === currentPage) return;
-      resetAppliedTableCacheKeys();
-      clearTableRows({ keepTotal: true });
       setSelectedAssetId(null);
       setCurrentPage(page);
     },
-    [currentPage, resetAppliedTableCacheKeys, clearTableRows, setCurrentPage],
+    [setCurrentPage],
   );
 
   const handleItemsPerPageChange = useCallback(
     (size: number) => {
-      resetAppliedTableCacheKeys();
-      clearTableRows({ keepTotal: true });
       setSelectedAssetId(null);
       setItemsPerPage(clampTablePageSize(size));
       setCurrentPage(1);
     },
-    [resetAppliedTableCacheKeys, clearTableRows, setItemsPerPage, setCurrentPage],
+    [setItemsPerPage, setCurrentPage],
   );
 
   const huEmptySelectionLabel = useMemo(() => {
@@ -1850,7 +1830,6 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           <AssetFilterPanel
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
-            onSearchSubmit={handleSearchSubmit}
             onSearchReset={handleSearchReset}
             onFilterPanelOpen={refreshMasterConfig}
             toolbarLeading={
@@ -1902,11 +1881,10 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           selectedAssetId={selectedAssetId}
           onRowClick={handleRowClick}
           onRowHover={handleRowHover}
-          showInitialLoading={showInitialTableLoading || isPageLoading}
-          isFilterRefreshing={isFilterRefreshing}
-          isSearchActive={isSearchActive}
-          isBackgroundRefresh={isBackgroundRefresh}
-          isPageTransition={isPageTransition}
+          showBlockingSkeleton={showInitialTableLoading}
+          isTableLoading={isPageDataRefreshing}
+          isSearchPending={isSearchStaging}
+          isBackgroundRefetch={isBackgroundRefetch}
           hasActiveFilters={hasMobileActiveFilters}
           footerTotalCount={footerTotalCount}
           currentPage={currentPage}

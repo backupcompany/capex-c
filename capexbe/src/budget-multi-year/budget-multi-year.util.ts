@@ -56,22 +56,25 @@ export function buildMultiYearsFromRows(
     let totalApproved = 0;
     let totalConsumed = 0;
     let totalCarryForward = 0;
+    let totalBudgetPlan = 0;
     periodsForMultiYear.forEach((period) => {
       const periodCategoryBudgets =
         allCategoryBudgets?.filter((cb) => cb.period_name === period.period_name) || [];
       periodCategoryBudgets.forEach((cb) => {
+        totalBudgetPlan += Number(cb.budget_plan || 0);
         totalAllocated += Number(cb.budget_allocated || 0);
         totalApproved += Number(cb.approved_budget || 0);
         totalConsumed += Number(cb.consumed_budget || 0);
         totalCarryForward += Number(cb.budget_carry_forward || 0);
       });
     });
+    const shellPlan = Number(camelItem.budgetPlan || 0);
     return {
       name: camelItem.name,
       startYear: camelItem.startYear,
       endYear: camelItem.endYear,
       budget: {
-        budgetPlan: Number(camelItem.budgetPlan || 0),
+        budgetPlan: shellPlan > 0 ? shellPlan : totalBudgetPlan,
         budgetCarryForward: totalCarryForward,
         budgetAllocated: totalAllocated,
         approvedBudget: totalApproved,

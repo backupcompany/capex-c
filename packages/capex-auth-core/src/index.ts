@@ -25,6 +25,7 @@ export {
   getAccessTokenFromRequest,
   requireAccessTokenFromRequest,
   parseBodyUserId,
+  getCallerUserId,
 } from './utils/request-access-token.util';
 export { authRequestContext, getAuthRequestContext } from './auth-request-context';
 export { isSuperAdminRole, ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE, CSRF_HEADER } from './constants/auth-policy';

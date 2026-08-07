@@ -2,14 +2,15 @@
 
 import { proxyAuthToBackend } from '@/lib/auth/authBff';
 import { proxyBePost } from '@/lib/auth/beProxy';
+import { decodeUserPublicId } from '@/lib/publicUserId';
 
 async function resolveServerUserId(): Promise<number | null> {
   const meRes = await proxyAuthToBackend('/session', { method: 'GET' });
   if (!meRes.ok) return null;
-  const me = (await meRes.json()) as { authenticated?: boolean; user?: { id?: number } };
-  if (!me.authenticated || me.user?.id == null) return null;
-  const userId = Number(me.user.id);
-  return Number.isFinite(userId) ? userId : null;
+  const me = (await meRes.json()) as { authenticated?: boolean; user?: { publicId?: string } };
+  if (!me.authenticated || !me.user?.publicId) return null;
+  const userId = decodeUserPublicId(me.user.publicId);
+  return userId ?? null;
 }
 
 /** @deprecated Prefer notificationService.markNotificationAsRead via BFF. */

@@ -51,7 +51,6 @@ export function useMyTasksScreenQuery({
     ...largeListQueryOptions(),
     staleTime: MY_TASKS_STALE_MS,
     refetchOnMount: true,
-    placeholderData: (previousData) =>
-      previousData ?? (useServerPagination ? undefined : diskTasksSeed),
+    placeholderData: (previousData) => previousData ?? diskTasksSeed,
   });
 }

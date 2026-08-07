@@ -1,7 +1,14 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  BUDGET_STACK_CREATE,
+  BUDGET_STACK_UPDATE,
+  BUDGET_STACK_VIEW,
+} from '../auth/budget-permission.constants';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { BudgetMultiYearService } from './budget-multi-year.service';
 
 class BudgetMultiYearUserBodyDto {
@@ -42,81 +49,73 @@ class BudgetMultiYearSaveHuPlansDto extends BudgetMultiYearUserBodyDto {
 export class BudgetMultiYearController {
   constructor(private readonly budgetMultiYearService: BudgetMultiYearService) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
-    return userId;
-  }
-
-  @RequirePermission('Budget', 'view')
+  @BUDGET_STACK_VIEW
   @Post('page-bundle')
   async pageBundle(@Req() req: Request, @Body() body: BudgetMultiYearUserBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetMultiYearService.loadPageBundle(token, this.parseUserId(body));
+    return this.budgetMultiYearService.loadPageBundle(token, getCallerUserId(req));
   }
 
-  @RequirePermission('Budget', 'view')
+  @BUDGET_STACK_VIEW
   @Post('period-budgets')
   async periodBudgets(@Req() req: Request, @Body() body: BudgetMultiYearPeriodBudgetsDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetMultiYearService.loadPeriodBudgets(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.multiYearName,
     );
   }
 
-  @RequirePermission('Budget', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-multi-year')
   async saveMultiYear(@Req() req: Request, @Body() body: BudgetMultiYearSaveDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetMultiYearService.saveMultiYear(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.multiYear ?? {},
     );
   }
 
-  @RequirePermission('Budget', 'create')
+  @BUDGET_STACK_CREATE
   @Post('create-period')
   async createPeriod(@Req() req: Request, @Body() body: BudgetMultiYearCreatePeriodDto) {
     const token = requireAccessTokenFromRequest(req);
-    return this.budgetMultiYearService.createPeriod(token, this.parseUserId(body), body);
+    return this.budgetMultiYearService.createPeriod(token, getCallerUserId(req), body);
   }
 
-  @RequirePermission('Budget', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-period-plans')
   async savePeriodPlans(@Req() req: Request, @Body() body: BudgetMultiYearSavePeriodDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetMultiYearService.savePeriodCategoryPlans(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.period ?? {},
       body.categoryIds,
     );
   }
 
-  @RequirePermission('Budget', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-archetype-plans')
   async saveArchetypePlans(@Req() req: Request, @Body() body: BudgetMultiYearSaveArchetypePlansDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetMultiYearService.saveArchetypeBudgetPlans(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.rows ?? [],
     );
   }
 
-  @RequirePermission('Budget', 'update')
+  @BUDGET_STACK_UPDATE
   @Post('save-hu-plans')
   async saveHuPlans(@Req() req: Request, @Body() body: BudgetMultiYearSaveHuPlansDto) {
     const token = requireAccessTokenFromRequest(req);
     return this.budgetMultiYearService.saveHuBudgetPlans(
       token,
-      this.parseUserId(body),
+      getCallerUserId(req),
       body.periodName,
       body.rows ?? [],
     );

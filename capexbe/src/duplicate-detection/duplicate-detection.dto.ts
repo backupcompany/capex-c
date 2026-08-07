@@ -1,3 +1,5 @@
+import { resolveBodyActorUserId } from '../shared/public-id.util';
+
 export type DuplicateEntityType = 'project' | 'asset';
 
 export type DuplicateSearchBody = {
@@ -28,10 +30,7 @@ export function parseDuplicateSearchBody(body: unknown): {
   limit: number;
 } {
   const b = (body && typeof body === 'object' ? body : {}) as DuplicateSearchBody;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) {
-    throw new Error('Invalid userId');
-  }
+  const userId = resolveBodyActorUserId(body);
   const periodName = String(b.periodName ?? '').trim();
   if (!periodName) {
     throw new Error('periodName is required');
@@ -57,10 +56,7 @@ export function parseDuplicateFetchBody(body: unknown): {
   id: string;
 } {
   const b = (body && typeof body === 'object' ? body : {}) as DuplicateFetchBody;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) {
-    throw new Error('Invalid userId');
-  }
+  const userId = resolveBodyActorUserId(body);
   const periodName = String(b.periodName ?? '').trim();
   const id = String(b.id ?? '').trim();
   if (!periodName || !id) {

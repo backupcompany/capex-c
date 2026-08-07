@@ -22,24 +22,47 @@ function parsePayback(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeSearchText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function compactSearchText(value: string): string {
+  return normalizeSearchText(value).replace(/\s+/g, '');
+}
+
+function fieldMatchesSearch(value: unknown, term: string, compactTerm: string): boolean {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) return false;
+  if (normalized.includes(term)) return true;
+  return compactSearchText(normalized).includes(compactTerm);
+}
+
 function matchesSearch(fs: EnrichedFS, q: string): boolean {
-  if (!q) return true;
-  const lower = q.toLowerCase();
-  const numericOnly = /^\d+$/.test(q.trim());
+  const term = normalizeSearchText(q);
+  if (!term) return true;
+  const compactTerm = compactSearchText(q);
+  const numericOnly = /^\d+$/.test(term);
   if (numericOnly) {
-    const num = parseInt(q.trim(), 10);
+    const num = parseInt(term, 10);
     if (parsePayback(fs.paybackPeriod) === num) return true;
     if (fs.amount === num) return true;
     if (fs.npv === num) return true;
   }
-  return (
-    fs.projectName.toLowerCase().includes(lower) ||
-    fs.huName.toLowerCase().includes(lower) ||
-    fs.archetypeName.toLowerCase().includes(lower) ||
-    fs.capexCategoryName.toLowerCase().includes(lower) ||
-    String(fs.conclusion).toLowerCase().includes(lower) ||
-    String(fs.paybackPeriod).includes(q.trim())
-  );
+  return [
+    fs.projectName,
+    fs.huName,
+    fs.archetypeName,
+    fs.capexCategoryName,
+    fs.conclusion,
+    fs.fsType ?? '',
+    fs.followUpAction ?? '',
+    String(fs.paybackPeriod),
+    String(fs.amount),
+    String(fs.npv),
+  ].some((field) => fieldMatchesSearch(field, term, compactTerm));
 }
 
 function matchesPaybackRange(fs: EnrichedFS, min?: number, max?: number): boolean {

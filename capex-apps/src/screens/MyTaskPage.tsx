@@ -37,7 +37,8 @@ import { TaskCard } from '../components/molecules/TaskCard/TaskCard';
 import { TaskFilterPanel } from '../components/organisms/TaskFilterPanel/TaskFilterPanel';
 import { Dropdown } from '../components/molecules/Dropdown/Dropdown';
 import { useDebouncedValue } from './CapexProjectList/hooks/useDebouncedValue';
-import { MyTaskPageSkeleton } from './MyTask/MyTaskPageSkeleton';
+import { Spinner } from '../components/atoms/Spinner/Spinner';
+import { MyTaskContentSkeleton } from './MyTask/MyTaskPageSkeleton';
 import {
   MY_TASK_SORT_OPTIONS,
   type MyTaskSortOption,
@@ -66,7 +67,7 @@ const CompleteTaskModalLazy = lazy(() =>
   })),
 );
 
-const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_DEBOUNCE_MS = 150;
 const INITIAL_PAGE_SIZE = 20;
 
 interface MyTaskPageProps {
@@ -216,6 +217,7 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
   const [showCompleted, setShowCompleted] = useState(() => savedFilters?.showCompleted ?? false);
   const [searchTerm, setSearchTerm] = useState(() => savedFilters?.searchTerm ?? '');
   const debouncedSearchTerm = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
+  const isSearchStaging = searchTerm.trim() !== debouncedSearchTerm.trim();
   const [selectedArchetypes, setSelectedArchetypes] = useState<string[]>(
     () => savedFilters?.selectedArchetypes ?? [],
   );
@@ -353,12 +355,15 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
         : 'Failed to load your tasks. Please try again later.'
       : null;
 
-  const showBlockingSkeleton = useMobileInfinite
+  const showContentSkeleton = useMobileInfinite
     ? infiniteTasks.isPending && tasks.length === 0
-    : tasksQuery.isPending && !diskTasksSeed && tasks.length === 0;
+    : tasksQuery.isPending && tasks.length === 0 && !tasksQuery.isPlaceholderData;
+
   const isBackgroundRefetch = useMobileInfinite
     ? infiniteTasks.isFetching && tasks.length > 0 && !infiniteTasks.isFetchingNextPage
-    : tasksQuery.isFetching && tasks.length > 0;
+    : tasksQuery.isFetching && tasks.length > 0 && !tasksQuery.isPending;
+
+  const isContentRefreshing = isSearchStaging || isBackgroundRefetch;
 
   useEffect(() => {
     if (!currentUser?.id || useServerPagination) return;
@@ -536,29 +541,24 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
     );
   }
 
-  if (showBlockingSkeleton) {
-    return <MyTaskPageSkeleton />;
-  }
-
-  if (error && tasks.length === 0) {
-    return <div className="text-center p-8 text-danger">{error}</div>;
-  }
+  const contentBusy = showContentSkeleton || isContentRefreshing;
+  const loadingLabel = isSearchStaging ? 'Mencari…' : 'Memuat task…';
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
-      {isBackgroundRefetch && (
+    <div className="space-y-6 h-full flex flex-col" aria-busy={contentBusy}>
+      {isBackgroundRefetch ? (
         <div
           className="h-0.5 w-full bg-siloam-blue/30 overflow-hidden shrink-0"
           aria-hidden
         >
           <div className="h-full w-1/3 bg-siloam-blue animate-pulse" />
         </div>
-      )}
-      {error && tasks.length > 0 && (
+      ) : null}
+      {error && tasks.length > 0 ? (
         <p className="text-sm text-danger px-1" role="status">
           {error} — showing cached tasks.
         </p>
-      )}
+      ) : null}
 
       <TaskFilterPanel
         searchTerm={searchTerm}
@@ -591,37 +591,81 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
         </div>
       </TaskFilterPanel>
 
-      <div className="hidden md:block flex-1 overflow-y-auto min-h-0">
-        <Suspense
-          fallback={
-            <div className="flex gap-6 h-full min-h-[280px] animate-pulse">
-              <div className="flex-1 bg-siloam-bg rounded-xl" />
-              <div className="flex-1 bg-siloam-bg rounded-xl" />
+      <div className="hidden md:block flex-1 overflow-y-auto min-h-0 relative">
+        {isContentRefreshing && !showContentSkeleton ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-siloam-bg/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+              <Spinner size={18} className="text-siloam-blue" />
+              <span>{loadingLabel}</span>
             </div>
+          </div>
+        ) : null}
+        <div
+          className={
+            isContentRefreshing && !showContentSkeleton
+              ? 'h-full min-h-[280px] opacity-50 select-none pointer-events-none'
+              : 'h-full min-h-[280px]'
           }
         >
-          <KanbanBoardLazy
-            tasks={paginatedTasks}
-            onDropOnDone={handleDropOnDone}
-            onCompleteClick={handleDropOnDone}
-          />
-        </Suspense>
+          {showContentSkeleton ? (
+            <MyTaskContentSkeleton />
+          ) : error && tasks.length === 0 ? (
+            <div className="text-center p-12 bg-siloam-surface rounded-xl shadow-soft">
+              <p className="text-danger">{error}</p>
+            </div>
+          ) : (
+            <Suspense
+              fallback={
+                <div className="flex gap-6 h-full min-h-[280px] animate-pulse">
+                  <div className="flex-1 bg-siloam-bg rounded-xl" />
+                  <div className="flex-1 bg-siloam-bg rounded-xl" />
+                </div>
+              }
+            >
+              <KanbanBoardLazy
+                tasks={paginatedTasks}
+                onDropOnDone={handleDropOnDone}
+                onCompleteClick={handleDropOnDone}
+              />
+            </Suspense>
+          )}
+        </div>
       </div>
 
-      <div className="md:hidden flex-1 overflow-y-auto min-h-0">
-        <MyTaskMobileGrid tasks={paginatedTasks} onCompleteClick={handleCompleteClick} />
-        {useMobileInfinite && infiniteTasks.hasNextPage && (
-          <div className="pt-4 pb-2 flex justify-center">
-            <button
-              type="button"
-              onClick={infiniteTasks.fetchNextPage}
-              disabled={infiniteTasks.isFetchingNextPage}
-              className="px-4 py-2 rounded-xl border border-siloam-border bg-siloam-bg text-sm hover:bg-siloam-surface disabled:opacity-50"
-            >
-              {infiniteTasks.isFetchingNextPage ? 'Loading…' : 'Load more tasks'}
-            </button>
+      <div className="md:hidden flex-1 overflow-y-auto min-h-0 relative">
+        {isContentRefreshing && !showContentSkeleton ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-siloam-bg/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+              <Spinner size={18} className="text-siloam-blue" />
+              <span>{loadingLabel}</span>
+            </div>
           </div>
-        )}
+        ) : null}
+        <div className={isContentRefreshing && !showContentSkeleton ? 'opacity-50 select-none pointer-events-none' : ''}>
+          {showContentSkeleton ? (
+            <MyTaskContentSkeleton />
+          ) : error && tasks.length === 0 ? (
+            <div className="text-center p-12 bg-siloam-surface rounded-xl shadow-soft">
+              <p className="text-danger">{error}</p>
+            </div>
+          ) : (
+            <>
+              <MyTaskMobileGrid tasks={paginatedTasks} onCompleteClick={handleCompleteClick} />
+              {useMobileInfinite && infiniteTasks.hasNextPage ? (
+                <div className="pt-4 pb-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={infiniteTasks.fetchNextPage}
+                    disabled={infiniteTasks.isFetchingNextPage}
+                    className="px-4 py-2 rounded-xl border border-siloam-border bg-siloam-bg text-sm hover:bg-siloam-surface disabled:opacity-50"
+                  >
+                    {infiniteTasks.isFetchingNextPage ? 'Loading…' : 'Load more tasks'}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
 
       {!useMobileInfinite && (

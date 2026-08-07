@@ -5,53 +5,32 @@ import type { ClientFilteredProjectListPage } from '../listUtils';
 export type ProjectListTableDisplayInput = {
   useClientFilteredDisplay: boolean;
   clientFilteredPage: ClientFilteredProjectListPage | null;
-  serverTableReady: boolean;
-  allAssets: EnrichedAsset[];
-  listTotalAssetCount: number | null;
-  /** Show preloaded rows while server key catches up (default view, no active filters). */
-  allowPreloadRows?: boolean;
-  /** Defer visible rows only during active search/filter transitions (not client pool path). */
+  serverPageAssets: EnrichedAsset[];
+  serverPageTotalCount: number | null;
+  /** Defer visible rows during search/filter transitions (BDD Construction pattern). */
   deferTableRows?: boolean;
-  /** Hide stale rows while server fetches another page. */
-  isPageTransition?: boolean;
 };
 
 export type ProjectListTableDisplay = {
   paginatedAssets: EnrichedAsset[];
   tableAssets: EnrichedAsset[];
   footerTotalCount: number;
-  serverTableReady: boolean;
 };
 
 /**
- * Derive visible page rows.
- * - `paginatedAssets`: immediate (footer, selection sync, columns)
- * - `tableAssets`: deferred only when `deferTableRows` to avoid double-lag with client search defer
+ * Derive visible page rows — server page bundle or client-filter slice (BDD-style).
  */
 export function useProjectListTableDisplay({
   useClientFilteredDisplay,
   clientFilteredPage,
-  serverTableReady,
-  allAssets,
-  listTotalAssetCount,
-  allowPreloadRows = false,
+  serverPageAssets,
+  serverPageTotalCount,
   deferTableRows = false,
-  isPageTransition = false,
 }: ProjectListTableDisplayInput): ProjectListTableDisplay {
   const paginatedAssets = useMemo(() => {
-    if (isPageTransition) return [];
     if (useClientFilteredDisplay && clientFilteredPage) return clientFilteredPage.assets;
-    if (serverTableReady) return allAssets;
-    if (allowPreloadRows && allAssets.length > 0) return allAssets;
-    return [];
-  }, [
-    isPageTransition,
-    useClientFilteredDisplay,
-    clientFilteredPage,
-    serverTableReady,
-    allowPreloadRows,
-    allAssets,
-  ]);
+    return serverPageAssets;
+  }, [useClientFilteredDisplay, clientFilteredPage, serverPageAssets]);
 
   const deferredTableAssets = useDeferredValue(paginatedAssets);
   const tableAssets = deferTableRows ? deferredTableAssets : paginatedAssets;
@@ -60,25 +39,18 @@ export function useProjectListTableDisplay({
     if (useClientFilteredDisplay && clientFilteredPage) {
       return clientFilteredPage.totalAssetCount;
     }
-    if (serverTableReady) {
-      return listTotalAssetCount ?? allAssets.length;
-    }
-    if (listTotalAssetCount != null && listTotalAssetCount > 0) {
-      return listTotalAssetCount;
-    }
-    return 0;
+    if (serverPageTotalCount != null) return serverPageTotalCount;
+    return serverPageAssets.length;
   }, [
     useClientFilteredDisplay,
     clientFilteredPage,
-    serverTableReady,
-    listTotalAssetCount,
-    allAssets.length,
+    serverPageTotalCount,
+    serverPageAssets.length,
   ]);
 
   return {
     paginatedAssets,
     tableAssets,
     footerTotalCount,
-    serverTableReady,
   };
 }

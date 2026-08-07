@@ -21,6 +21,101 @@ export type PoUpdateBundle = {
   totalAssetCount?: number;
 };
 
+export type PoUpdateAssetWindow = {
+  assets: EnrichedAsset[];
+  projects: Project[];
+  assetHasPOMap: Record<string, boolean>;
+  assetLastTaskMap: Record<string, string>;
+  totalAssetCount: number;
+  page: number;
+  pageSize: number;
+};
+
+export type PoUpdateWindowFilters = {
+  search?: string;
+  poStatus?: 'all' | 'hasPO' | 'noPO';
+  focusNeedingPO?: boolean;
+  focusNotReceived?: boolean;
+  hus?: string[];
+  priorities?: string[];
+  finishedTasks?: string[];
+  budgetFilter?: 'low' | 'high' | null;
+  completionMin?: number;
+  completionMax?: number;
+  archetype?: string | null;
+  assetTypeGroup?: string | null;
+  sortBy?: 'assetName_asc' | 'projectName_asc' | 'consumedBudget_desc';
+};
+
+export type PoUpdateMaster = {
+  archetypes: ArchetypeConfig[];
+  hus: HospitalUnitConfig[];
+  priorities: ProjectPriorityConfig[];
+  finishedTaskOptions?: string[];
+  assetTypeGroupOptions?: string[];
+};
+
+export async function fetchPoUpdateMasterFromBackend(
+  userId: number,
+  periodName?: string,
+): Promise<PoUpdateMaster | null> {
+  if (!isCapexBeConfigured()) return null;
+  const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+  try {
+    const data = await postToCapexBe<PoUpdateMaster>(
+      '/po-update/master',
+      { userId, periodName: periodName?.trim() || undefined },
+      accessToken,
+    );
+    trackBackendFetch('poUpdate.master', 'success');
+    return {
+      archetypes: Array.isArray(data?.archetypes) ? data.archetypes : [],
+      hus: Array.isArray(data?.hus) ? data.hus : [],
+      priorities: Array.isArray(data?.priorities) ? data.priorities : [],
+      finishedTaskOptions: Array.isArray(data?.finishedTaskOptions) ? data.finishedTaskOptions : [],
+      assetTypeGroupOptions: Array.isArray(data?.assetTypeGroupOptions) ? data.assetTypeGroupOptions : [],
+    };
+  } catch (err) {
+    trackBackendFetch('poUpdate.master', 'fallback', { reason: 'http_error' });
+    return null;
+  }
+}
+
+export async function fetchPoUpdateAssetWindowFromBackend(
+  userId: number,
+  periodName: string,
+  opts: { page: number; pageSize: number; filters: PoUpdateWindowFilters },
+): Promise<PoUpdateAssetWindow | null> {
+  if (!isCapexBeConfigured()) return null;
+  const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+  try {
+    const data = await postToCapexBe<Partial<PoUpdateAssetWindow>>(
+      '/po-update/asset-window',
+      {
+        userId,
+        periodName: periodName?.trim() || undefined,
+        page: opts.page,
+        pageSize: opts.pageSize,
+        filters: opts.filters,
+      },
+      accessToken,
+    );
+    trackBackendFetch('poUpdate.assetWindow', 'success');
+    return {
+      assets: Array.isArray(data?.assets) ? data.assets : [],
+      projects: Array.isArray(data?.projects) ? data.projects : [],
+      assetHasPOMap: data?.assetHasPOMap ?? {},
+      assetLastTaskMap: data?.assetLastTaskMap ?? {},
+      totalAssetCount: typeof data?.totalAssetCount === 'number' ? data.totalAssetCount : 0,
+      page: typeof data?.page === 'number' ? data.page : opts.page,
+      pageSize: typeof data?.pageSize === 'number' ? data.pageSize : opts.pageSize,
+    };
+  } catch (err) {
+    trackBackendFetch('poUpdate.assetWindow', 'fallback', { reason: 'http_error' });
+    return null;
+  }
+}
+
 export async function fetchPoUpdateBundleFromBackend(
   userId: number,
   periodName?: string,

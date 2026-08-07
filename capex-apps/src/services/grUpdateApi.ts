@@ -21,6 +21,38 @@ import {
   grUpdateBundleSchema,
 } from '../lib/validation/schemas/grUpdate.schema';
 
+export type GrUpdateWindowFilters = {
+  search?: string;
+  grStatus?: 'all' | 'notReceived' | 'partiallyReceived' | 'fullyReceived';
+  hus?: string[];
+  priorities?: string[];
+  finishedTasks?: string[];
+  budgetFilter?: 'low' | 'high' | null;
+  completionMin?: number;
+  completionMax?: number;
+  archetype?: string | null;
+  assetTypeGroup?: string | null;
+  sortBy?: 'assetName_asc' | 'projectName_asc' | 'receivedQty_desc';
+};
+
+export type GrUpdateMaster = {
+  archetypes: ArchetypeConfig[];
+  hus: HospitalUnitConfig[];
+  priorities: ProjectPriorityConfig[];
+  grnTasks: Task[];
+  finishedTaskOptions?: string[];
+  assetTypeGroupOptions?: string[];
+};
+
+export type GrUpdateAssetWindow = {
+  assets: EnrichedAsset[];
+  projects: Project[];
+  assetLastTaskMap: Record<string, string>;
+  totalAssetCount: number;
+  page: number;
+  pageSize: number;
+};
+
 export type GrUpdateBundle = {
   assets: EnrichedAsset[];
   archetypes: ArchetypeConfig[];
@@ -30,7 +62,66 @@ export type GrUpdateBundle = {
   statuses: AssetTaskStatus[];
   tasks: Task[];
   taskLogs: TaskLog[];
+  assetLastTaskMap?: Record<string, string>;
+  totalAssetCount?: number;
 };
+
+export async function fetchGrUpdateMasterFromBackend(
+  userId: number,
+  periodName?: string,
+): Promise<GrUpdateMaster | null> {
+  if (!isCapexBeConfigured()) return null;
+  const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+  try {
+    const data = await postToCapexBe<GrUpdateMaster>(
+      '/gr-update/master',
+      { userId, periodName: periodName?.trim() || undefined },
+      accessToken,
+    );
+    return {
+      archetypes: Array.isArray(data?.archetypes) ? data.archetypes : [],
+      hus: Array.isArray(data?.hus) ? data.hus : [],
+      priorities: Array.isArray(data?.priorities) ? data.priorities : [],
+      grnTasks: Array.isArray(data?.grnTasks) ? data.grnTasks : [],
+      finishedTaskOptions: Array.isArray(data?.finishedTaskOptions) ? data.finishedTaskOptions : [],
+      assetTypeGroupOptions: Array.isArray(data?.assetTypeGroupOptions) ? data.assetTypeGroupOptions : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchGrUpdateAssetWindowFromBackend(
+  userId: number,
+  periodName: string,
+  opts: { page: number; pageSize: number; filters: GrUpdateWindowFilters },
+): Promise<GrUpdateAssetWindow | null> {
+  if (!isCapexBeConfigured()) return null;
+  const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+  try {
+    const data = await postToCapexBe<Partial<GrUpdateAssetWindow>>(
+      '/gr-update/asset-window',
+      {
+        userId,
+        periodName: periodName?.trim() || undefined,
+        page: opts.page,
+        pageSize: opts.pageSize,
+        filters: opts.filters,
+      },
+      accessToken,
+    );
+    return {
+      assets: Array.isArray(data?.assets) ? data.assets : [],
+      projects: Array.isArray(data?.projects) ? data.projects : [],
+      assetLastTaskMap: data?.assetLastTaskMap ?? {},
+      totalAssetCount: typeof data?.totalAssetCount === 'number' ? data.totalAssetCount : 0,
+      page: typeof data?.page === 'number' ? data.page : opts.page,
+      pageSize: typeof data?.pageSize === 'number' ? data.pageSize : opts.pageSize,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchGrUpdateBundleFromBackend(
   userId: number,

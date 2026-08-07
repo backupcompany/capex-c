@@ -23,6 +23,7 @@ import {
 } from '../fs/fs-db.constants';
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import { CacheAsideService } from '../shared/cache-aside.service';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 import {
   enrichFsUpdateProjectPage,
 } from './fs-update-enrichment.util';
@@ -49,12 +50,8 @@ export class FsUpdateService {
     private readonly cacheAside: CacheAsideService,
   ) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new BadRequestException('Invalid userId');
-    }
-    return userId;
+  private parseUserId(body: unknown): number {
+    return resolveBodyActorUserId(body);
   }
 
   private extractPeriodIds(period: any | null): { projectIds: string[]; assetIds: string[] } {

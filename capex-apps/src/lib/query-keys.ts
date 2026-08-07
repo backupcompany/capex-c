@@ -49,6 +49,8 @@ export const queryKeys = {
   },
   userMonitoring: {
     bundle: (userId: number) => ['screen', 'user-monitoring', userId] as const,
+    screen: (userId: number, filtersKey: string, page: number, pageSize: number) =>
+      ['screen', 'user-monitoring', 'screen', userId, filtersKey, page, pageSize] as const,
     table: (userId: number, filtersKey: string, page: number, pageSize: number) =>
       ['screen', 'user-monitoring', 'table', userId, filtersKey, page, pageSize] as const,
   },
@@ -95,10 +97,18 @@ export const queryKeys = {
   poUpdate: {
     page: (periodName: string, userId: number) =>
       ['screen', 'po-update', periodName || 'all', userId] as const,
+    master: (userId: number, periodName: string) =>
+      ['screen', 'po-update', 'master', userId, periodName || 'all'] as const,
+    assetWindow: (periodName: string, userId: number, filterKey: string) =>
+      ['screen', 'po-update', 'window', periodName || 'all', userId, filterKey] as const,
   },
   grUpdate: {
     page: (periodName: string, userId: number) =>
       ['screen', 'gr-update', periodName || 'all', userId] as const,
+    master: (userId: number, periodName: string) =>
+      ['screen', 'gr-update', 'master', userId, periodName || 'all'] as const,
+    assetWindow: (periodName: string, userId: number, filterKey: string) =>
+      ['screen', 'gr-update', 'window', periodName || 'all', userId, filterKey] as const,
   },
   fsUpdate: {
     page: (periodName: string, userId: number) => ['screen', 'fs-update', periodName, userId] as const,

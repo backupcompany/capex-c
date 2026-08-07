@@ -1,36 +1,28 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { User, UserRole, ChangeSummary, Page, FSConclusion, FINAL_FS_APPROVAL_CONCLUSIONS } from '../../types';
 import * as fsService from '../../services/fsService';
 import * as budgetService from '../../services/budgetService';
 import * as taskService from '../../services/taskService';
 import { usePermissions } from '../../hooks/usePermissions';
-import { SpreadsheetTable, SpreadsheetColumn } from '../../components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { TaskFilterPanel } from '../../components/organisms/TaskFilterPanel/TaskFilterPanel';
 import { Dropdown } from '../../components/molecules/Dropdown/Dropdown';
 import { FSApprovalStatusModal } from '../../components/organisms/FSApprovalStatusModal/FSApprovalStatusModal';
-import { NumericInput } from '../../components/atoms/NumericInput/NumericInput';
-import {
-  type FsApprovalSortOption,
-} from './fsApprovalHelpers';
-import * as configService from '../../services/configService';
-import {
-  buildScopeFilterPayload,
-  buildScopedArchetypeOptions,
-  buildScopedHuOptions,
-} from '../../lib/scopedFilterOptions';
-import { useFsTableQuery } from '../../hooks/useFsTableQuery';
-import { FsScreenRefreshChrome } from '../../components/molecules/FsScreenRefreshChrome/FsScreenRefreshChrome';
 import type { EnrichedFS } from '../../hooks/queries/fetchFsApprovalPageData';
+import { type FsApprovalSortOption } from './fsApprovalHelpers';
+import { useFsApprovalFilterState } from './hooks/useFsApprovalFilterState';
+import { useFsApprovalPageData } from './hooks/useFsApprovalPageData';
+import { FSApprovalTableBlock } from './FSApprovalTableBlock';
+import { FsApprovalPaybackFilter } from './FsApprovalPaybackFilter';
+import { buildFsApprovalColumns } from './buildFsApprovalColumns';
+import {
+  readFsApprovalFocusFromSearchParams,
+  stripDeepLinkParamsFromUrl,
+} from '@/lib/screenRef';
 
 type FsEditEntry = { original: EnrichedFS; current: EnrichedFS };
-
-const STALE_MS = 120_000;
-const SEARCH_DEBOUNCE_MS = 200;
-const INITIAL_PAGE_SIZE = 20;
 
 const SORT_OPTIONS: { label: string; value: FsApprovalSortOption }[] = [
   { label: 'Project Name (A-Z)', value: 'projectName_asc' },
@@ -39,13 +31,6 @@ const SORT_OPTIONS: { label: string; value: FsApprovalSortOption }[] = [
   { label: 'Amount (Highest First)', value: 'amount_desc' },
   { label: 'Amount (Lowest First)', value: 'amount_asc' },
 ];
-
-function conclusionColorClass(status: string): string {
-  if (status === 'Approved' || status === 'Approved with Notes') return 'text-siloam-green font-medium';
-  if (status === 'Pending') return 'text-warning font-medium';
-  if (status === 'Rejected') return 'text-danger font-medium';
-  return 'text-siloam-text-secondary';
-}
 
 interface FSApprovalPageProps {
   periodName: string;
@@ -70,8 +55,8 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
   setPageActions,
   showToast,
 }) => {
-  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const permissions = usePermissions(currentUser, allRoles);
   const canView = permissions.canOperateOnPage(Page.FSApproval, 'view');
   const canEdit = permissions.canOperateOnPage(Page.FSApproval, 'edit');
@@ -79,154 +64,45 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
   const [editMap, setEditMap] = useState<Map<string, FsEditEntry>>(new Map());
   const isDirty = editMap.size > 0;
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedArchetypes, setSelectedArchetypes] = useState<string[]>([]);
-  const [selectedHUs, setSelectedHUs] = useState<string[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [paybackMin, setPaybackMin] = useState<number | undefined>(undefined);
-  const [paybackMax, setPaybackMax] = useState<number | undefined>(undefined);
-  const [paybackMinActive, setPaybackMinActive] = useState(false);
-  const [paybackMaxActive, setPaybackMaxActive] = useState(false);
-  const [sortBy, setSortBy] = useState<FsApprovalSortOption>('projectName_asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(INITIAL_PAGE_SIZE);
-
   const [statusModalFs, setStatusModalFs] = useState<EnrichedFS | null>(null);
   const emailLinkFocus = searchParams.get('focus');
 
-  useEffect(() => {
-    setIsPageDirty(isDirty);
-  }, [isDirty, setIsPageDirty]);
-
-  const [masterArchetypes, setMasterArchetypes] = useState<
-    Awaited<ReturnType<typeof configService.getAllArchetypesConfig>>
-  >([]);
-  const [masterHus, setMasterHus] = useState<
-    Awaited<ReturnType<typeof configService.getAllHospitalUnitsConfig>>
-  >([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      configService.getAllArchetypesConfig(),
-      configService.getAllHospitalUnitsConfig(),
-    ]).then(([archetypes, hus]) => {
-      if (!cancelled) {
-        setMasterArchetypes(archetypes);
-        setMasterHus(hus);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const scopeFilter = useMemo(
-    () => buildScopeFilterPayload(permissions.userScopes, masterArchetypes, masterHus),
-    [permissions.userScopes, masterArchetypes, masterHus],
-  );
-
+  const filterState = useFsApprovalFilterState(periodName);
   const {
-    tableQuery,
-    rows: serverRows,
-    totalCount,
-    totalPages,
-    filterOptions: serverFilterOptions,
-    isBlockingLoad,
-    isBackgroundRefresh,
-    isFilterRefreshing,
+    searchTerm,
+    setSearchTerm,
+    debouncedSearch,
     isSearchStaging,
-  } = useFsTableQuery({
+    selectedArchetypes,
+    setSelectedArchetypes,
+    selectedHUs,
+    setSelectedHUs,
+    selectedCategories,
+    setSelectedCategories,
+    paybackMin,
+    setPaybackMin,
+    paybackMax,
+    setPaybackMax,
+    paybackMinActive,
+    setPaybackMinActive,
+    paybackMaxActive,
+    setPaybackMaxActive,
+    sortBy,
+    setSortBy,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    setItemsPerPage,
+    resetLocalFilters,
+  } = filterState;
+
+  const pageData = useFsApprovalPageData({
     periodName,
     userId: currentUser.id,
     canView,
-    page: currentPage,
-    pageSize: itemsPerPage,
-    search: searchTerm,
-    searchDebounceMs: SEARCH_DEBOUNCE_MS,
-    archetypes: selectedArchetypes,
-    hus: selectedHUs,
-    categories: selectedCategories,
-    paybackMin: paybackMinActive ? paybackMin : undefined,
-    paybackMax: paybackMaxActive ? paybackMax : undefined,
-    sortBy,
-    scopeFilter,
-    screen: 'approval',
-    staleTime: STALE_MS,
-  });
-
-  const filterOptions = useMemo(() => {
-    const base = {
-      archetypes: serverFilterOptions.archetypes,
-      hus: serverFilterOptions.hus,
-      categories: serverFilterOptions.categories ?? [],
-    };
-    if (permissions.userScopes.all) return base;
-
-    const scopedArch = buildScopedArchetypeOptions(
-      masterArchetypes,
-      permissions.userScopes,
-      masterHus,
-    );
-    const scopedHu = buildScopedHuOptions(masterHus, masterArchetypes, permissions.userScopes);
-    const archSet = new Set(scopedArch);
-    const huSet = new Set(scopedHu);
-
-    return {
-      archetypes:
-        scopedArch.length > 0
-          ? base.archetypes.filter((a) => archSet.has(a))
-          : base.archetypes.filter((a) => permissions.userScopes.archetypes.has(a)),
-      hus:
-        scopedHu.length > 0
-          ? base.hus.filter((h) => huSet.has(h))
-          : base.hus.filter((h) => permissions.userScopes.hus.has(h)),
-      categories: base.categories,
-    };
-  }, [serverFilterOptions, permissions.userScopes, masterArchetypes, masterHus]);
-
-  const paginatedData = useMemo(
-    () => serverRows.map((row) => editMap.get(row.id)?.current ?? row),
-    [serverRows, editMap],
-  );
-
-  const hasListData = totalCount > 0 || paginatedData.length > 0;
-  const showFilters = hasListData || totalCount === 0 && !isBlockingLoad && !!periodName;
-
-  useEffect(() => {
-    if (tableQuery.isError) {
-      console.error('Error loading FS Approval data:', tableQuery.error);
-      showToast('Failed to load FS data.', 'error');
-    }
-  }, [tableQuery.isError, tableQuery.error, showToast]);
-
-  const resetLocalFilters = useCallback(() => {
-    setPaybackMin(undefined);
-    setPaybackMax(undefined);
-    setPaybackMinActive(false);
-    setPaybackMaxActive(false);
-    setSortBy('projectName_asc');
-  }, []);
-
-  useEffect(() => {
-    setEditMap(new Map());
-    setCurrentPage(1);
-    setSearchTerm('');
-    setSelectedArchetypes([]);
-    setSelectedHUs([]);
-    setSelectedCategories([]);
-    resetLocalFilters();
-  }, [periodName, resetLocalFilters]);
-
-  useEffect(() => {
-    const fsId = searchParams.get('fsId')?.trim();
-    if (fsId) setSearchTerm(fsId);
-  }, [searchParams]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchTerm,
+    userScopes: permissions.userScopes,
+    debouncedSearch,
+    isSearchStaging,
     selectedArchetypes,
     selectedHUs,
     selectedCategories,
@@ -235,9 +111,48 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
     paybackMinActive,
     paybackMaxActive,
     sortBy,
+    currentPage,
+    setCurrentPage,
     itemsPerPage,
-    periodName,
-  ]);
+    showToast,
+  });
+
+  const {
+    tableQuery,
+    serverRows,
+    filterOptions,
+    totalCount,
+    totalPages,
+    isBlockingLoad,
+    showTableBusy,
+    footerTotalCount,
+    showPagination,
+    invalidateFsApprovalQueries,
+  } = pageData;
+
+  useEffect(() => {
+    setIsPageDirty(isDirty);
+  }, [isDirty, setIsPageDirty]);
+
+  useEffect(() => {
+    setEditMap(new Map());
+  }, [periodName]);
+
+  useEffect(() => {
+    const focusFsId = readFsApprovalFocusFromSearchParams(searchParams);
+    if (!focusFsId) return;
+    setSearchTerm(focusFsId);
+    const cleanPath = stripDeepLinkParamsFromUrl(
+      window.location.pathname,
+      window.location.search,
+    );
+    router.replace(cleanPath);
+  }, [searchParams, setSearchTerm, router]);
+
+  const paginatedData = useMemo(
+    () => serverRows.map((row) => editMap.get(row.id)?.current ?? row),
+    [serverRows, editMap],
+  );
 
   const handleStatusModalConfirm = useCallback(
     (status: FSConclusion, followUpAction: string) => {
@@ -327,14 +242,12 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
         'success',
       );
       setEditMap(new Map());
-      await queryClient.invalidateQueries({
-        queryKey: ['screen', 'fs-approval', 'query', periodName, currentUser.id],
-      });
+      await invalidateFsApprovalQueries();
     } catch (err) {
       console.error('Failed to save FS Approval updates:', err);
       showToast('Failed to save changes.', 'error');
     }
-  }, [editMap, showToast, queryClient, periodName, currentUser]);
+  }, [editMap, showToast, invalidateFsApprovalQueries, periodName, currentUser]);
 
   const handleCancel = useCallback(() => {
     setEditMap(new Map());
@@ -369,108 +282,24 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
     setPageActions({ onSave: handleSave, onCancel: handleCancel, getSummary: getChangeSummary });
   }, [handleSave, handleCancel, getChangeSummary, setPageActions]);
 
-  const columns: SpreadsheetColumn<EnrichedFS>[] = useMemo(
-    () => [
-      { header: 'Network', accessor: 'archetypeName' },
-      { header: 'Unit', accessor: 'huName' },
-      { header: 'Project Name', accessor: 'projectName' },
-      { header: 'Capex Category', accessor: 'capexCategoryName' },
-      { header: 'New FS / Revision', accessor: 'fsType' },
-      { header: 'Amount [Rp mn]', accessor: 'amount', isNumeric: true },
-      { header: 'IRR', accessor: (item) => `${item.irr}%` },
-      {
-        id: 'paybackPeriod',
-        header: 'Payback in Month',
-        accessor: 'paybackPeriod',
-        isNumeric: true,
-        numericDisplay: 'plain',
-        align: 'right',
-      },
-      { header: 'NPV [Rp mn]', accessor: 'npv', isNumeric: true },
-      { header: 'ROI', accessor: (item) => `${item.roi}%` },
-      {
-        header: 'Conclusion',
-        accessor: (item) => (
-          <span className={`px-3 py-2.5 inline-block ${conclusionColorClass(String(item.conclusion))}`}>
-            {item.conclusion}
-          </span>
-        ),
-      },
-      {
-        header: 'Follow Up action',
-        accessor: (item) => (
-          <span className="px-3 py-2.5 inline-block text-siloam-text-primary">
-            {item.followUpAction || '—'}
-          </span>
-        ),
-      },
-      {
-        header: 'Action',
-        accessor: (item) =>
-          canEdit ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setStatusModalFs(item);
-              }}
-              className="px-3 py-1 bg-siloam-blue text-white text-xs rounded-lg hover:bg-siloam-blue/90"
-            >
-              Edit Status
-            </button>
-          ) : (
-            <span className="text-xs text-siloam-text-secondary">View only</span>
-          ),
-        align: 'center',
-      },
-    ],
+  const columns = useMemo(
+    () =>
+      buildFsApprovalColumns({
+        canEdit,
+        onEditStatus: setStatusModalFs,
+      }),
     [canEdit],
   );
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? '';
 
-  const paybackFilterNode = (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-siloam-text-secondary">Payback in Month (range)</p>
-      <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 flex-1">
-          <input
-            type="checkbox"
-            checked={paybackMinActive}
-            onChange={(e) => setPaybackMinActive(e.target.checked)}
-            className="h-4 w-4 rounded border-siloam-border text-siloam-blue"
-          />
-          <span className="text-xs text-siloam-text-secondary shrink-0">Min</span>
-          <NumericInput
-            value={paybackMin ?? 0}
-            onValueChange={setPaybackMin}
-            disabled={!paybackMinActive}
-            allowDecimal={false}
-            align="center"
-            className="w-full px-2 py-1.5 border border-siloam-border rounded-md bg-siloam-bg text-sm disabled:opacity-50"
-          />
-        </label>
-        <span className="text-siloam-text-secondary font-bold">–</span>
-        <label className="flex items-center gap-2 flex-1">
-          <input
-            type="checkbox"
-            checked={paybackMaxActive}
-            onChange={(e) => setPaybackMaxActive(e.target.checked)}
-            className="h-4 w-4 rounded border-siloam-border text-siloam-blue"
-          />
-          <span className="text-xs text-siloam-text-secondary shrink-0">Max</span>
-          <NumericInput
-            value={paybackMax ?? 0}
-            onValueChange={setPaybackMax}
-            disabled={!paybackMaxActive}
-            allowDecimal={false}
-            align="center"
-            className="w-full px-2 py-1.5 border border-siloam-border rounded-md bg-siloam-bg text-sm disabled:opacity-50"
-          />
-        </label>
-      </div>
-    </div>
-  );
+  const hasActiveFilters =
+    debouncedSearch.length > 0 ||
+    selectedArchetypes.length > 0 ||
+    selectedHUs.length > 0 ||
+    selectedCategories.length > 0 ||
+    paybackMinActive ||
+    paybackMaxActive;
 
   if (!canView) {
     return (
@@ -488,17 +317,12 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-3">
+      <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-bold">FS Approval Board</h2>
-          {isBlockingLoad ? (
-            <p className="text-xs text-siloam-text-secondary mt-1 flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-              Memuat data…
-            </p>
-          ) : isBackgroundRefresh ? (
-            <p className="text-xs text-siloam-text-secondary mt-1">Memperbarui data di latar…</p>
-          ) : null}
+          <h2 className="text-xl font-bold text-siloam-text-primary">FS Approval Board</h2>
+          <p className="mt-1 text-sm text-siloam-text-secondary">
+            Periode <span className="font-medium text-siloam-text-primary">{periodName}</span>
+          </p>
           {emailLinkFocus === 'approve' || emailLinkFocus === 'reject' ? (
             <p className="text-xs text-siloam-blue mt-1">
               Opened from email link — review the FS below, update Conclusion, then Save Changes.
@@ -506,18 +330,18 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
           ) : null}
         </div>
         {isDirty && canEdit ? (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg"
+              className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg text-sm"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void handleSave()}
-              className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90"
+              className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 text-sm"
             >
               Save Changes
             </button>
@@ -525,128 +349,64 @@ export const FSApprovalPage: React.FC<FSApprovalPageProps> = ({
         ) : null}
       </div>
 
-      {showFilters ? (
-        <TaskFilterPanel
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          searchPlaceholder="Search project, unit, archetype, category, payback…"
-          huOptions={filterOptions.hus}
-          selectedHUs={selectedHUs}
-          setSelectedHUs={setSelectedHUs}
-          archetypeOptions={filterOptions.archetypes}
-          selectedArchetypes={selectedArchetypes}
-          setSelectedArchetypes={setSelectedArchetypes}
-          categoryOptions={filterOptions.categories}
-          selectedCategories={selectedCategories}
-          setSelectedCategories={setSelectedCategories}
-          onResetFilters={resetLocalFilters}
-          extraFilters={paybackFilterNode}
-        >
-          <div className="w-64">
-            <Dropdown
-              label="Sort by"
-              options={SORT_OPTIONS.map((o) => o.label)}
-              selectedValue={sortLabel}
-              onSelect={(label) => {
-                const selected = SORT_OPTIONS.find((o) => o.label === label)?.value;
-                if (selected) setSortBy(selected);
-              }}
-            />
-          </div>
-        </TaskFilterPanel>
-      ) : null}
+      <TaskFilterPanel
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        searchPlaceholder="Search project, unit, archetype, category, payback…"
+        huOptions={filterOptions.hus}
+        selectedHUs={selectedHUs}
+        setSelectedHUs={setSelectedHUs}
+        archetypeOptions={filterOptions.archetypes}
+        selectedArchetypes={selectedArchetypes}
+        setSelectedArchetypes={setSelectedArchetypes}
+        categoryOptions={filterOptions.categories}
+        selectedCategories={selectedCategories}
+        setSelectedCategories={setSelectedCategories}
+        onResetFilters={resetLocalFilters}
+        extraFilters={
+          <FsApprovalPaybackFilter
+            paybackMin={paybackMin}
+            paybackMax={paybackMax}
+            paybackMinActive={paybackMinActive}
+            paybackMaxActive={paybackMaxActive}
+            onPaybackMinChange={setPaybackMin}
+            onPaybackMaxChange={setPaybackMax}
+            onPaybackMinActiveChange={setPaybackMinActive}
+            onPaybackMaxActiveChange={setPaybackMaxActive}
+          />
+        }
+      >
+        <div className="w-64">
+          <Dropdown
+            label="Sort by"
+            options={SORT_OPTIONS.map((o) => o.label)}
+            selectedValue={sortLabel}
+            onSelect={(label) => {
+              const selected = SORT_OPTIONS.find((o) => o.label === label)?.value;
+              if (selected) setSortBy(selected);
+            }}
+          />
+        </div>
+      </TaskFilterPanel>
 
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 space-y-4 relative">
-        <FsScreenRefreshChrome
-          isBlockingLoad={isBlockingLoad}
-          isBackgroundRefresh={isBackgroundRefresh}
-          isFilterRefreshing={isFilterRefreshing}
-          hasListData={hasListData}
-          blockingMessage="Memuat data FS Approval…"
-          filterMessage={isSearchStaging ? 'Mencari…' : 'Memfilter…'}
-        />
-        {hasListData || totalCount > 0 ? (
-          <>
-            {paginatedData.length > 0 ? (
-              <SpreadsheetTable
-                columns={columns}
-                data={paginatedData}
-                onDataChange={() => {}}
-                rowHeaderAccessor="projectName"
-              />
-            ) : (
-              <p className="text-center py-8 text-siloam-text-secondary">
-                No FS proposals match the current filters.
-              </p>
-            )}
-
-            {totalCount > 0 ? (
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">
-                <div className="text-sm text-siloam-text-secondary">
-                  Showing {Math.min(totalCount, (currentPage - 1) * itemsPerPage + 1)} -{' '}
-                  {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}{' '}
-                  proposals
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-siloam-text-secondary">Per page:</label>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => {
-                        setItemsPerPage(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
-                    >
-                      <option value={20}>20</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                  {totalPages > 1 ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 text-sm"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-siloam-text-secondary">
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 text-sm"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : isBlockingLoad ? (
-          <div className="text-center py-12 text-siloam-text-secondary flex flex-col items-center gap-3">
-            <span className="inline-block h-6 w-6 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-            <p className="text-sm">Memuat data FS Approval…</p>
-          </div>
-        ) : (
-          <div className="text-center py-12 text-siloam-text-secondary space-y-2">
-            <p className="font-medium text-siloam-text-primary">Belum ada FS Proposal untuk periode ini</p>
-            <p className="text-sm max-w-lg mx-auto">
-              Halaman FS Approval menampilkan data dari FS Proposal yang dibuat di{' '}
-              <strong>Budget HU</strong> (bukan checkbox FS Approval di FS Update). Buat atau edit FS Proposal
-              pada project di Budget HU, lalu kembali ke halaman ini.
-            </p>
-          </div>
-        )}
-      </div>
+      <FSApprovalTableBlock
+        columns={columns}
+        data={paginatedData}
+        isBlockingLoad={isBlockingLoad}
+        showTableBusy={showTableBusy}
+        isSearchStaging={isSearchStaging}
+        isTableError={tableQuery.isError}
+        hasActiveFilters={hasActiveFilters}
+        debouncedSearch={debouncedSearch}
+        totalCount={totalCount}
+        footerTotalCount={footerTotalCount}
+        showPagination={showPagination}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+      />
 
       {statusModalFs ? (
         <FSApprovalStatusModal

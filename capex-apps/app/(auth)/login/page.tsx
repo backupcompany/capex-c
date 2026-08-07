@@ -1,9 +1,6 @@
-import { cookies } from 'next/headers';
-import { readHasSessionCookies } from '@/lib/auth/authCookies.server';
-import { LoginRouteClient } from './LoginRouteClient';
+import { redirect } from 'next/navigation';
 
-export default async function LoginPageRoute() {
-  const hasSessionCookies = readHasSessionCookies(await cookies());
-
-  return <LoginRouteClient hasSessionCookies={hasSessionCookies} />;
+/** Legacy `/login` — canonical entry is `/`. */
+export default function LegacyLoginRedirectPage() {
+  redirect('/');
 }

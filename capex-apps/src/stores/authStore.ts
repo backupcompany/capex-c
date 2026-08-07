@@ -10,9 +10,15 @@ type AuthState = {
   user: User | null;
   roles: string[];
   idleTimeoutMs: number;
+  /** True after /auth/session probe finishes (success or anonymous). */
+  authProbeComplete: boolean;
+  /** True after startup session probe + CSRF bootstrap — safe to POST /api/be. */
+  sessionReady: boolean;
   setSession: (user: User, roles?: string[], idleTimeoutMs?: number) => void;
   clearSession: () => void;
   setStatus: (status: AuthStatus) => void;
+  setAuthProbeComplete: (complete: boolean) => void;
+  setSessionReady: (ready: boolean) => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -20,6 +26,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   roles: [],
   idleTimeoutMs: IDLE_TIMEOUT_MS,
+  authProbeComplete: false,
+  sessionReady: false,
   setSession: (user, roles = [], idleTimeoutMs = IDLE_TIMEOUT_MS) =>
     set({ status: 'authenticated', user, roles, idleTimeoutMs }),
   clearSession: () =>
@@ -28,8 +36,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: null,
       roles: [],
       idleTimeoutMs: IDLE_TIMEOUT_MS,
+      authProbeComplete: false,
+      sessionReady: false,
     }),
   setStatus: (status) => set({ status }),
+  setAuthProbeComplete: (authProbeComplete) => set({ authProbeComplete }),
+  setSessionReady: (sessionReady) => set({ sessionReady }),
 }));
 
 /** Memoized selectors — avoid global rerenders. */
@@ -43,4 +55,25 @@ export function useAuthStatus(): AuthStatus {
 
 export function useAuthIdleTimeoutMs(): number {
   return useAuthStore((s) => s.idleTimeoutMs);
+}
+
+export function useSessionReady(): boolean {
+  return useAuthStore((s) => s.sessionReady);
+}
+
+export function useAuthProbeComplete(): boolean {
+  return useAuthStore((s) => s.authProbeComplete);
+}
+
+/** Shared gate — probe done, CSRF ok, authenticated user (JWT). */
+export function useAuthenticatedNetworkReady(): boolean {
+  return useAuthStore(
+    useShallow(
+      (s) =>
+        s.authProbeComplete &&
+        s.sessionReady &&
+        s.status === 'authenticated' &&
+        Boolean(s.user?.id),
+    ),
+  );
 }

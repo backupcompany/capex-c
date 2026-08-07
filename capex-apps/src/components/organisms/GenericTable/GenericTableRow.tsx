@@ -15,6 +15,7 @@ type GenericTableRowProps<T extends object> = {
   onRowMouseEnter?: (item: T) => void;
   measureRef?: (node: Element | null) => void;
   dataIndex?: number;
+  stickyLastColumn?: boolean;
 };
 
 function GenericTableRowInner<T extends object>({
@@ -27,6 +28,7 @@ function GenericTableRowInner<T extends object>({
   onRowMouseEnter,
   measureRef,
   dataIndex,
+  stickyLastColumn = true,
 }: GenericTableRowProps<T>) {
   return (
     <tr
@@ -47,7 +49,7 @@ function GenericTableRowInner<T extends object>({
           return (
             <td
               key={`${String(rowKey)}-${colIndex}`}
-              className={`relative p-0 ${isFirstColumn && isSelected ? 'border-l-4 border-siloam-blue' : ''} ${isLastColumn ? 'sticky right-0 bg-siloam-surface border-l border-siloam-border' : ''}`}
+              className={`relative p-0 align-top ${isFirstColumn && isSelected ? 'border-l-4 border-siloam-blue' : ''} ${isLastColumn && stickyLastColumn ? 'sticky right-0 bg-siloam-surface border-l border-siloam-border' : ''}`}
             >
               <SmartNumericDisplay value={numericValue} />
             </td>
@@ -57,7 +59,7 @@ function GenericTableRowInner<T extends object>({
         return (
           <td
             key={`${String(rowKey)}-${colIndex}`}
-            className={`relative p-0 text-siloam-text-primary ${isFirstColumn && isSelected ? 'border-l-4 border-siloam-blue' : ''} ${isLastColumn ? 'sticky right-0 bg-siloam-surface border-l border-siloam-border' : ''}`}
+            className={`relative p-0 text-siloam-text-primary align-top ${isFirstColumn && isSelected ? 'border-l-4 border-siloam-blue' : ''} ${isLastColumn && stickyLastColumn ? 'sticky right-0 bg-siloam-surface border-l border-siloam-border' : ''}`}
           >
             <div className="px-4 py-3 whitespace-normal break-words">{value as React.ReactNode}</div>
           </td>

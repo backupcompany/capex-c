@@ -37,7 +37,8 @@ export type AuthMeAssignmentDto = {
 };
 
 export type AuthMeDto = {
-  id: number;
+  /** Opaque account ref — numeric id is not exposed on the wire. */
+  publicId: string;
   username: string;
   email: string;
   roles: EnterpriseRoleSlug[];

@@ -18,4 +18,9 @@ export class MonitoringController {
   async usersQuery(@Req() req: Request, @Body() body: unknown) {
     return this.monitoringService.loadUsersPage(requireAccessTokenFromRequest(req), body);
   }
+
+  @Post('screen')
+  async screen(@Req() req: Request, @Body() body: unknown) {
+    return this.monitoringService.loadScreen(requireAccessTokenFromRequest(req), body);
+  }
 }

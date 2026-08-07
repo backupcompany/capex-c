@@ -5,7 +5,9 @@ import { AuthZService } from '../auth/auth-z.service';
 import { persistAssetRow } from '../budget-hu/budget-hu-persist.util';
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import { CacheAsideService } from '../shared/cache-aside.service';
-import { loadPoUpdatePageBundle } from './po-update-page.loader';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
+import { loadPoUpdatePageBundle, loadPoUpdateMaster, loadPoUpdateAssetWindow, clearPoUpdateFilteredIdsCache } from './po-update-page.loader';
+import { parsePoWindowFilters } from './po-update-filter.util';
 
 type PoAssetPatch = {
   id: string;
@@ -42,12 +44,8 @@ export class PoUpdateService {
     private readonly cacheAside: CacheAsideService,
   ) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new BadRequestException('Invalid userId');
-    }
-    return userId;
+  private parseUserId(body: unknown): number {
+    return resolveBodyActorUserId(body);
   }
 
   private async loadPageBundleCached(
@@ -81,6 +79,46 @@ export class PoUpdateService {
     };
   }
 
+  async loadMaster(accessToken: string, body: unknown) {
+    const b = (body ?? {}) as { userId?: number; periodName?: string };
+    const userId = this.parseUserId(b);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'PO Update', 'view');
+    const { client } = await this.authContext.getRlsClient(accessToken, userId);
+    const periodName = typeof b.periodName === 'string' ? b.periodName.trim() : '';
+    return loadPoUpdateMaster(client, periodName || undefined);
+  }
+
+  async loadAssetWindow(accessToken: string, body: unknown) {
+    const b = (body ?? {}) as {
+      userId?: number;
+      periodName?: string;
+      page?: number;
+      pageSize?: number;
+      filters?: Record<string, unknown>;
+    };
+    const userId = this.parseUserId(b);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'PO Update', 'view');
+    const { client } = await this.authContext.getRlsClient(accessToken, userId);
+    const periodName = typeof b.periodName === 'string' ? b.periodName.trim() : '';
+    if (!periodName) {
+      return {
+        assets: [],
+        projects: [],
+        assetHasPOMap: {},
+        assetLastTaskMap: {},
+        totalAssetCount: 0,
+        page: 1,
+        pageSize: 50,
+      };
+    }
+    const filters = parsePoWindowFilters(b.filters);
+    return loadPoUpdateAssetWindow(client, periodName, {
+      page: Number(b.page) || 1,
+      pageSize: Number(b.pageSize) || 50,
+      filters,
+    });
+  }
+
   async saveAssets(accessToken: string, body: unknown) {
     const b = (body ?? {}) as {
       userId?: number;
@@ -97,10 +135,11 @@ export class PoUpdateService {
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     if (b.poFieldsOnly === true) {
       await this.patchPoFieldsOnly(client, patches);
-      await this.cacheAside.invalidateByPrefix(`app:table:po-update:page:${userId}:`);
     } else {
       await this.patchAssetsFull(client, patches);
     }
+    clearPoUpdateFilteredIdsCache();
+    await this.cacheAside.invalidateByPrefix(`app:table:po-update:page:${userId}:`);
     return { ok: true, updated: patches.length };
   }
 

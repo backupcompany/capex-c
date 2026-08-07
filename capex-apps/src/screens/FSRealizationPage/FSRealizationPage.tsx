@@ -1,34 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { User, UserRole, ChangeSummary, FSRealization, Page } from '../../types';
 import * as fsService from '../../services/fsService';
 import { usePermissions } from '../../hooks/usePermissions';
-import { SpreadsheetTable, SpreadsheetColumn } from '../../components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { TaskFilterPanel } from '../../components/organisms/TaskFilterPanel/TaskFilterPanel';
 import { Dropdown } from '../../components/molecules/Dropdown/Dropdown';
-import { formatCurrency } from '../../lib/formatter';
-import {
-  type EnrichedFS,
-  type FsRealizationPageData,
-} from '../../hooks/queries/fetchFsRealizationPageData';
-import { useFsTableQuery } from '../../hooks/useFsTableQuery';
-import { FsScreenRefreshChrome } from '../../components/molecules/FsScreenRefreshChrome/FsScreenRefreshChrome';
-import * as configService from '../../services/configService';
-import {
-  buildScopeFilterPayload,
-  buildScopedArchetypeOptions,
-  buildScopedHuOptions,
-} from '../../lib/scopedFilterOptions';
-import {
-  toFsApprovedBudgetIdr,
-  type FsRealizationSortOption,
-} from './fsRealizationHelpers';
-
-const STALE_MS = 120_000;
-const SEARCH_DEBOUNCE_MS = 200;
-const INITIAL_PAGE_SIZE = 20;
+import type { EnrichedFS, FsRealizationPageData } from '../../hooks/queries/fetchFsRealizationPageData';
+import { type FsRealizationSortOption } from './fsRealizationHelpers';
+import { useFsRealizationFilterState } from './hooks/useFsRealizationFilterState';
+import { useFsRealizationPageData } from './hooks/useFsRealizationPageData';
+import { FSRealizationTableBlock } from './FSRealizationTableBlock';
+import { buildFsRealizationColumns } from './buildFsRealizationColumns';
 
 const SORT_OPTIONS: { label: string; value: FsRealizationSortOption }[] = [
   { label: 'Project Name (A-Z)', value: 'projectName_asc' },
@@ -75,7 +58,6 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
   setPageActions,
   showToast,
 }) => {
-  const queryClient = useQueryClient();
   const permissions = usePermissions(currentUser, allRoles);
   const canView = permissions.canOperateOnPage(Page.FSRealization, 'view');
   const canEdit = permissions.canOperateOnPage(Page.FSRealization, 'edit');
@@ -84,111 +66,57 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
   const [realizations, setRealizations] = useState<FSRealization[]>([]);
   const [isModalLoading, setIsModalLoading] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedArchetypes, setSelectedArchetypes] = useState<string[]>([]);
-  const [selectedHUs, setSelectedHUs] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<FsRealizationSortOption>('projectName_asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(INITIAL_PAGE_SIZE);
-
-  const [masterArchetypes, setMasterArchetypes] = useState<
-    Awaited<ReturnType<typeof configService.getAllArchetypesConfig>>
-  >([]);
-  const [masterHus, setMasterHus] = useState<
-    Awaited<ReturnType<typeof configService.getAllHospitalUnitsConfig>>
-  >([]);
-  const [isMasterConfigLoading, setIsMasterConfigLoading] = useState(true);
-
-  const scopeFilter = useMemo(
-    () => buildScopeFilterPayload(permissions.userScopes, masterArchetypes, masterHus),
-    [permissions.userScopes, masterArchetypes, masterHus],
-  );
-
+  const filterState = useFsRealizationFilterState(periodName);
   const {
-    tableQuery,
-    rows: paginatedData,
-    totalCount,
-    totalPages,
-    filterOptions: serverFilterOptions,
-    isBlockingLoad,
-    isBackgroundRefresh,
-    isFilterRefreshing,
+    searchTerm,
+    setSearchTerm,
+    debouncedSearch,
     isSearchStaging,
-  } = useFsTableQuery({
+    selectedArchetypes,
+    setSelectedArchetypes,
+    selectedHUs,
+    setSelectedHUs,
+    sortBy,
+    setSortBy,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    setItemsPerPage,
+    resetLocalFilters,
+  } = filterState;
+
+  const pageData = useFsRealizationPageData({
     periodName,
     userId: currentUser.id,
     canView,
-    page: currentPage,
-    pageSize: itemsPerPage,
-    search: searchTerm,
-    searchDebounceMs: SEARCH_DEBOUNCE_MS,
-    archetypes: selectedArchetypes,
-    hus: selectedHUs,
+    userScopes: permissions.userScopes,
+    debouncedSearch,
+    isSearchStaging,
+    selectedArchetypes,
+    selectedHUs,
     sortBy,
-    scopeFilter,
-    screen: 'realization',
-    staleTime: STALE_MS,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    showToast,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    setIsMasterConfigLoading(true);
-    void Promise.all([
-      configService.getAllArchetypesConfig(),
-      configService.getAllHospitalUnitsConfig(),
-    ]).then(([archetypes, hus]) => {
-      if (!cancelled) {
-        setMasterArchetypes(archetypes);
-        setMasterHus(hus);
-        setIsMasterConfigLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const needsScopeResolution =
-    !permissions.userScopes.all &&
-    (permissions.userScopes.archetypeIds.size > 0 || permissions.userScopes.huIds.size > 0);
-  const isScopePending = isMasterConfigLoading && needsScopeResolution;
-
-  const filterOptions = useMemo(() => {
-    const base = {
-      archetypes: serverFilterOptions.archetypes,
-      hus: serverFilterOptions.hus,
-    };
-    if (permissions.userScopes.all) return base;
-
-    const scopedArch = buildScopedArchetypeOptions(
-      masterArchetypes,
-      permissions.userScopes,
-      masterHus,
-    );
-    const scopedHu = buildScopedHuOptions(masterHus, masterArchetypes, permissions.userScopes);
-    const archSet = new Set(scopedArch);
-    const huSet = new Set(scopedHu);
-
-    return {
-      archetypes:
-        scopedArch.length > 0
-          ? base.archetypes.filter((a) => archSet.has(a))
-          : base.archetypes.filter((a) => permissions.userScopes.archetypes.has(a)),
-      hus:
-        scopedHu.length > 0
-          ? base.hus.filter((h) => huSet.has(h))
-          : base.hus.filter((h) => permissions.userScopes.hus.has(h)),
-    };
-  }, [serverFilterOptions, permissions.userScopes, masterArchetypes, masterHus]);
-
-  const hasListData = totalCount > 0 || paginatedData.length > 0;
-
-  useEffect(() => {
-    if (tableQuery.isError) {
-      console.error('Error loading FS Realization data:', tableQuery.error);
-      showToast('Failed to load FS data.', 'error');
-    }
-  }, [tableQuery.isError, tableQuery.error, showToast]);
+  const {
+    tableQuery,
+    serverRows,
+    filterOptions,
+    totalCount,
+    totalPages,
+    isBlockingLoad,
+    showTableBusy,
+    footerTotalCount,
+    showPagination,
+    isScopePending,
+    isMasterConfigLoading,
+    masterArchetypes,
+    masterHus,
+    invalidateFsRealizationQueries,
+  } = pageData;
 
   useEffect(() => {
     setPageActions({
@@ -199,20 +127,8 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
     setIsPageDirty(false);
   }, [setPageActions, setIsPageDirty]);
 
-  const resetLocalFilters = useCallback(() => {
-    setSortBy('projectName_asc');
-  }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-    setSearchTerm('');
-    setSelectedArchetypes([]);
-    setSelectedHUs([]);
-    resetLocalFilters();
-  }, [periodName, resetLocalFilters]);
-
   const headerScopeKey = `${periodName}:${headerArchetypeId ?? ''}:${headerHuId ?? ''}`;
-  const lastHeaderScopeKeyRef = React.useRef('');
+  const lastHeaderScopeKeyRef = useRef('');
 
   useEffect(() => {
     if (lastHeaderScopeKeyRef.current === headerScopeKey) return;
@@ -247,21 +163,8 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
     isMasterConfigLoading,
     masterArchetypes,
     masterHus,
-  ]);
-
-  const filteredDataCount = totalCount;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchTerm,
-    selectedArchetypes,
-    selectedHUs,
-    sortBy,
-    itemsPerPage,
-    headerArchetypeId,
-    headerHuId,
-    periodName,
+    setSelectedArchetypes,
+    setSelectedHUs,
   ]);
 
   const handleOpenModal = useCallback(
@@ -303,15 +206,13 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
         showToast('Realizations saved successfully.', 'success');
         setSelectedFS(null);
         setRealizations([]);
-        await queryClient.invalidateQueries({
-          queryKey: ['screen', 'fs-realization', 'query', periodName, currentUser.id],
-        });
+        await invalidateFsRealizationQueries();
       } catch (err) {
         console.error('Error saving realizations:', err);
         showToast('Failed to save realizations.', 'error');
       }
     },
-    [selectedFS, currentUser.id, showToast, queryClient, periodName],
+    [selectedFS, currentUser.id, showToast, invalidateFsRealizationQueries],
   );
 
   const handleCloseModal = useCallback(() => {
@@ -319,43 +220,23 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
     setRealizations([]);
   }, []);
 
-  const columns: SpreadsheetColumn<EnrichedFS>[] = useMemo(
-    () => [
-      { header: 'Network', accessor: 'archetypeName' },
-      { header: 'Unit', accessor: 'huName' },
-      { header: 'Project Name', accessor: 'projectName' },
-      { header: 'Capex Category', accessor: 'capexCategoryName' },
-      { header: 'FS Type', accessor: 'fsType' },
-      {
-        header: 'Approved Budget',
-        accessor: (item) => formatCurrency(toFsApprovedBudgetIdr(item.amount)),
-        isNumeric: true,
-      },
-      { header: 'Plan Revenue Start', accessor: 'plannedRevenueStartDate' },
-      { header: 'Actual Revenue Start', accessor: (item) => item.actualRevenueStartDate || 'Not Set' },
-      {
-        header: 'Monthly Revenue Plan',
-        accessor: (item) => formatCurrency(item.monthlyRevenuePlan),
-        isNumeric: true,
-      },
-      {
-        header: 'Action',
-        accessor: (item) => (
-          <button
-            type="button"
-            onClick={() => void handleOpenModal(item)}
-            disabled={isModalLoading && selectedFS?.id === item.id}
-            className="px-3 py-1 bg-siloam-blue text-white text-xs rounded-lg hover:bg-siloam-blue/90 disabled:opacity-50"
-          >
-            {canEdit ? 'Update Realization' : 'View Realization'}
-          </button>
-        ),
-      },
-    ],
-    [canEdit, handleOpenModal, isModalLoading, selectedFS?.id],
+  const columns = useMemo(
+    () =>
+      buildFsRealizationColumns({
+        canEdit,
+        isModalLoading,
+        selectedFsId: selectedFS?.id ?? null,
+        onOpenModal: handleOpenModal,
+      }),
+    [canEdit, isModalLoading, selectedFS?.id, handleOpenModal],
   );
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? '';
+
+  const hasActiveFilters =
+    debouncedSearch.length > 0 ||
+    selectedArchetypes.length > 0 ||
+    selectedHUs.length > 0;
 
   if (!canView) {
     return (
@@ -374,143 +255,60 @@ export const FSRealizationPage: React.FC<FSRealizationPageProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold">FS Realization Tracking</h2>
-        {isBlockingLoad ? (
-          <p className="text-xs text-siloam-text-secondary mt-1 flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-            Memuat data…
-          </p>
-        ) : isBackgroundRefresh ? (
-          <p className="text-xs text-siloam-text-secondary mt-1">Memperbarui data di latar…</p>
-        ) : totalCount > 0 ? (
-          <p className="text-xs text-siloam-text-secondary mt-1">
-            {totalCount} approved NR project{totalCount === 1 ? '' : 's'} in your scope
-          </p>
-        ) : null}
+        <h2 className="text-xl font-bold text-siloam-text-primary">FS Realization Tracking</h2>
+        <p className="mt-1 text-sm text-siloam-text-secondary">
+          Periode <span className="font-medium text-siloam-text-primary">{periodName}</span>
+          {totalCount > 0 && !isBlockingLoad ? (
+            <span className="ml-2">
+              · {totalCount} approved NR project{totalCount === 1 ? '' : 's'} in your scope
+            </span>
+          ) : null}
+        </p>
       </div>
 
-      {periodName ? (
-        <TaskFilterPanel
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          searchPlaceholder="Search project, unit, network, category, revenue date…"
-          huOptions={filterOptions.hus}
-          selectedHUs={selectedHUs}
-          setSelectedHUs={setSelectedHUs}
-          archetypeOptions={filterOptions.archetypes}
-          selectedArchetypes={selectedArchetypes}
-          setSelectedArchetypes={setSelectedArchetypes}
-          onResetFilters={resetLocalFilters}
-        >
-          <div className="w-64">
-            <Dropdown
-              label="Sort by"
-              options={SORT_OPTIONS.map((o) => o.label)}
-              selectedValue={sortLabel}
-              onSelect={(label) => {
-                const selected = SORT_OPTIONS.find((o) => o.label === label)?.value;
-                if (selected) setSortBy(selected);
-              }}
-            />
-          </div>
-        </TaskFilterPanel>
-      ) : null}
-
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 space-y-4 relative">
-        <FsScreenRefreshChrome
-          isBlockingLoad={isBlockingLoad}
-          isBackgroundRefresh={isBackgroundRefresh}
-          isFilterRefreshing={isFilterRefreshing}
-          hasListData={hasListData}
-          blockingMessage="Memuat data FS Realization…"
-          filterMessage={isSearchStaging ? 'Mencari…' : 'Memfilter…'}
-        />
-        <div className="bg-siloam-blue/10 p-3 rounded-lg text-sm text-siloam-blue">
-          <strong>Note:</strong> Hanya menampilkan FS dengan kategori budget{' '}
-          <strong>New Revenue Generating (NR)</strong> yang berstatus Approved atau Approved with Notes.
+      <TaskFilterPanel
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        searchPlaceholder="Search project, unit, network, category, revenue date…"
+        huOptions={filterOptions.hus}
+        selectedHUs={selectedHUs}
+        setSelectedHUs={setSelectedHUs}
+        archetypeOptions={filterOptions.archetypes}
+        selectedArchetypes={selectedArchetypes}
+        setSelectedArchetypes={setSelectedArchetypes}
+        onResetFilters={resetLocalFilters}
+      >
+        <div className="w-64">
+          <Dropdown
+            label="Sort by"
+            options={SORT_OPTIONS.map((o) => o.label)}
+            selectedValue={sortLabel}
+            onSelect={(label) => {
+              const selected = SORT_OPTIONS.find((o) => o.label === label)?.value;
+              if (selected) setSortBy(selected);
+            }}
+          />
         </div>
+      </TaskFilterPanel>
 
-        {isScopePending ? (
-          <div className="text-center py-12 text-siloam-text-secondary flex flex-col items-center gap-3">
-            <span className="inline-block h-6 w-6 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-            <p className="text-sm">Memuat scope unit…</p>
-          </div>
-        ) : totalCount > 0 || paginatedData.length > 0 ? (
-          <>
-            {paginatedData.length > 0 ? (
-              <SpreadsheetTable
-                columns={columns}
-                data={paginatedData}
-                onDataChange={() => {}}
-                rowHeaderAccessor="projectName"
-              />
-            ) : (
-              <p className="text-center py-8 text-siloam-text-secondary">
-                No projects match the current filters.
-              </p>
-            )}
-
-            {filteredDataCount > 0 ? (
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">
-                <div className="text-sm text-siloam-text-secondary">
-                  Showing {Math.min(filteredDataCount, (currentPage - 1) * itemsPerPage + 1)} -{' '}
-                  {Math.min(currentPage * itemsPerPage, filteredDataCount)} of {filteredDataCount} projects
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-siloam-text-secondary">Per page:</label>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => {
-                        setItemsPerPage(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
-                    >
-                      <option value={20}>20</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                  {totalPages > 1 ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 text-sm"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-siloam-text-secondary">
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 text-sm"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : isBlockingLoad ? (
-          <div className="text-center py-12 text-siloam-text-secondary flex flex-col items-center gap-3">
-            <span className="inline-block h-6 w-6 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-            <p className="text-sm">Memuat data FS Realization…</p>
-          </div>
-        ) : (
-          <p className="text-center py-8 text-siloam-text-secondary">
-            No approved NR (New Revenue Generating) feasibility studies found for this period in your unit scope.
-          </p>
-        )}
-      </div>
+      <FSRealizationTableBlock
+        columns={columns}
+        data={serverRows}
+        isScopePending={isScopePending}
+        isBlockingLoad={isBlockingLoad}
+        showTableBusy={showTableBusy}
+        isSearchStaging={isSearchStaging}
+        isTableError={tableQuery.isError}
+        hasActiveFilters={hasActiveFilters}
+        debouncedSearch={debouncedSearch}
+        footerTotalCount={footerTotalCount}
+        showPagination={showPagination}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+      />
 
       {selectedFS ? (
         <Suspense fallback={null}>

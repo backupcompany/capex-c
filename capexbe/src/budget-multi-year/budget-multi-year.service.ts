@@ -22,7 +22,11 @@ import {
 
 const MULTI_YEAR_SHELL_COLUMNS = 'name, start_year, end_year, budget_plan';
 
-const BUDGET_HIERARCHY = 'Budget';
+import {
+  BUDGET_STACK_CREATE_HIERARCHIES,
+  BUDGET_STACK_UPDATE_HIERARCHIES,
+  BUDGET_STACK_VIEW_HIERARCHIES,
+} from '../auth/budget-permission.constants';
 const CATEGORY_SELECT = 'id, name, is_active';
 
 async function getActiveBudgetCategories(client: SupabaseClient): Promise<any[]> {
@@ -116,7 +120,7 @@ export class BudgetMultiYearService {
           'budget_period_category_budgets',
           'period_name',
           periodNames,
-          'period_name, budget_carry_forward, budget_allocated, approved_budget, consumed_budget',
+          'period_name, budget_plan, budget_carry_forward, budget_allocated, approved_budget, consumed_budget',
         )
       : [];
 
@@ -128,7 +132,12 @@ export class BudgetMultiYearService {
   }
 
   async loadPageBundle(accessToken: string, userId: number) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const key = cacheKeys.budgetMultiYearPage(userId);
 
     const processHit = this.getFromProcessCache<{ multiYears: any[]; categories: any[]; periodSummaries?: any[] }>(key);
@@ -150,7 +159,12 @@ export class BudgetMultiYearService {
   }
 
   async loadPeriodBudgets(accessToken: string, userId: number, multiYearName: string) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const trimmed = multiYearName.trim();
     if (!trimmed) throw new BadRequestException('multiYearName is required');
 
@@ -178,7 +192,12 @@ export class BudgetMultiYearService {
   }
 
   async saveMultiYear(accessToken: string, userId: number, multiYear: Record<string, unknown>) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'update');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_UPDATE_HIERARCHIES],
+      'update',
+    );
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
 
     const name = String(multiYear.name ?? '').trim();
@@ -213,7 +232,12 @@ export class BudgetMultiYearService {
       multiYearName: string;
     },
   ) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'create');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_CREATE_HIERARCHIES],
+      'create',
+    );
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
 
     const periodName = payload.periodName.trim();
@@ -262,7 +286,12 @@ export class BudgetMultiYearService {
     period: Record<string, unknown>,
     categoryIds?: string[],
   ) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'update');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_UPDATE_HIERARCHIES],
+      'update',
+    );
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
 
     const periodName = String(period.periodName ?? '').trim();
@@ -320,7 +349,12 @@ export class BudgetMultiYearService {
     periodName: string,
     rows: Array<{ archetypeId?: string; categoryId?: string; budgetPlan?: number }>,
   ) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'update');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_UPDATE_HIERARCHIES],
+      'update',
+    );
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
 
     const pn = String(periodName ?? '').trim();
@@ -380,7 +414,12 @@ export class BudgetMultiYearService {
     periodName: string,
     rows: Array<{ hospitalUnitId?: string; categoryId?: string; budgetPlan?: number }>,
   ) {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, BUDGET_HIERARCHY, 'update');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_UPDATE_HIERARCHIES],
+      'update',
+    );
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
 
     const pn = String(periodName ?? '').trim();

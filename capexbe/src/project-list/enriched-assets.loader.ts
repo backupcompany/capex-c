@@ -82,6 +82,8 @@ export function enrichAssetRowsFromJoinedSelect(
         project.budgetCategoryId ||
         '',
       projectPriorityId: project.priority_id || project.priorityId || '',
+      projectApprovedBudget: Number(project.approved_budget || project.approvedBudget) || 0,
+      projectBudgetPlan: Number(project.budget_plan || project.budgetPlan) || 0,
       endTargetDate: row.end_target_date || row.endTargetDate || null,
       catalogueId: row.catalogue_id || row.catalogueId || null,
         poNumber: row.po_number || row.poNumber || null,

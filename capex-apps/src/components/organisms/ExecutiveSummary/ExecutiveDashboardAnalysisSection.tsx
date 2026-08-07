@@ -32,9 +32,12 @@ export const ExecutiveDashboardAnalysisSection = memo(function ExecutiveDashboar
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
-      <div className="xl:col-span-1">
+      <ExecutiveDashboardPanel title="Pengeluaran Berdasarkan Kategori">
         <DonutChart
-          title="Pengeluaran Berdasarkan Kategori"
+          title=""
+          labelMode="legend"
+          compact
+          embedded
           valueFormatter={formatBudgetView}
           data={
             categoryChartData.length > 0
@@ -42,7 +45,7 @@ export const ExecutiveDashboardAnalysisSection = memo(function ExecutiveDashboar
               : [{ name: '—', value: 1, color: '#E2E8F0' }]
           }
         />
-      </div>
+      </ExecutiveDashboardPanel>
 
       <ExecutiveDashboardPanel title="Top 5 Investasi Terbesar">
         {topInvestments.length === 0 ? (
@@ -61,7 +64,7 @@ export const ExecutiveDashboardAnalysisSection = memo(function ExecutiveDashboar
               <tbody>
                 {topInvestments.map((row) => (
                   <tr key={row.id} className="border-b border-siloam-border/50 last:border-0">
-                    <td className="py-2.5 font-medium text-siloam-text-primary pr-2 max-w-[120px] truncate" title={row.projectName}>
+                    <td className="py-2.5 font-medium text-siloam-text-primary pr-2 max-w-[140px] truncate" title={row.projectName}>
                       {row.projectName}
                     </td>
                     <td className="py-2.5 text-siloam-text-secondary whitespace-nowrap">{row.unitCode}</td>

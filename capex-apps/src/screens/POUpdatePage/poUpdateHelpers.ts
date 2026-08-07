@@ -7,6 +7,73 @@ export const normalize = (value: unknown): string => String(value ?? '').trim().
 
 const BUDGET_THRESHOLD = 300_000_000;
 
+export type PoUpdateWindowFilters = {
+  search?: string;
+  poStatus?: PoStatusFilter;
+  focusNeedingPO?: boolean;
+  focusNotReceived?: boolean;
+  hus?: string[];
+  priorities?: string[];
+  finishedTasks?: string[];
+  budgetFilter?: 'low' | 'high' | null;
+  completionMin?: number;
+  completionMax?: number;
+  archetype?: string | null;
+  assetTypeGroup?: string | null;
+  sortBy?: PoSortOption;
+};
+
+export function buildPoWindowFilters(input: {
+  debouncedSearch: string;
+  poStatusFilter: PoStatusFilter;
+  focusNeedingPO: boolean;
+  focusNotReceived: boolean;
+  selectedHUs: string[];
+  selectedPriorities: string[];
+  selectedFinishedTasks: string[];
+  selectedBudgetFilter: string | null;
+  completionRange: { min: number; max: number };
+  meetingFilters: { archetype: string | null; assetTypeGroup: string | null };
+  sortBy: PoSortOption;
+}): PoUpdateWindowFilters {
+  return {
+    search: input.debouncedSearch.trim(),
+    poStatus: input.poStatusFilter,
+    focusNeedingPO: input.focusNeedingPO,
+    focusNotReceived: input.focusNotReceived,
+    hus: input.selectedHUs,
+    priorities: input.selectedPriorities,
+    finishedTasks: input.selectedFinishedTasks,
+    budgetFilter:
+      input.selectedBudgetFilter === 'low' || input.selectedBudgetFilter === 'high'
+        ? input.selectedBudgetFilter
+        : null,
+    completionMin: input.completionRange.min,
+    completionMax: input.completionRange.max,
+    archetype: input.meetingFilters.archetype,
+    assetTypeGroup: input.meetingFilters.assetTypeGroup,
+    sortBy: input.sortBy,
+  };
+}
+
+export function buildPoWindowFilterKey(filters: PoUpdateWindowFilters): string {
+  return JSON.stringify({
+    s: filters.search?.trim().toLowerCase() ?? '',
+    ps: filters.poStatus ?? 'noPO',
+    fp: filters.focusNeedingPO ? 1 : 0,
+    fr: filters.focusNotReceived ? 1 : 0,
+    hu: [...(filters.hus ?? [])].map(normalize).sort().join('|'),
+    pr: [...(filters.priorities ?? [])].map(normalize).sort().join('|'),
+    ft: [...(filters.finishedTasks ?? [])].map(normalize).sort().join('|'),
+    bf: filters.budgetFilter ?? '',
+    cmin: filters.completionMin ?? 0,
+    cmax: filters.completionMax ?? 100,
+    ar: normalize(filters.archetype),
+    atg: normalize(filters.assetTypeGroup),
+    sort: filters.sortBy ?? 'assetName_asc',
+  });
+}
+
 export type PoFilterMaps = {
   projectPriorityMap: Map<string, string>;
   projectBudgetMap: Map<string, number>;
@@ -46,6 +113,7 @@ export function filterAndSortPoAssets(
     meetingFilters: { archetype: string | null; assetTypeGroup: string | null };
     assetLastTaskMap: Map<string, string>;
     filterMaps: PoFilterMaps;
+    priorities?: ProjectPriorityConfig[];
   },
 ): EnrichedAsset[] {
   let result = data;
@@ -68,6 +136,9 @@ export function filterAndSortPoAssets(
   }
 
   const { projectPriorityMap, projectBudgetMap } = options.filterMaps;
+  const priorityIdToName = new Map(
+    (options.priorities ?? []).map((p) => [String(p.id), p.name] as [string, string]),
+  );
   const lowerSearch = options.debouncedSearch.toLowerCase().trim();
 
   result = result.filter((asset) => {
@@ -90,12 +161,21 @@ export function filterAndSortPoAssets(
       return false;
     }
     if (options.selectedBudgetFilter) {
-      const projectBudget = projectBudgetMap.get(asset.projectId) || 0;
+      const approved = asset.projectApprovedBudget ?? 0;
+      const plan = asset.projectBudgetPlan ?? 0;
+      const projectBudget =
+        approved > 0
+          ? approved
+          : plan > 0
+            ? plan
+            : projectBudgetMap.get(asset.projectId) || 0;
       if (options.selectedBudgetFilter === 'low' && projectBudget > BUDGET_THRESHOLD) return false;
       if (options.selectedBudgetFilter === 'high' && projectBudget <= BUDGET_THRESHOLD) return false;
     }
     if (options.selectedPriorities.length > 0) {
-      const priorityName = projectPriorityMap.get(asset.projectId);
+      const priorityName =
+        priorityIdToName.get(String(asset.projectPriorityId ?? '')) ??
+        projectPriorityMap.get(asset.projectId);
       if (!priorityName || !options.selectedPriorities.some((p) => normalize(p) === normalize(priorityName))) {
         return false;
       }

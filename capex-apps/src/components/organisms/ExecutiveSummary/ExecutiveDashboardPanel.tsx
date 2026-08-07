@@ -11,11 +11,11 @@ export const ExecutiveDashboardPanel = memo(function ExecutiveDashboardPanel({
   title,
   children,
   className = '',
-  minHeightClass = 'min-h-[360px]',
+  minHeightClass = 'min-h-[320px]',
 }: ExecutiveDashboardPanelProps) {
   return (
     <div
-      className={`bg-siloam-surface p-5 rounded-xl shadow-soft border border-siloam-border/60 h-full flex flex-col ${minHeightClass} ${className}`}
+      className={`bg-siloam-surface p-5 rounded-xl shadow-soft border border-siloam-border/60 h-full flex flex-col overflow-hidden ${minHeightClass} ${className}`}
     >
       {title ? (
         <h3 className="text-base font-bold text-siloam-text-primary mb-4 shrink-0">{title}</h3>

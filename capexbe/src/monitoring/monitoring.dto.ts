@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 export type UserActivityStatus = 'Active' | 'Dormant' | 'Inactive';
 
@@ -23,10 +23,6 @@ export type MonitoringUserRowDto = {
   unitNames: string[];
   archetypeNames: string[];
   lastActiveAt: string | null;
-  totalActions: number;
-  taskCompletionCount: number;
-  adhocTaskCreatedCount: number;
-  engagementScore: number;
   status: UserActivityStatus;
   isOnline: boolean;
 };
@@ -51,8 +47,12 @@ export type MonitoringPageBundleDto = {
   };
   archetypeSummary: MonitoringScopeSummaryRow[];
   unitSummary: MonitoringScopeSummaryRow[];
-  archetypes: { id: string; name: string }[];
-  hospitalUnits: { id: string; name: string; archetypeId: string }[];
+  unitNames: string[];
+};
+
+export type MonitoringScreenDto = {
+  bundle: MonitoringPageBundleDto;
+  usersPage: MonitoringUsersPageDto;
 };
 
 export type MonitoringUsersPageDto = {
@@ -64,10 +64,7 @@ export type MonitoringUsersPageDto = {
 };
 
 export function parseMonitoringUserBody(body: unknown): { userId: number } {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
-  return { userId };
+  return { userId: resolveBodyActorUserId(body) };
 }
 
 function parseStatusFilter(v: unknown): MonitoringListFilters['status'] {

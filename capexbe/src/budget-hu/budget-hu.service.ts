@@ -1,6 +1,11 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { AuthContextService } from '../auth/auth-context.service';
 import { AuthZService } from '../auth/auth-z.service';
+import {
+  BUDGET_STACK_UPDATE_HIERARCHIES,
+  BUDGET_STACK_VIEW_HIERARCHIES,
+} from '../auth/budget-permission.constants';
+import type { ResolvedAuthContext } from '../auth/auth.types';
 import { fetchAllRecords, fetchAllRecordsWhereEq, toCamelCase } from '../project-list/supabase-helpers';
 import { countAssetsByProjectIds } from '../executive-summary/executive-summary-query.util';
 import { getAllWorkflowSets } from '../project-list/master-data.loader';
@@ -113,13 +118,37 @@ export class BudgetHuService {
     userId: number,
     periodName: string,
   ): Promise<void> {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'update');
+    await this.assertBudgetStackUpdate(accessToken, userId);
     await this.invalidateCachesForPeriod(periodName);
   }
 
   private async invalidateCachesForPeriod(periodName: string): Promise<void> {
     pruneProcessCachesForBudgetPeriod(this.responseCache, this.inflight, periodName);
     await invalidateBudgetHuPeriodSharedCaches(periodName);
+  }
+
+  private assertBudgetStackView(
+    accessToken: string,
+    userId: number,
+  ): Promise<ResolvedAuthContext> {
+    return this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
+  }
+
+  private assertBudgetStackUpdate(
+    accessToken: string,
+    userId: number,
+  ): Promise<ResolvedAuthContext> {
+    return this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      [...BUDGET_STACK_UPDATE_HIERARCHIES],
+      'update',
+    );
   }
 
   private async fetchStudiesByProjectIds(
@@ -172,7 +201,7 @@ export class BudgetHuService {
   }
 
   async loadConfigBundle(accessToken: string, userId: number, skipCache = false): Promise<BudgetHuConfigBundleDto> {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const key = cacheKeys.budgetHuConfig();
     if (skipCache) {
       this.responseCache.delete(key);
@@ -208,7 +237,7 @@ export class BudgetHuService {
     if (!periodName?.trim()) {
       throw new BadRequestException('periodName is required');
     }
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const networkView = options?.networkView === true;
     const networkShell = options?.networkShell === true;
     const categoryId = String(options?.categoryId ?? '').trim();
@@ -257,7 +286,7 @@ export class BudgetHuService {
     if (!periodName?.trim()) {
       throw new BadRequestException('periodName is required');
     }
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const key = cacheKeys.budgetHuPeriodStructure(userId, periodName);
     if (skipCache) {
       this.responseCache.delete(key);
@@ -293,7 +322,7 @@ export class BudgetHuService {
     if (!periodName?.trim()) {
       throw new BadRequestException('periodName is required');
     }
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const scopedHuId = String(options?.hospitalUnitId ?? '').trim();
     if (scopedHuId) {
       const { client } = await this.authContext.getRlsClient(accessToken, userId);
@@ -382,7 +411,7 @@ export class BudgetHuService {
     const huId = hospitalUnitId.trim();
     if (!pn || !huId) throw new BadRequestException('periodName and hospitalUnitId are required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     await assertHuInUserScope(client, userId, huId);
 
@@ -438,7 +467,7 @@ export class BudgetHuService {
     if (!periodName?.trim()) {
       throw new BadRequestException('periodName is required');
     }
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const scopedHuId = String(options?.hospitalUnitId ?? '').trim();
     const key = cacheKeys.budgetHuAssetCounts(userId, periodName, scopedHuId || undefined);
     if (skipCache) {
@@ -489,7 +518,7 @@ export class BudgetHuService {
     const pid = String(projectId ?? '').trim();
     if (!pn || !pid) throw new BadRequestException('periodName and projectId are required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const key = cacheKeys.budgetHuProjectAssets(userId, pid);
     if (skipCache) {
       this.responseCache.delete(key);
@@ -553,12 +582,7 @@ export class BudgetHuService {
       throw new BadRequestException('periodName is required');
     }
 
-    const ctx = await this.authZ.assertHierarchyPermission(
-      accessToken,
-      userId,
-      'Budget HU',
-      'update',
-    );
+    const ctx = await this.assertBudgetStackUpdate(accessToken, userId);
     const persistClient = this.getPersistClient(ctx.client);
 
     const huId = String(payload.huId ?? '').trim();
@@ -685,7 +709,7 @@ export class BudgetHuService {
       excludeProjectId?: string;
     },
   ): Promise<{ projectCode: string }> {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const persistClient = this.getPersistClient(
       (await this.authContext.getRlsClient(accessToken, userId)).client,
     );
@@ -714,7 +738,7 @@ export class BudgetHuService {
       excludeAssetId?: string;
     },
   ): Promise<{ assetCode: string }> {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const persistClient = this.getPersistClient(
       (await this.authContext.getRlsClient(accessToken, userId)).client,
     );
@@ -747,7 +771,7 @@ export class BudgetHuService {
     projectCount: number;
     assetCount: number;
   }> {
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const pn = String(periodName ?? '').trim();
     const huId = String(hospitalUnitId ?? '').trim();
     if (!pn) throw new BadRequestException('periodName is required');
@@ -892,7 +916,7 @@ export class BudgetHuService {
     try {
       await this.authZ.assertHierarchyPermission(accessToken, userId, 'Capex Project List', 'update');
     } catch {
-      await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'update');
+      await this.assertBudgetStackUpdate(accessToken, userId);
     }
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const persistClient = this.getPersistClient(client);
@@ -987,7 +1011,7 @@ export class BudgetHuService {
     const id = String(poId ?? '').trim();
     if (!id) throw new BadRequestException('poId is required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const purchaseOrder = await fetchPurchaseOrderById(client, id);
     return { purchaseOrder };
@@ -1001,7 +1025,7 @@ export class BudgetHuService {
     const pid = String(projectId ?? '').trim();
     if (!pid) throw new BadRequestException('projectId is required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const rows = await fetchPurchaseOrdersByProjectId(client, pid);
     const sorted = rows.sort((a, b) => {
@@ -1021,7 +1045,7 @@ export class BudgetHuService {
     const pn = String(periodName ?? '').trim();
     if (!pn) throw new BadRequestException('periodName is required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Budget HU', 'view');
+    await this.assertBudgetStackView(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const rows = await fetchAllRecordsWhereEq(client, 'projects', 'period_name', pn, PROJECT_LIST_SELECT);
     const projects = (rows ?? []).map((row) => ({ ...toCamelCase(row), assets: [] }));

@@ -17,17 +17,21 @@ import {
 } from '../../hooks/queries/fetchGrUpdatePageData';
 import { cloneDeep } from '../../lib/clone';
 import { useDebouncedValue } from '../BudgetHU/useDebouncedValue';
+import { isCapexBeConfigured } from '../../lib/capexBeClient';
+import { Spinner } from '../../components/atoms/Spinner/Spinner';
+import { useGrUpdateWindowQuery } from '../../hooks/queries/useGrUpdateWindowQuery';
 import {
   type GrSortOption,
   type GrStatusFilter,
   buildPoFilterMaps,
+  buildGrWindowFilters,
   collectGrAssetChanges,
   filterAndSortGrAssets,
   getGRNStatus,
 } from './grUpdateHelpers';
 import { taskHasTriggerEvent } from '../../lib/systemTriggerEvents';
 
-const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_DEBOUNCE_MS = 150;
 const grListQueryOptions = largeListQueryOptions();
 
 interface GRUpdatePageProps {
@@ -63,6 +67,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
 
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
+  const isSearchStaging = searchTerm.trim() !== debouncedSearch.trim();
   const [selectedHUs, setSelectedHUs] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [selectedFinishedTasks, setSelectedFinishedTasks] = useState<string[]>([]);
@@ -92,44 +97,113 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
   const grQuery = useQuery({
     queryKey: queryKeys.grUpdate.page(periodName, currentUser.id),
     queryFn: ({ signal }) => fetchGrUpdatePageData(currentUser.id, periodName, signal),
-    enabled: canView && Boolean(periodName.trim()),
+    enabled: canView && Boolean(periodName.trim()) && !isCapexBeConfigured(),
     ...grListQueryOptions,
     initialData: initialPageData,
     initialDataUpdatedAt: initialPageData ? Date.now() - grListQueryOptions.staleTime - 1 : undefined,
     placeholderData: (prev) => prev,
   });
 
+  const windowFilters = useMemo(
+    () =>
+      buildGrWindowFilters({
+        debouncedSearch,
+        grStatusFilter,
+        selectedHUs,
+        selectedPriorities,
+        selectedFinishedTasks,
+        selectedBudgetFilter,
+        completionRange,
+        meetingFilters,
+        sortBy,
+      }),
+    [
+      debouncedSearch,
+      grStatusFilter,
+      selectedHUs,
+      selectedPriorities,
+      selectedFinishedTasks,
+      selectedBudgetFilter,
+      completionRange,
+      meetingFilters,
+      sortBy,
+    ],
+  );
+
+  const windowQuery = useGrUpdateWindowQuery({
+    userId: currentUser.id,
+    periodName,
+    filters: windowFilters,
+    enabled: canView,
+  });
+
+  const useWindow = windowQuery.useWindow;
+  const sourceAssets = useWindow
+    ? windowQuery.merged.assets
+    : (grQuery.data?.assets ?? []);
+  const sourceTasks = useWindow
+    ? (windowQuery.masterQuery.data?.grnTasks ?? [])
+    : (grQuery.data?.tasks ?? []);
+
   const displayAssets = useMemo(
-    () => (isDirty ? editedData : (grQuery.data?.assets ?? [])),
-    [isDirty, editedData, grQuery.data?.assets],
+    () => (isDirty ? editedData : sourceAssets),
+    [isDirty, editedData, sourceAssets],
   );
 
-  const masterData = grQuery.data?.masterData ?? {
-    archetypes: [],
-    hus: [],
-    projects: [],
-    priorities: [],
-  };
+  const masterData = useWindow
+    ? {
+        archetypes: windowQuery.masterQuery.data?.archetypes ?? [],
+        hus: windowQuery.masterQuery.data?.hus ?? [],
+        projects: [] as unknown[],
+        priorities: windowQuery.masterQuery.data?.priorities ?? [],
+      }
+    : (grQuery.data?.masterData ?? {
+        archetypes: [],
+        hus: [],
+        projects: [],
+        priorities: [],
+      });
 
-  const assetLastTaskMap = useMemo(
-    () => new Map(Object.entries(grQuery.data?.assetLastTaskMap ?? {})),
-    [grQuery.data?.assetLastTaskMap],
-  );
+  const assetLastTaskMap = useMemo(() => {
+    const raw = useWindow
+      ? windowQuery.merged.assetLastTaskMap
+      : (grQuery.data?.assetLastTaskMap ?? {});
+    return new Map(Object.entries(raw));
+  }, [useWindow, windowQuery.merged.assetLastTaskMap, grQuery.data?.assetLastTaskMap]);
 
-  const showTableLoading = displayAssets.length === 0 && (grQuery.isPending || grQuery.isFetching);
-  const isBackgroundRefresh = grQuery.isFetching && displayAssets.length > 0;
+  const showTableLoading = useWindow
+    ? windowQuery.showContentSkeleton
+    : displayAssets.length === 0 && (grQuery.isPending || grQuery.isFetching);
+  const isBackgroundRefresh = useWindow
+    ? windowQuery.isBackgroundRefetch || isSearchStaging
+    : grQuery.isFetching && displayAssets.length > 0;
+  const loadingLabel = isSearchStaging ? 'Mencari…' : 'Memuat data terbaru…';
+  const totalAssetCount = useWindow
+    ? windowQuery.merged.totalAssetCount
+    : displayAssets.length;
+  const isDataSettled = useWindow ? windowQuery.windowQuery.isFetched : grQuery.isFetched;
 
   useEffect(() => {
-    if (grQuery.isError) {
-      console.error('Error loading GR update data:', grQuery.error);
+    const err = useWindow ? windowQuery.windowQuery.error : grQuery.error;
+    const isError = useWindow ? windowQuery.windowQuery.isError : grQuery.isError;
+    if (isError) {
+      console.error('Error loading GR update data:', err);
       showToast('Failed to load asset data.', 'error');
     }
-  }, [grQuery.isError, grQuery.error, showToast]);
+  }, [
+    useWindow,
+    windowQuery.windowQuery.isError,
+    windowQuery.windowQuery.error,
+    grQuery.isError,
+    grQuery.error,
+    showToast,
+  ]);
 
   useEffect(() => {
-    if (!grQuery.data?.assets?.length || isDirty) return;
-    serverAssetsRef.current = cloneDeep(grQuery.data.assets);
-  }, [grQuery.data?.assets, isDirty]);
+    const assets = useWindow ? windowQuery.merged.assets : grQuery.data?.assets;
+    if (!assets?.length || isDirty) return;
+    serverAssetsRef.current = cloneDeep(assets);
+  }, [useWindow, windowQuery.merged.assets, grQuery.data?.assets, isDirty]);
 
   const handleDataChange = useCallback(
     (updatedData: EnrichedAsset[]) => {
@@ -148,24 +222,24 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
       };
 
       setEditedData((prev) => {
-        const base = prev.length > 0 ? prev : cloneDeep(grQuery.data?.assets ?? []);
+        const base = prev.length > 0 ? prev : cloneDeep(sourceAssets);
         if (prev.length === 0) {
-          serverAssetsRef.current = cloneDeep(grQuery.data?.assets ?? []);
+          serverAssetsRef.current = cloneDeep(sourceAssets);
         }
         const next = base.map(applyRow);
         updateIsDirty(collectGrAssetChanges(serverAssetsRef.current, next).size > 0);
         return next;
       });
     },
-    [grQuery.data?.assets, updateIsDirty],
+    [sourceAssets, updateIsDirty],
   );
 
   const handleMarkReceivedChange = useCallback(
     (assetId: string, isReceived: boolean) => {
       setEditedData((prev) => {
-        const base = prev.length > 0 ? prev : cloneDeep(grQuery.data?.assets ?? []);
+        const base = prev.length > 0 ? prev : cloneDeep(sourceAssets);
         if (prev.length === 0) {
-          serverAssetsRef.current = cloneDeep(grQuery.data?.assets ?? []);
+          serverAssetsRef.current = cloneDeep(sourceAssets);
         }
         const next = base.map((asset) => {
           if (asset.id !== assetId) return asset;
@@ -182,7 +256,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
         return next;
       });
     },
-    [grQuery.data?.assets, updateIsDirty],
+    [sourceAssets, updateIsDirty],
   );
 
   const handleSave = useCallback(async () => {
@@ -215,7 +289,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
       });
 
       if (assetsToCompleteGRN.length > 0) {
-        const allTasks = grQuery.data?.tasks ?? [];
+        const allTasks = sourceTasks;
         const grnTask = allTasks.find((task) => {
           const taskNameLower = task.name.toLowerCase();
           return (
@@ -252,15 +326,13 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
       setEditedData([]);
       updateIsDirty(false);
       onDataChange();
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.grUpdate.page(periodName, currentUser.id),
-      });
+      await queryClient.invalidateQueries({ queryKey: ['screen', 'gr-update'] });
     } catch (error) {
       console.error('Failed to save GR updates:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to save changes.';
       showToast(`Failed to save changes: ${errorMessage}`, 'error');
     }
-  }, [editedData, currentUser, allRoles, grQuery.data?.tasks, onDataChange, showToast, queryClient, updateIsDirty]);
+  }, [editedData, currentUser, allRoles, sourceTasks, onDataChange, showToast, queryClient, updateIsDirty, periodName]);
 
   const handleCancel = useCallback(() => {
     setEditedData([]);
@@ -311,23 +383,9 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
     [masterData.projects, masterData.priorities],
   );
 
-  const filteredAndSortedData = useMemo(
-    () =>
-      filterAndSortGrAssets(displayAssets, {
-        grStatusFilter,
-        debouncedSearch,
-        selectedHUs,
-        selectedPriorities,
-        selectedFinishedTasks,
-        selectedBudgetFilter,
-        completionRange,
-        sortBy,
-        meetingFilters,
-        assetLastTaskMap,
-        filterMaps,
-      }),
-    [
-      displayAssets,
+  const filteredAndSortedData = useMemo(() => {
+    if (useWindow) return displayAssets;
+    return filterAndSortGrAssets(displayAssets, {
       grStatusFilter,
       debouncedSearch,
       selectedHUs,
@@ -339,8 +397,61 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
       meetingFilters,
       assetLastTaskMap,
       filterMaps,
+      priorities: masterData.priorities,
+    });
+  }, [
+    useWindow,
+    displayAssets,
+    grStatusFilter,
+    debouncedSearch,
+    selectedHUs,
+    selectedPriorities,
+    selectedFinishedTasks,
+    selectedBudgetFilter,
+    completionRange,
+    sortBy,
+    meetingFilters,
+    assetLastTaskMap,
+    filterMaps,
+    masterData.priorities,
+  ]);
+
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(debouncedSearch.trim()) ||
+      grStatusFilter !== 'all' ||
+      selectedHUs.length > 0 ||
+      selectedPriorities.length > 0 ||
+      selectedFinishedTasks.length > 0 ||
+      selectedBudgetFilter != null ||
+      completionRange.min > 0 ||
+      completionRange.max < 100 ||
+      meetingFilters.archetype != null ||
+      meetingFilters.assetTypeGroup != null,
+    [
+      debouncedSearch,
+      grStatusFilter,
+      selectedHUs.length,
+      selectedPriorities.length,
+      selectedFinishedTasks.length,
+      selectedBudgetFilter,
+      completionRange.min,
+      completionRange.max,
+      meetingFilters.archetype,
+      meetingFilters.assetTypeGroup,
     ],
   );
+
+  const clearAllFilters = useCallback(() => {
+    setSearchTerm('');
+    setSelectedHUs([]);
+    setSelectedPriorities([]);
+    setSelectedFinishedTasks([]);
+    setSelectedBudgetFilter(null);
+    setCompletionRange({ min: 0, max: 100 });
+    setGrStatusFilter('all');
+    setMeetingFilters({ archetype: null, assetTypeGroup: null });
+  }, []);
 
   const columns: SpreadsheetColumn<EnrichedAsset>[] = useMemo(
     () => [
@@ -396,10 +507,22 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
     [masterData.priorities],
   );
 
-  const finishedTaskOptions = useMemo(
-    () => Array.from(new Set(assetLastTaskMap.values())),
-    [assetLastTaskMap],
-  );
+  const finishedTaskOptions = useMemo(() => {
+    const fromMaster = windowQuery.masterQuery.data?.finishedTaskOptions ?? [];
+    if (fromMaster.length > 0) return fromMaster;
+    return Array.from(new Set(assetLastTaskMap.values())).sort((a, b) => a.localeCompare(b));
+  }, [windowQuery.masterQuery.data?.finishedTaskOptions, assetLastTaskMap]);
+
+  const assetTypeGroupOptions = useMemo(() => {
+    const fromMaster = windowQuery.masterQuery.data?.assetTypeGroupOptions ?? [];
+    if (fromMaster.length > 0) return fromMaster;
+    const names = new Set<string>();
+    displayAssets.forEach((asset) => {
+      const name = asset.assetTypeGroupName?.trim();
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [windowQuery.masterQuery.data?.assetTypeGroupOptions, displayAssets]);
 
   const huOptions = useMemo(() => {
     if (masterData.hus.length > 0) return masterData.hus.map((h) => h.name);
@@ -408,16 +531,32 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
     );
   }, [masterData.hus, displayAssets]);
 
+  const handleNearTableEnd = useCallback(() => {
+    if (!useWindow || !windowQuery.hasNextWindow || windowQuery.isFetchingNextWindow) return;
+    void windowQuery.fetchNextWindow();
+  }, [useWindow, windowQuery.hasNextWindow, windowQuery.isFetchingNextWindow, windowQuery.fetchNextWindow]);
+
   if (!canView) {
     return <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>;
   }
 
-  const showEmptyState = grQuery.isFetched && displayAssets.length === 0 && !showTableLoading;
+  const showFilteredEmptyState =
+    isDataSettled && totalAssetCount === 0 && hasActiveFilters && !showTableLoading;
+  const showNoGrDataState =
+    isDataSettled && totalAssetCount === 0 && !hasActiveFilters && !showTableLoading;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Goods Received (GR) Update</h2>
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Goods Received (GR) Update</h2>
+          {!showTableLoading && totalAssetCount > 0 ? (
+            <p className="text-xs text-siloam-text-secondary mt-1">
+              {filteredAndSortedData.length} / {totalAssetCount} asset
+              {totalAssetCount === 1 ? '' : 's'}
+            </p>
+          ) : null}
+        </div>
         {isDirty && canEdit && (
           <div className="flex items-center space-x-2">
             <button
@@ -436,7 +575,12 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
         )}
       </div>
 
-      <MeetingFilterBar onFilterChange={setMeetingFilters} />
+      <MeetingFilterBar
+        onFilterChange={setMeetingFilters}
+        selectedArchetype={meetingFilters.archetype}
+        selectedAssetTypeGroup={meetingFilters.assetTypeGroup}
+        assetTypeGroupOptions={assetTypeGroupOptions}
+      />
       <AssetFilterPanel
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -484,8 +628,8 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
         </div>
       </div>
 
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[12rem]">
-        {isBackgroundRefresh ? (
+      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[12rem]" aria-busy={showTableLoading || isBackgroundRefresh}>
+        {isBackgroundRefresh && !showTableLoading ? (
           <>
             <div
               className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden rounded-full bg-siloam-border"
@@ -493,12 +637,26 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
             >
               <div className="h-full w-1/3 rounded-full bg-siloam-blue/70 animate-pulse" />
             </div>
-            <div className="pointer-events-none absolute right-3 top-2 z-10 rounded border border-siloam-border bg-siloam-bg/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-siloam-text-secondary">
-              Sinkron
+            <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-siloam-surface/60 backdrop-blur-[1px]">
+              <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+                <Spinner size={18} className="text-siloam-blue" />
+                <span>{loadingLabel}</span>
+              </div>
             </div>
           </>
         ) : null}
-        {showEmptyState ? (
+        {showFilteredEmptyState ? (
+          <div className="py-12 text-center text-siloam-text-secondary space-y-3">
+            <p>Tidak ada asset yang cocok dengan filter saat ini.</p>
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="text-siloam-blue font-semibold hover:underline"
+            >
+              Reset semua filter
+            </button>
+          </div>
+        ) : showNoGrDataState ? (
           <div className="py-12 text-center text-siloam-text-secondary">
             <p className="mb-4">No assets found that need GRN update.</p>
             <p className="text-sm">
@@ -513,10 +671,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
           </div>
         ) : showTableLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
-            <span
-              className="inline-block h-5 w-5 rounded-full border-2 border-siloam-border border-t-siloam-blue animate-spin"
-              aria-hidden
-            />
+            <Spinner size={20} className="text-siloam-blue" />
             <span>Memuat data aset…</span>
           </div>
         ) : (
@@ -525,14 +680,23 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
             data={filteredAndSortedData}
             onDataChange={handleDataChange}
             rowHeaderAccessor="assetName"
-            virtualizeRows="auto"
+            forceVirtualize
+            dimWhileScrolling
+            onNearEnd={handleNearTableEnd}
+            virtualizeRows
           />
         )}
+        {useWindow && windowQuery.isFetchingNextWindow ? (
+          <div className="pt-3 text-center text-xs text-siloam-text-secondary">
+            Memuat baris berikutnya…
+          </div>
+        ) : null}
       </div>
 
       {filteredAndSortedData.length > 0 && (
         <div className="pt-4 border-t border-siloam-border text-sm text-siloam-text-secondary">
-          {filteredAndSortedData.length} assets — scroll inside the table to browse all rows
+          {filteredAndSortedData.length}
+          {useWindow && totalAssetCount > 0 ? ` / ${totalAssetCount}` : ''} assets — scroll untuk muat baris berikutnya
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { sanitizePostgrestSearchTerm } from '../shared/postgrest-filter.util';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 export type CapexTypeFilter = 'all' | 'pipeline' | 'strategic' | 'general';
 export type StatusFilter = 'all' | 'on-track' | 'at-risk' | 'off-track';
@@ -33,8 +34,7 @@ const SORTABLE = new Set([
 
 export function parsePeriodUserBody(body: unknown): { userId: number; periodName: string } {
   const b = (body ?? {}) as Record<string, unknown>;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
+  const userId = resolveBodyActorUserId(body);
   const periodName = String(b.periodName ?? '').trim();
   if (!periodName) throw new BadRequestException('periodName is required');
   return { userId, periodName };

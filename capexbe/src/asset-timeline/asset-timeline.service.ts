@@ -4,6 +4,7 @@ import { AuthZService } from '../auth/auth-z.service';
 import { getAllTasks, getAllWorkflowSets } from '../project-list/master-data.loader';
 import { fetchAllRecordsWhereEq, toCamelCase, normId } from '../project-list/supabase-helpers';
 import { getEffectiveStatusForStep, mergeAfterLastDoneWorkflow, norm, TaskCurrentStatus } from './build-timeline';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 const AUDIT_LOG_COLUMNS =
   'id,entity_id,entity_type,action,field_name,old_value,new_value,changed_by,timestamp';
@@ -24,10 +25,7 @@ export class AssetTimelineService {
       throw new BadRequestException('assetId and workflowSetId are required');
     }
 
-    const userId = Number(body.userId);
-    if (!Number.isFinite(userId)) {
-      throw new BadRequestException('Invalid userId');
-    }
+    const userId = resolveBodyActorUserId(body);
     await this.authZ.assertHierarchyPermission(accessToken, userId, 'Capex Project List', 'view');
 
     const { client } = await this.authContext.getRlsClient(accessToken, userId);

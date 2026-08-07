@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { getAccessTokenFromRequest } from '../auth/request-access-token.util';
+import { getAccessTokenFromRequest, getCallerUserId } from '../auth/request-access-token.util';
 import { RequirePermission } from '../auth/decorators/permissions.decorator';
 import { SmartMigrationService } from './smart-migration.service';
 import type { SmartMigrationMeta } from './smart-migration.types';
@@ -55,7 +55,7 @@ export class SmartMigrationController {
     @Body() body: { userId?: number; jobId?: string },
   ) {
     const authHeader = getAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
+    const userId = getCallerUserId(req);
     const jobId = typeof body?.jobId === 'string' ? body.jobId : '';
     const progress = await this.smartMigrationService.getProgress(
       authHeader ? `Bearer ${authHeader}` : '',

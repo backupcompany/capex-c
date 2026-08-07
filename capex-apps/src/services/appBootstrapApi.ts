@@ -1,7 +1,8 @@
 import type { BudgetMultiYear, BudgetPeriod, User, UserRole } from '../types';
 import { capexBeRequestUrl, useBeBffProxy } from '../lib/capexBeClient';
-import { useBackendSession } from '../lib/auth/authConstants';
 import { authenticatedFetch } from '../lib/auth/authenticatedFetch';
+import { useBackendSession } from '../lib/auth/authConstants';
+import { redactOutgoingUserId } from '../lib/redactApiUserId';
 
 export type AppInitPack = {
   users: User[];
@@ -18,15 +19,18 @@ const MAX_BOOTSTRAP_ATTEMPTS = 2;
 async function postBootstrapJson<T>(
   path: string,
   accessToken: string | null | undefined,
-  userId: number,
+  userId?: number,
 ): Promise<T | null> {
   const base = (process.env.NEXT_PUBLIC_CAPEXBE_URL || '').replace(/\/$/, '').trim();
   if (!base) return null;
-  const uid = Number(userId);
-  if (!Number.isFinite(uid)) return null;
   const bff = useBeBffProxy();
   const backendSession = useBackendSession();
   if (!bff && !backendSession && !accessToken?.trim()) return null;
+
+  const body =
+    userId != null && Number.isFinite(userId)
+      ? redactOutgoingUserId({ userId })
+      : {};
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_BOOTSTRAP_TIMEOUT_MS);
@@ -41,7 +45,7 @@ async function postBootstrapJson<T>(
         method: 'POST',
         headers,
         credentials: bff || backendSession ? 'include' : 'same-origin',
-        body: JSON.stringify({ userId: uid }),
+        body: JSON.stringify(body),
         signal: controller.signal,
         ...(bff || backendSession ? { retryOn401: true } : {}),
       },
@@ -61,7 +65,7 @@ async function postBootstrapJson<T>(
  */
 export async function fetchAppInitPackFromBackend(
   accessToken: string | null | undefined,
-  userId: number,
+  userId?: number,
 ): Promise<AppInitPack | null> {
   const invoke = async (): Promise<AppInitPack | null> => {
     const json = await postBootstrapJson<Partial<AppInitPack>>('/bootstrap', accessToken, userId);

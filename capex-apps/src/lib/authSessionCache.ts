@@ -5,6 +5,7 @@ const STORAGE_KEY = 'capex.authUser.v1';
 /** Persisted fields only — no email/phone (PII stays from /auth/session in memory). */
 type AuthUserCacheSnapshot = {
   id: number;
+  publicId?: string;
   username: string;
   assignments: User['assignments'];
 };
@@ -36,9 +37,10 @@ export function readCachedAuthUser(): User | null {
     if (!isRecord(o)) return null;
     const id = Number(o.id);
     const username = typeof o.username === 'string' ? o.username : '';
+    const publicId = typeof o.publicId === 'string' ? o.publicId.trim() : '';
     const assignments = Array.isArray(o.assignments) ? (o.assignments as User['assignments']) : [];
     if (!Number.isFinite(id) || !username) return null;
-    return { id, username, email: '', assignments };
+    return { id, publicId: publicId || undefined, username, email: '', assignments };
   } catch {
     return null;
   }
@@ -54,8 +56,10 @@ export function writeCachedAuthUser(user: User): void {
         assignments = existing.assignments;
       }
     }
+    const existing = readCachedAuthUser();
     const snapshot: AuthUserCacheSnapshot = {
       id: user.id,
+      publicId: user.publicId?.trim() || (existing?.id === user.id ? existing.publicId : undefined),
       username: user.username,
       assignments,
     };

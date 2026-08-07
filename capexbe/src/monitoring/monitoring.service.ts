@@ -8,8 +8,12 @@ import {
   getSupabaseServiceKey,
 } from '../shared/supabase-client.factory';
 import { parseMonitoringUsersQuery } from './monitoring.dto';
+import type { MonitoringUserRowDto } from './monitoring.dto';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 import {
+  buildPageBundleFromContext,
   loadMonitoringContext,
+  loadMonitoringScreen,
   loadMonitoringUsersPage,
 } from './monitoring-user.loader';
 
@@ -22,7 +26,7 @@ type MonitoringDataCache = {
 @Injectable()
 export class MonitoringService {
   private cache: MonitoringDataCache | null = null;
-  private readonly cacheTtlMs = 30_000;
+  private readonly cacheTtlMs = 60_000;
 
   constructor(private readonly authZ: AuthZService) {}
 
@@ -49,26 +53,20 @@ export class MonitoringService {
     await this.authZ.assertHierarchyPermission(accessToken, userId, 'User Monitoring', 'view');
   }
 
+  private maskRowsIfNeeded(rows: MonitoringUserRowDto[], includePii: boolean) {
+    if (includePii) return rows;
+    return rows.map((row) => ({
+      ...row,
+      email: row.email ? maskEmail(row.email) : '',
+    }));
+  }
+
   async loadPageBundle(accessToken: string, body: unknown) {
-    const userId = Number((body as Record<string, unknown>)?.userId);
-    if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
+    const userId = resolveBodyActorUserId(body);
     await this.assertView(accessToken, userId);
     const cached = this.getCachedContext();
     const ctx = await cached.contextPromise;
-    const scoped = buildScopeSummaries(ctx.allRows, ctx.archetypes, ctx.hospitalUnits);
-    return {
-      summary: {
-        totalUsers: ctx.allRows.length,
-        onlineNow: ctx.allRows.filter((r) => r.isOnline).length,
-        activeUsers: ctx.allRows.filter((r) => r.status === 'Active').length,
-        dormantUsers: ctx.allRows.filter((r) => r.status === 'Dormant').length,
-        inactiveUsers: ctx.allRows.filter((r) => r.status === 'Inactive').length,
-      },
-      archetypeSummary: scoped.archetypeSummary,
-      unitSummary: scoped.unitSummary,
-      archetypes: ctx.archetypes,
-      hospitalUnits: ctx.hospitalUnits,
-    };
+    return buildPageBundleFromContext(ctx);
   }
 
   async loadUsersPage(accessToken: string, body: unknown) {
@@ -78,51 +76,25 @@ export class MonitoringService {
     const cached = this.getCachedContext();
     const ctx = await cached.contextPromise;
     const page = await loadMonitoringUsersPage(cached.admin, query, ctx.allRows);
-    if (includePii) return page;
     return {
       ...page,
-      rows: page.rows.map((row) => ({
-        ...row,
-        email: row.email ? maskEmail(row.email) : '',
-      })),
+      rows: this.maskRowsIfNeeded(page.rows, includePii),
     };
   }
-}
 
-function emptySummaryRow(key: string, label: string) {
-  return { key, label, total: 0, online: 0, active: 0, dormant: 0, inactive: 0 };
-}
-
-function bumpSummary(
-  row: { total: number; online: number; active: number; dormant: number; inactive: number },
-  metric: { isOnline: boolean; status: string },
-) {
-  row.total += 1;
-  if (metric.isOnline) row.online += 1;
-  if (metric.status === 'Active') row.active += 1;
-  else if (metric.status === 'Dormant') row.dormant += 1;
-  else row.inactive += 1;
-}
-
-function buildScopeSummaries(
-  rows: Array<{ archetypeNames: string[]; unitNames: string[]; isOnline: boolean; status: string }>,
-  archetypes: { id: string; name: string }[],
-  hospitalUnits: { id: string; name: string; archetypeId: string }[],
-) {
-  const archMap = new Map(archetypes.map((a) => [a.name, emptySummaryRow(a.id, a.name)]));
-  const unitMap = new Map(hospitalUnits.map((hu) => [hu.name, emptySummaryRow(hu.id, hu.name)]));
-  for (const row of rows) {
-    for (const arch of row.archetypeNames) {
-      const entry = archMap.get(arch);
-      if (entry) bumpSummary(entry, row);
-    }
-    for (const unit of row.unitNames) {
-      const entry = unitMap.get(unit);
-      if (entry) bumpSummary(entry, row);
-    }
+  async loadScreen(accessToken: string, body: unknown) {
+    const query = parseMonitoringUsersQuery(body);
+    await this.assertView(accessToken, query.userId);
+    const includePii = await viewerCanSeeUserPii(this.authZ, accessToken, query.userId);
+    const cached = this.getCachedContext();
+    const ctx = await cached.contextPromise;
+    const screen = await loadMonitoringScreen(cached.admin, query, ctx);
+    return {
+      ...screen,
+      usersPage: {
+        ...screen.usersPage,
+        rows: this.maskRowsIfNeeded(screen.usersPage.rows, includePii),
+      },
+    };
   }
-  return {
-    archetypeSummary: Array.from(archMap.values()).sort((a, b) => b.active - a.active || a.label.localeCompare(b.label)),
-    unitSummary: Array.from(unitMap.values()).sort((a, b) => b.active - a.active || a.label.localeCompare(b.label)),
-  };
 }

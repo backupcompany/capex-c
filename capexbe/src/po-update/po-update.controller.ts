@@ -15,6 +15,20 @@ export class PoUpdateController {
     return this.poUpdateService.loadPageBundle(token, body);
   }
 
+  @RequirePermission('PO Update', 'view')
+  @Post('master')
+  async master(@Req() req: Request, @Body() body: unknown) {
+    const token = requireAccessTokenFromRequest(req);
+    return this.poUpdateService.loadMaster(token, body);
+  }
+
+  @RequirePermission('PO Update', 'view')
+  @Post('asset-window')
+  async assetWindow(@Req() req: Request, @Body() body: unknown) {
+    const token = requireAccessTokenFromRequest(req);
+    return this.poUpdateService.loadAssetWindow(token, body);
+  }
+
   @RequirePermission('PO Update', 'update')
   @Post('save')
   async save(@Req() req: Request, @Body() body: unknown) {

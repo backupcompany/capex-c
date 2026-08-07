@@ -6,6 +6,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthContextService } from '../auth/auth-context.service';
 import { AuthZService } from '../auth/auth-z.service';
+import { BUDGET_STACK_VIEW_HIERARCHIES } from '../auth/budget-permission.constants';
 import { getAllHospitalUnitsConfig } from '../project-list/master-data.loader';
 import { perfCacheGet, perfCacheSet } from '../shared/perf-cache';
 import { normalizeSearchText } from './duplicate-detection.normalize';
@@ -53,7 +54,12 @@ export class DuplicateDetectionService {
 
   async searchProjects(accessToken: string, body: unknown) {
     const parsed = this.parseSearch(body);
-    await this.authZ.assertHierarchyPermission(accessToken, parsed.userId, 'Budget HU', 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      parsed.userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const extra = `${parsed.huId ?? '_'}:${parsed.excludeId ?? '_'}`;
     const cacheKey = this.cacheKey('project', parsed.periodName, parsed.query, parsed.cursor, extra);
     const cached = await perfCacheGet<Awaited<ReturnType<typeof searchDuplicateProjects>>>(cacheKey);
@@ -80,7 +86,12 @@ export class DuplicateDetectionService {
 
   async searchAssets(accessToken: string, body: unknown) {
     const parsed = this.parseSearch(body);
-    await this.authZ.assertHierarchyPermission(accessToken, parsed.userId, 'Budget HU', 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      parsed.userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const extra = `${parsed.huId ?? '_'}:${parsed.projectId ?? '_'}:${parsed.excludeId ?? '_'}`;
     const cacheKey = this.cacheKey('asset', parsed.periodName, parsed.query, parsed.cursor, extra);
     const cached = await perfCacheGet<Awaited<ReturnType<typeof searchDuplicateAssets>>>(cacheKey);
@@ -107,7 +118,12 @@ export class DuplicateDetectionService {
 
   async fetchProject(accessToken: string, body: unknown) {
     const parsed = parseDuplicateFetchBody(body);
-    await this.authZ.assertHierarchyPermission(accessToken, parsed.userId, 'Budget HU', 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      parsed.userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const { client } = await this.authContext.resolve(accessToken, parsed.userId);
 
     const { data: project, error } = await client
@@ -146,7 +162,12 @@ export class DuplicateDetectionService {
 
   async fetchAsset(accessToken: string, body: unknown) {
     const parsed = parseDuplicateFetchBody(body);
-    await this.authZ.assertHierarchyPermission(accessToken, parsed.userId, 'Budget HU', 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      parsed.userId,
+      [...BUDGET_STACK_VIEW_HIERARCHIES],
+      'view',
+    );
     const { client } = await this.authContext.resolve(accessToken, parsed.userId);
 
     const { data: asset, error } = await client

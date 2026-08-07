@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { User } from '@/types';
+import { useSessionReady } from '@/stores/authStore';
 import { queryKeys } from '@/lib/query-keys';
 import {
   DASHBOARD_GC_TIME_MS,
@@ -27,6 +28,7 @@ function statsFromBundle(bundle: DashboardBundle | undefined): DashboardStats {
 export function useDashboardPage({ periodName, currentUser }: UseDashboardPageParams) {
   const userId = currentUser.id;
   const trimmedPeriod = periodName.trim();
+  const sessionReady = useSessionReady();
 
   const cachedBundle = useMemo(
     () => (trimmedPeriod ? readCachedDashboardBundle(trimmedPeriod, userId) : undefined),
@@ -46,7 +48,7 @@ export function useDashboardPage({ periodName, currentUser }: UseDashboardPagePa
       }
       return bundle;
     },
-    enabled: Boolean(trimmedPeriod),
+    enabled: Boolean(trimmedPeriod) && sessionReady,
     staleTime: DASHBOARD_STALE_TIME_MS,
     gcTime: DASHBOARD_GC_TIME_MS,
     refetchOnWindowFocus: false,

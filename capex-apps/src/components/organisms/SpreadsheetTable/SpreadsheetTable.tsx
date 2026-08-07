@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { SmartNumericDisplay } from '../../atoms/SmartNumericDisplay/SmartNumericDisplay';
 import { NumericInput } from '../../atoms/NumericInput/NumericInput';
@@ -41,6 +41,13 @@ interface SpreadsheetTableProps<T> {
   windowRows?: boolean | 'auto';
   /** Alias for windowRows — matches GenericTable API. */
   virtualizeRows?: boolean | 'auto';
+  /** Always virtualize regardless of row count. */
+  forceVirtualize?: boolean;
+  /** Dim tbody while user scrolls (window transition UX). */
+  dimWhileScrolling?: boolean;
+  /** Fired when scroll nears bottom — load next window page. */
+  onNearEnd?: () => void;
+  nearEndThresholdPx?: number;
   /** When paste exceeds row count, append blank rows from this factory. */
   createRowOnPaste?: () => T;
 }
@@ -77,13 +84,51 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
   maxHeight,
   windowRows = 'auto',
   virtualizeRows,
+  forceVirtualize = false,
+  dimWhileScrolling = false,
+  onNearEnd,
+  nearEndThresholdPx = 120,
   createRowOnPaste,
 }: SpreadsheetTableProps<T>) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nearEndFiredRef = useRef(false);
+
   const rowWindowMode = virtualizeRows ?? windowRows;
   const windowingEnabled =
+    forceVirtualize ||
     rowWindowMode === true ||
     (rowWindowMode === 'auto' && data.length >= WINDOW_ROW_THRESHOLD);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      if (dimWhileScrolling) {
+        setIsScrolling(true);
+        if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+        scrollEndTimerRef.current = setTimeout(() => setIsScrolling(false), 150);
+      }
+      if (onNearEnd) {
+        const nearBottom =
+          el.scrollTop + el.clientHeight >= el.scrollHeight - nearEndThresholdPx;
+        if (nearBottom && !nearEndFiredRef.current) {
+          nearEndFiredRef.current = true;
+          onNearEnd();
+        } else if (!nearBottom) {
+          nearEndFiredRef.current = false;
+        }
+      }
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    };
+  }, [dimWhileScrolling, onNearEnd, nearEndThresholdPx]);
 
   const rowVirtualizer = useVirtualizer({
     count: windowingEnabled ? data.length : 0,
@@ -239,11 +284,14 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
   return (
     <div
       ref={scrollRef}
-      className={`overflow-auto border border-siloam-border rounded-xl shadow-soft ${containerClassName ?? ''} ${className ?? ''}`}
+      className={`overflow-auto border border-siloam-border rounded-xl shadow-soft relative ${containerClassName ?? ''} ${className ?? ''} ${dimWhileScrolling && isScrolling ? 'select-none' : ''}`}
       style={effectiveMaxHeight ? { maxHeight: effectiveMaxHeight } : undefined}
       onPaste={handlePaste}
     >
-      <table className="w-full text-sm table-auto min-w-full border-collapse">
+      {dimWhileScrolling && isScrolling ? (
+        <div className="pointer-events-none absolute inset-0 z-10 bg-siloam-surface/25" aria-hidden />
+      ) : null}
+      <table className={`w-full text-sm table-auto min-w-full border-collapse transition-opacity duration-150 ${dimWhileScrolling && isScrolling ? 'opacity-50' : 'opacity-100'}`}>
         <thead className="text-xs text-siloam-text-secondary uppercase bg-siloam-sidebar sticky top-0 z-20 border-b border-siloam-border">
           <tr>
             {columns.map((col, index) => {

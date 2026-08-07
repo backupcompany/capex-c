@@ -10,6 +10,7 @@ import {
 import { resolveAuthoritativeProjectListScope } from '../project-list/project-list-query.util';
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import { perfCacheGet, perfCacheSet } from '../shared/perf-cache';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 const MOM_SUMMARY_COLUMNS =
   'id,asset_id,content,created_at,created_by_user_id,created_by_username';
@@ -206,14 +207,18 @@ export class MomDailySummaryService {
       scopeAll?: boolean;
       skipCache?: boolean;
     };
-    const userId = Number(b.userId);
-    if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
+    const userId = resolveBodyActorUserId(b);
     const periodName = String(b.periodName ?? '').trim();
     const summaryDate = String(b.summaryDate ?? '').trim();
     if (!periodName) throw new BadRequestException('periodName is required');
     if (!summaryDate) throw new BadRequestException('summaryDate is required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Daily MOM Summary', 'view');
+    await this.authZ.assertAnyHierarchyPermission(
+      accessToken,
+      userId,
+      ['Daily MOM Summary', 'Project'],
+      'view',
+    );
 
     const cacheKey = cacheKeys.momDailySummary(userId, periodName, summaryDate);
     if (b.skipCache !== true) {

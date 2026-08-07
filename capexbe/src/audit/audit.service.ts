@@ -4,6 +4,7 @@ import { AuthZService } from '../auth/auth-z.service';
 import { getUserById } from '../project-list/master-data.loader';
 import { toCamelCase } from '../project-list/supabase-helpers';
 import { assertAnyHierarchyPermission } from '../shared/authz-helpers.util';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 
 const AUDIT_LOG_COLUMNS =
   'id,entity_id,entity_type,action,field_name,old_value,new_value,changed_by,timestamp';
@@ -43,9 +44,7 @@ export class AuditService {
   ) {}
 
   private parseUserId(body: unknown): number {
-    const userId = Number((body as Record<string, unknown>)?.userId);
-    if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
-    return userId;
+    return resolveBodyActorUserId(body);
   }
 
   private async assertAuditRead(accessToken: string, userId: number): Promise<void> {

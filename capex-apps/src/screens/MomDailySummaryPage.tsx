@@ -24,6 +24,34 @@ function formatDateTime(iso: string) {
   }
 }
 
+function localDateInputValue(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function shiftLocalDate(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const next = new Date(y, m - 1, d);
+  next.setDate(next.getDate() + days);
+  return localDateInputValue(next);
+}
+
+function formatSummaryDateLabel(iso: string): string {
+  try {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function rowToPlainText(r: DailyMOMSummaryRow): string {
   return [
     `Project: ${r.projectName} (${r.projectCode})`,
@@ -61,12 +89,13 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
   const { showToast } = useToast();
   const permissions = usePermissions(currentUser, allRoles);
   const canView = permissions.canOperateOnPage(Page.DailyMOMSummary, 'view');
-  /** Empty until user picks a date — no fetch on mount. */
-  const [summaryDate, setSummaryDate] = useState('');
+  const [summaryDate, setSummaryDate] = useState(() => localDateInputValue());
   const [selectedMomId, setSelectedMomId] = useState<string | null>(null);
   const scopesKey = useMemo(() => JSON.stringify(permissions.userScopes ?? []), [permissions.userScopes]);
 
   const queryEnabled = Boolean(currentUser && periodName.trim() && canView && summaryDate.trim());
+  const todayIso = localDateInputValue();
+  const yesterdayIso = shiftLocalDate(todayIso, -1);
 
   const {
     data: rows = [],
@@ -106,14 +135,15 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
   const hasLoaded = queryEnabled && isSuccess && !loading;
 
   const handleDateChange = useCallback((value: string) => {
-    setSummaryDate(value);
+    setSummaryDate(value.trim() || localDateInputValue());
     setSelectedMomId(null);
   }, []);
 
-  const handleClearDate = useCallback(() => {
-    setSummaryDate('');
-    setSelectedMomId(null);
-  }, []);
+  const pickToday = useCallback(() => handleDateChange(todayIso), [handleDateChange, todayIso]);
+  const pickYesterday = useCallback(
+    () => handleDateChange(yesterdayIso),
+    [handleDateChange, yesterdayIso],
+  );
 
   const toggleRowSelect = useCallback((momId: string) => {
     setSelectedMomId((prev) => (prev === momId ? null : momId));
@@ -188,76 +218,109 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
     );
   }
 
-  const panelDimmed = isIdle || loading || refreshing;
+  const dateChipClass = (active: boolean) =>
+    `rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+      active
+        ? 'bg-siloam-blue text-white'
+        : 'border border-siloam-border bg-white text-siloam-text-primary hover:bg-siloam-surface'
+    }`;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-siloam-text-primary">Daily MOM Summary</h1>
         <p className="mt-1 text-sm text-siloam-text-secondary max-w-3xl">
-          Pilih tanggal ringkasan untuk memuat MOM hari tersebut. Data tidak di-fetch otomatis saat halaman
-          dibuka — hanya proyek pada periode anggaran aktif ({periodName || '—'}).
+          Lihat semua catatan MOM (Minutes of Meeting) yang dibuat pada satu hari, untuk proyek di periode
+          anggaran aktif{periodName ? `: ${periodName}` : ''}. Ganti tanggal untuk melihat hari lain.
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-4">
-        <div>
-          <label htmlFor="mom-summary-date" className="block text-sm font-medium text-siloam-text-secondary">
-            Tanggal ringkasan
-          </label>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <input
-              id="mom-summary-date"
-              type="date"
-              value={summaryDate}
-              onChange={(e) => handleDateChange(e.target.value)}
-              className="block rounded-xl border border-siloam-border bg-siloam-surface px-3 py-2 text-siloam-text-primary focus:outline-none focus:ring-2 focus:ring-siloam-blue"
-            />
-            {summaryDate ? (
+      <div className="rounded-xl border border-siloam-border bg-white p-4 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-siloam-text-primary">Pilih tanggal</p>
+              <p className="text-xs text-siloam-text-secondary mt-0.5">
+                Data dimuat otomatis saat tanggal berubah.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="mom-summary-date"
+                type="date"
+                value={summaryDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="rounded-xl border border-siloam-border bg-siloam-surface px-3 py-2 text-siloam-text-primary focus:outline-none focus:ring-2 focus:ring-siloam-blue"
+              />
+              <button type="button" onClick={pickToday} className={dateChipClass(summaryDate === todayIso)}>
+                Hari ini
+              </button>
               <button
                 type="button"
-                onClick={handleClearDate}
-                className="text-sm text-siloam-text-secondary hover:text-siloam-text-primary underline"
+                onClick={pickYesterday}
+                className={dateChipClass(summaryDate === yesterdayIso)}
               >
-                Hapus tanggal
+                Kemarin
               </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={!queryEnabled || loading}
+              className="rounded-xl border border-siloam-border bg-white px-4 py-2 text-sm font-medium text-siloam-text-primary hover:bg-siloam-surface disabled:opacity-50"
+            >
+              {loading ? 'Memuat…' : refreshing ? 'Memuat ulang…' : 'Segarkan'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyAllMOMText()}
+              disabled={!hasLoaded || rows.length === 0}
+              className="rounded-xl border border-siloam-border bg-white px-4 py-2 text-sm font-medium text-siloam-text-primary hover:bg-siloam-surface disabled:opacity-50"
+            >
+              Salin semua MOM
+            </button>
+            <button
+              type="button"
+              onClick={exportExcel}
+              disabled={!hasLoaded || rows.length === 0}
+              className="rounded-xl border border-siloam-border bg-white px-4 py-2 text-sm font-medium text-siloam-text-primary hover:bg-siloam-surface disabled:opacity-50"
+            >
+              Ekspor Excel
+            </button>
+          </div>
+        </div>
+
+        {!isIdle ? (
+          <div className="rounded-lg bg-siloam-surface/80 px-4 py-3 text-sm text-siloam-text-secondary border border-siloam-border/60">
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-siloam-blue border-t-transparent" />
+                Memuat MOM untuk {formatSummaryDateLabel(summaryDate)}…
+              </span>
+            ) : hasLoaded && rows.length === 0 ? (
+              <>
+                <span className="font-medium text-siloam-text-primary">0 catatan</span>
+                {' · '}
+                Tidak ada MOM pada {formatSummaryDateLabel(summaryDate)} untuk cakupan Anda.
+              </>
+            ) : hasLoaded ? (
+              <>
+                <span className="font-medium text-siloam-text-primary">
+                  {rows.length} catatan MOM
+                </span>
+                {' · '}
+                {formatSummaryDateLabel(summaryDate)}
+                {uniqueProjects > 0 ? ` · ${uniqueProjects} project` : ''}
+              </>
             ) : null}
           </div>
-          {isIdle ? (
-            <p className="mt-1 text-xs text-siloam-text-secondary">Pilih tanggal untuk memuat data.</p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={!queryEnabled || loading}
-            className="rounded-xl bg-siloam-blue px-4 py-2 text-sm font-medium text-white hover:bg-siloam-blue/90 disabled:opacity-50"
-          >
-            {loading ? 'Memuat…' : refreshing ? 'Memuat ulang…' : 'Muat ringkasan'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void copyAllMOMText()}
-            disabled={!hasLoaded || rows.length === 0}
-            className="rounded-xl border border-siloam-border bg-white px-4 py-2 text-sm font-medium text-siloam-text-primary hover:bg-siloam-surface disabled:opacity-50"
-          >
-            Salin semua MOM
-          </button>
-          <button
-            type="button"
-            onClick={exportExcel}
-            disabled={!hasLoaded || rows.length === 0}
-            className="rounded-xl border border-siloam-border bg-white px-4 py-2 text-sm font-medium text-siloam-text-primary hover:bg-siloam-surface disabled:opacity-50"
-          >
-            Ekspor Excel
-          </button>
-        </div>
+        ) : null}
       </div>
 
-      <div
-        className={`grid grid-cols-1 sm:grid-cols-3 gap-4 transition-opacity duration-200 ${panelDimmed ? 'opacity-45 pointer-events-none' : 'opacity-100'}`}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-xl border border-siloam-border bg-white p-4 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">Total MOM</p>
           <p className="mt-1 text-2xl font-bold text-siloam-text-primary">
@@ -278,9 +341,7 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
         </div>
       </div>
 
-      <div
-        className={`rounded-xl border border-siloam-border bg-white overflow-hidden shadow-sm transition-opacity duration-200 ${panelDimmed ? 'opacity-45' : 'opacity-100'}`}
-      >
+      <div className="rounded-xl border border-siloam-border bg-white overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -298,15 +359,19 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
               {isIdle && (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-siloam-text-secondary">
-                    Pilih tanggal ringkasan untuk menampilkan MOM hari tersebut.
+                    Pilih tanggal untuk menampilkan ringkasan MOM.
                   </td>
                 </tr>
               )}
               {loading && <MomTableSkeleton />}
               {!isIdle && !loading && hasLoaded && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-siloam-text-secondary">
-                    Tidak ada MOM pada tanggal ini untuk cakupan Anda, atau belum ada catatan pada periode ini.
+                  <td colSpan={7} className="px-4 py-10 text-center">
+                    <p className="font-medium text-siloam-text-primary">Tidak ada MOM pada tanggal ini</p>
+                    <p className="mt-1 text-sm text-siloam-text-secondary max-w-md mx-auto">
+                      Belum ada catatan MOM yang dibuat pada {formatSummaryDateLabel(summaryDate)} untuk
+                      proyek dalam cakupan Anda.
+                    </p>
                   </td>
                 </tr>
               )}

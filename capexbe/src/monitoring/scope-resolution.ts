@@ -122,5 +122,12 @@ export function formatRoleNames(
   assignments: Array<{ roleName?: string }> | undefined,
 ): string {
   const names = [...new Set((assignments ?? []).map((a) => String(a.roleName ?? '').trim()).filter(Boolean))];
+  names.sort((a, b) => {
+    const priority = (name: string) => (name === 'Super Admin' ? 0 : name === 'System Admin' ? 1 : 100);
+    const pa = priority(a);
+    const pb = priority(b);
+    if (pa !== pb) return pa - pb;
+    return a.localeCompare(b, 'id');
+  });
   return names.length > 0 ? names.join(', ') : 'N/A';
 }

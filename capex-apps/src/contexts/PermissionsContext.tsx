@@ -4,8 +4,8 @@ import { readConfigurationPackCacheAnyAge } from '../lib/configurationDiskCache'
 import { isCapexBeConfigured } from '../lib/capexBeClient';
 import { useBackendSession } from '../lib/auth/authConstants';
 import { getAccessTokenForBackend } from '../lib/authSession';
-import { useAuthStore } from '../stores/authStore';
-import type { ArchetypeConfig, HospitalUnitConfig } from '../types';
+import { useAuthenticatedNetworkReady, useAuthStore } from '../stores/authStore';
+import type { ArchetypeConfig, HospitalUnitConfig, User } from '../types';
 
 interface ScopeClassification {
     archetypeNames: Set<string>;
@@ -42,18 +42,18 @@ function readInitialClassification(userId: number): ScopeClassification {
     return classificationFromPack(readConfigurationPackCacheAnyAge(userId)) ?? defaultClassification;
 }
 
-async function loadScopeMasterConfig(userId: number): Promise<{
+async function loadScopeMasterConfig(user: User): Promise<{
     archetypes: ArchetypeConfig[];
     hus: HospitalUnitConfig[];
 }> {
-    if (!isCapexBeConfigured()) {
+    if (!isCapexBeConfigured() || !user.id) {
         return { archetypes: [], hus: [] };
     }
 
     const accessToken = useBackendSession()
         ? null
         : await getAccessTokenForBackend();
-    const pack = await fetchFreshConfigurationSlices(accessToken, userId, [
+    const pack = await fetchFreshConfigurationSlices(accessToken, user.id, [
         'archetypes',
         'hospitalUnits',
     ]);
@@ -65,21 +65,21 @@ async function loadScopeMasterConfig(userId: number): Promise<{
 }
 
 export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const authStatus = useAuthStore((s) => s.status);
-    const sessionUserId = useAuthStore((s) =>
-        s.status === 'authenticated' && s.user?.id ? s.user.id : null,
+    const networkReady = useAuthenticatedNetworkReady();
+    const sessionUser = useAuthStore((s) =>
+        s.status === 'authenticated' && s.user?.id ? s.user : null,
     );
     const [classification, setClassification] = useState<ScopeClassification>(() =>
-        sessionUserId != null ? readInitialClassification(sessionUserId) : defaultClassification,
+        sessionUser?.id != null ? readInitialClassification(sessionUser.id) : defaultClassification,
     );
 
     useEffect(() => {
-        if (authStatus !== 'authenticated' || sessionUserId == null) {
+        if (!networkReady || !sessionUser?.id) {
             setClassification(defaultClassification);
             return;
         }
 
-        const diskSeed = readInitialClassification(sessionUserId);
+        const diskSeed = readInitialClassification(sessionUser.id);
         setClassification((prev) => {
             if (prev.archetypeIdToName.size || prev.huIdToName.size) return prev;
             return diskSeed;
@@ -88,7 +88,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         let cancelled = false;
         void (async () => {
             try {
-                const { archetypes, hus } = await loadScopeMasterConfig(sessionUserId);
+                const { archetypes, hus } = await loadScopeMasterConfig(sessionUser);
                 if (cancelled) return;
                 setClassification({
                     archetypeNames: new Set(archetypes.map(a => a.name)),
@@ -101,7 +101,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
         })();
         return () => { cancelled = true; };
-    }, [authStatus, sessionUserId]);
+    }, [networkReady, sessionUser]);
 
     return (
         <PermissionsContext.Provider value={classification}>

@@ -21,7 +21,7 @@ export const ExecutiveDashboardHeader = memo(function ExecutiveDashboardHeader({
   return (
     <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-2 border-b border-siloam-border/60">
       <div className="space-y-1.5 min-w-0">
-        <h1 className="text-2xl lg:text-3xl font-bold text-siloam-text-primary tracking-tight">
+        <h1 className="text-2xl lg:text-3xl font-bold text-siloam-text-primary tracking-tight select-none">
           Executive Dashboard
         </h1>
         <p className="text-sm text-siloam-text-secondary font-medium">

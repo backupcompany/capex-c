@@ -1,7 +1,10 @@
+import { redactOutgoingUserIdJson } from '../redactApiUserId';
 import { useBackendSession } from './authConstants';
 import { coordinatedRefreshSession } from './authRefreshCoordinator';
 import { authDebug } from './authDebug';
+import { isAuthProbeComplete } from './authProbeGate';
 import { isBackendSessionValid } from './sessionValidity';
+import { hasSessionCookieHint } from './sessionCookieHint';
 import { withCsrfHeadersAsync } from './csrfToken';
 
 export type AuthenticatedFetchOptions = RequestInit & {
@@ -36,8 +39,13 @@ export async function authenticatedFetch(
 
   while (true) {
     const mergedInit = await withCsrfHeadersAsync(fetchInit);
+    let body = mergedInit.body;
+    if (typeof body === 'string') {
+      body = redactOutgoingUserIdJson(body);
+    }
     const res = await fetch(input, {
       ...mergedInit,
+      body,
       credentials: mergedInit.credentials ?? fetchInit.credentials ?? 'include',
     });
     lastRes = res;
@@ -64,7 +72,11 @@ export async function authenticatedFetch(
     const refreshed = await coordinatedRefreshSession();
     if (!refreshed) {
       const stillValid = await isBackendSessionValid();
-      if (!stillValid) {
+      if (!stillValid && hasSessionCookieHint()) {
+        if (!isAuthProbeComplete()) {
+          authDebug('fetch 401: auth probe pending — skip logout');
+          return res;
+        }
         authDebug('fetch 401: session invalid — cleanup');
         const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
           await import('./authApi');

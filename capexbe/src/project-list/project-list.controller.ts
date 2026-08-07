@@ -1,7 +1,10 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { ProjectListService } from './project-list.service';
 
 class ProjectListBodyDto {
@@ -22,10 +25,7 @@ export class ProjectListController {
   @Post('project-list')
   async projectList(@Req() req: Request, @Body() body: ProjectListBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.projectListService.loadBundle(token, userId, body.periodName, !!body.skipCache, {
       page: body.page,
       pageSize: body.pageSize,
@@ -37,10 +37,7 @@ export class ProjectListController {
   @Post('project-list/master')
   async projectListMaster(@Req() req: Request, @Body() body: { userId?: number }) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.projectListService.loadMasterBundle(token, userId);
   }
 

@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { toCamelCase } from '../project-list/supabase-helpers';
-import { buildSafeOrIlikeFilter, sanitizePostgrestIdList } from '../shared/postgrest-filter.util';
+import { sanitizePostgrestIdList } from '../shared/postgrest-filter.util';
 import type { EnrichedFsRow } from './fs-enrichment.loader';
 import { isNewRevenueGeneratingCategory } from './fs-enrichment.loader';
 import { FS_APPROVAL_STUDY_PAGE_SELECT, FS_REALIZATION_STUDY_PAGE_SELECT } from './fs-db.constants';
 import type { FsApprovalQuery, FsRealizationQuery } from './fs-query.dto';
+import { filterAndSortApprovalRows, filterAndSortRealizationRows } from './fs-query.util';
 import { resolveFsAllowedHuIds } from './fs-hu-scope.util';
 
 const APPROVED_CONCLUSIONS = new Set(['Approved', 'Approved with Notes']);
@@ -160,8 +161,20 @@ export async function loadFsApprovalStudiesPage(
     q = q.lte('payback_period', query.paybackMax);
   }
 
-  const searchOr = buildSafeOrIlikeFilter(['conclusion', 'follow_up_action'], query.search);
-  if (searchOr) q = q.or(searchOr);
+  const searchActive = Boolean(query.search.trim());
+
+  if (searchActive) {
+    const { data, error } = await q;
+    if (error) throw new Error(`feasibility_studies(fs-approval-page): ${error.message}`);
+
+    const allRows = ((data ?? []) as StudyPageRow[]).map((row) =>
+      mapStudyRowToEnrichedFs(row, categoryMap),
+    );
+    const filtered = filterAndSortApprovalRows(allRows, query);
+    const total = filtered.length;
+    const rows = filtered.slice(from, to + 1);
+    return { rows, total, page, pageSize };
+  }
 
   switch (query.sortBy) {
     case 'paybackPeriod_asc':
@@ -183,35 +196,7 @@ export async function loadFsApprovalStudiesPage(
   const { data, error, count } = await q.range(from, to);
   if (error) throw new Error(`feasibility_studies(fs-approval-page): ${error.message}`);
 
-  let rows = ((data ?? []) as StudyPageRow[]).map((row) => mapStudyRowToEnrichedFs(row, categoryMap));
-
-  const search = query.search.trim().toLowerCase();
-  if (search) {
-    rows = rows.filter((fs) => {
-      const numericOnly = /^\d+$/.test(search);
-      if (numericOnly) {
-        const num = parseInt(search, 10);
-        if (fs.paybackPeriod === num || fs.amount === num || fs.npv === num) return true;
-      }
-      return (
-        fs.projectName.toLowerCase().includes(search) ||
-        fs.huName.toLowerCase().includes(search) ||
-        fs.archetypeName.toLowerCase().includes(search) ||
-        fs.capexCategoryName.toLowerCase().includes(search) ||
-        String(fs.conclusion).toLowerCase().includes(search) ||
-        String(fs.paybackPeriod).includes(search)
-      );
-    });
-  }
-
-  if (query.archetypes.length > 0) {
-    const set = new Set(query.archetypes);
-    rows = rows.filter((fs) => set.has(fs.archetypeName));
-  }
-  if (query.hus.length > 0) {
-    const set = new Set(query.hus);
-    rows = rows.filter((fs) => set.has(fs.huName));
-  }
+  const rows = ((data ?? []) as StudyPageRow[]).map((row) => mapStudyRowToEnrichedFs(row, categoryMap));
 
   return {
     rows,
@@ -251,6 +236,25 @@ export async function loadFsRealizationStudiesPage(
   if (withHu === 'empty') return { rows: [], total: 0, page, pageSize };
   q = withHu;
 
+  const searchActive = Boolean(query.search.trim());
+
+  if (searchActive) {
+    const { data, error } = await q;
+    if (error) throw new Error(`feasibility_studies(fs-realization-page): ${error.message}`);
+
+    const allRows = ((data ?? []) as StudyPageRow[])
+      .map((row) => mapStudyRowToEnrichedFs(row, categoryMap))
+      .filter(
+        (fs) =>
+          APPROVED_CONCLUSIONS.has(String(fs.conclusion)) &&
+          isNewRevenueGeneratingCategory(fs.capexCategoryName, fs.budgetCategoryId),
+      );
+    const filtered = filterAndSortRealizationRows(allRows, query);
+    const total = filtered.length;
+    const rows = filtered.slice(from, to + 1);
+    return { rows, total, page, pageSize };
+  }
+
   switch (query.sortBy) {
     case 'amount_desc':
       q = q.order('amount', { ascending: false });
@@ -284,27 +288,6 @@ export async function loadFsRealizationStudiesPage(
       APPROVED_CONCLUSIONS.has(String(fs.conclusion)) &&
       isNewRevenueGeneratingCategory(fs.capexCategoryName, fs.budgetCategoryId),
   );
-
-  const search = query.search.trim().toLowerCase();
-  if (search) {
-    rows = rows.filter(
-      (fs) =>
-        fs.projectName.toLowerCase().includes(search) ||
-        fs.huName.toLowerCase().includes(search) ||
-        fs.archetypeName.toLowerCase().includes(search) ||
-        fs.capexCategoryName.toLowerCase().includes(search) ||
-        String(fs.fsType || '').toLowerCase().includes(search),
-    );
-  }
-
-  if (query.archetypes.length > 0) {
-    const set = new Set(query.archetypes);
-    rows = rows.filter((fs) => set.has(fs.archetypeName));
-  }
-  if (query.hus.length > 0) {
-    const set = new Set(query.hus);
-    rows = rows.filter((fs) => set.has(fs.huName));
-  }
 
   return {
     rows,

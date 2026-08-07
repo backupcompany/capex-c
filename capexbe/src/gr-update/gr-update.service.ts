@@ -5,7 +5,9 @@ import { AuthZService } from '../auth/auth-z.service';
 import { persistAssetRow } from '../budget-hu/budget-hu-persist.util';
 import { CACHE_TTL_MS, cacheKeys } from '../shared/cache-keys';
 import { CacheAsideService } from '../shared/cache-aside.service';
-import { loadGrUpdatePageBundle } from './gr-update-page.loader';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
+import { loadGrUpdatePageBundle, loadGrUpdateMaster, loadGrUpdateAssetWindow, clearGrUpdateFilteredIdsCache } from './gr-update-page.loader';
+import { parseGrWindowFilters } from './gr-update-filter.util';
 
 type GrAssetPatch = {
   id: string;
@@ -39,12 +41,8 @@ export class GrUpdateService {
     private readonly cacheAside: CacheAsideService,
   ) {}
 
-  private parseUserId(body: { userId?: number }): number {
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new BadRequestException('Invalid userId');
-    }
-    return userId;
+  private parseUserId(body: unknown): number {
+    return resolveBodyActorUserId(body);
   }
 
   private async loadPageBundleCached(client: SupabaseClient, userId: number, periodName: string) {
@@ -68,6 +66,44 @@ export class GrUpdateService {
     return this.loadPageBundleCached(client, userId, periodName);
   }
 
+  async loadMaster(accessToken: string, body: unknown) {
+    const b = (body ?? {}) as { userId?: number; periodName?: string };
+    const userId = this.parseUserId(b);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'GR Update', 'view');
+    const { client } = await this.authContext.getRlsClient(accessToken, userId);
+    const periodName = typeof b.periodName === 'string' ? b.periodName.trim() : '';
+    return loadGrUpdateMaster(client, periodName || undefined);
+  }
+
+  async loadAssetWindow(accessToken: string, body: unknown) {
+    const b = (body ?? {}) as {
+      userId?: number;
+      periodName?: string;
+      page?: number;
+      pageSize?: number;
+      filters?: Record<string, unknown>;
+    };
+    const userId = this.parseUserId(b);
+    await this.authZ.assertHierarchyPermission(accessToken, userId, 'GR Update', 'view');
+    const { client } = await this.authContext.getRlsClient(accessToken, userId);
+    const periodName = typeof b.periodName === 'string' ? b.periodName.trim() : '';
+    if (!periodName) {
+      return {
+        assets: [],
+        projects: [],
+        assetLastTaskMap: {},
+        totalAssetCount: 0,
+        page: 1,
+        pageSize: 50,
+      };
+    }
+    return loadGrUpdateAssetWindow(client, periodName, {
+      page: Number(b.page) || 1,
+      pageSize: Number(b.pageSize) || 50,
+      filters: parseGrWindowFilters(b.filters),
+    });
+  }
+
   async saveAssets(accessToken: string, body: unknown) {
     const b = (body ?? {}) as { userId?: number; periodName?: string; assets?: GrAssetPatch[] };
     const userId = this.parseUserId(b);
@@ -81,8 +117,9 @@ export class GrUpdateService {
     await this.patchAssets(client, patches);
 
     const periodName = typeof b.periodName === 'string' ? b.periodName.trim() : '';
+    clearGrUpdateFilteredIdsCache(periodName || undefined);
     if (periodName) {
-      await this.cacheAside.invalidate(cacheKeys.grUpdatePage(userId, periodName));
+      await this.cacheAside.invalidateByPrefix(`app:table:gr-update:page:${userId}:`);
     }
 
     return { ok: true, updated: patches.length };

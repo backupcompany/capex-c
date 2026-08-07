@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import type { EnrichedAsset } from '@/types';
 import type { Column } from '@/components/organisms/GenericTable/GenericTable';
 import { GenericTable } from '@/components/organisms/GenericTable/GenericTable';
+import { Spinner } from '@/components/atoms/Spinner/Spinner';
 import { TABLE_PAGE_SIZE_OPTIONS } from '@/lib/table/pageSizeOptions';
 import { CapexProjectListMobileAssetList } from './CapexProjectListMobileAssetList';
 
@@ -27,56 +28,16 @@ function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
   );
 }
 
-function ProjectListLoadingSpinner({
-  label,
-  size = 'lg',
-}: {
-  label: string;
-  size?: 'sm' | 'lg';
-}) {
-  const spinnerClass =
-    size === 'lg'
-      ? 'h-10 w-10 border-4 border-siloam-blue border-t-transparent'
-      : 'h-4 w-4 border-2 border-siloam-blue border-t-transparent';
-  return (
-    <div className="flex flex-col items-center gap-2.5" role="status" aria-live="polite" aria-busy="true">
-      <span className={`inline-flex rounded-full animate-spin ${spinnerClass}`} aria-hidden />
-      <p
-        className={
-          size === 'lg'
-            ? 'text-sm font-semibold text-siloam-text-secondary'
-            : 'text-xs font-medium text-siloam-text-secondary'
-        }
-      >
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function ProjectListTableLoadingOverlay({
-  label,
-}: {
-  label: string;
-}) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center">
-      <ProjectListLoadingSpinner label={label} />
-    </div>
-  );
-}
-
 export type CapexProjectListTableBlockProps = {
   columns: Column<EnrichedAsset>[];
   paginatedAssets: EnrichedAsset[];
   selectedAssetId?: string | number | null;
   onRowClick: (asset: EnrichedAsset) => void;
   onRowHover: (asset: EnrichedAsset) => void;
-  showInitialLoading: boolean;
-  isFilterRefreshing: boolean;
-  isSearchActive: boolean;
-  isBackgroundRefresh: boolean;
-  isPageTransition: boolean;
+  showBlockingSkeleton: boolean;
+  isTableLoading: boolean;
+  isSearchPending: boolean;
+  isBackgroundRefetch: boolean;
   hasActiveFilters: boolean;
   footerTotalCount: number;
   currentPage: number;
@@ -94,11 +55,10 @@ function CapexProjectListTableBlockInner({
   selectedAssetId,
   onRowClick,
   onRowHover,
-  showInitialLoading,
-  isFilterRefreshing,
-  isSearchActive,
-  isBackgroundRefresh,
-  isPageTransition,
+  showBlockingSkeleton,
+  isTableLoading,
+  isSearchPending,
+  isBackgroundRefetch,
   hasActiveFilters,
   footerTotalCount,
   currentPage,
@@ -109,24 +69,18 @@ function CapexProjectListTableBlockInner({
   onPageChange,
   onItemsPerPageChange,
 }: CapexProjectListTableBlockProps) {
-  const paginationBusy = isPageTransition || showInitialLoading;
+  const showTableBusy = isTableLoading || isSearchPending;
   const showPagination = footerTotalCount > itemsPerPage;
-  const tableDimmed = isPageTransition;
-  const loadingLabel = isPageTransition
-    ? `Memuat halaman ${currentPage}…`
-    : 'Memuat daftar proyek…';
+  const loadingLabel =
+    isSearchPending && !showBlockingSkeleton
+      ? 'Mencari…'
+      : showBlockingSkeleton
+        ? 'Memuat daftar proyek…'
+        : 'Memuat data terbaru…';
 
   return (
     <div data-tour="cpl-asset-table" className="flex-1 overflow-hidden flex flex-col relative">
-      {isFilterRefreshing ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center bg-siloam-surface/95 py-2 animate-fade-in">
-          <ProjectListLoadingSpinner
-            size="sm"
-            label={isSearchActive ? 'Mencari…' : 'Memfilter…'}
-          />
-        </div>
-      ) : null}
-      {isBackgroundRefresh ? (
+      {isBackgroundRefetch ? (
         <>
           <div
             className="pointer-events-none absolute inset-x-0 top-0 z-20 h-0.5 overflow-hidden bg-siloam-border"
@@ -142,14 +96,17 @@ function CapexProjectListTableBlockInner({
 
       <div
         className={`hidden md:block flex-1 overflow-hidden relative transition-opacity duration-200 ${
-          tableDimmed ? 'opacity-45 pointer-events-none' : 'opacity-100'
+          showTableBusy && !showBlockingSkeleton ? 'opacity-50 pointer-events-none select-none' : 'opacity-100'
         }`}
       >
-        {showInitialLoading ? (
-          <>
-            <TableSkeletonRows />
-            <ProjectListTableLoadingOverlay label={loadingLabel} />
-          </>
+        {showBlockingSkeleton ? <TableSkeletonRows /> : null}
+        {showTableBusy ? (
+          <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-siloam-surface/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+              <Spinner size={18} className="text-siloam-blue" />
+              <span>{loadingLabel}</span>
+            </div>
+          </div>
         ) : null}
         <GenericTable
           columns={columns}
@@ -165,14 +122,17 @@ function CapexProjectListTableBlockInner({
 
       <div
         className={`block md:hidden flex-1 overflow-hidden p-4 relative transition-opacity duration-200 ${
-          tableDimmed ? 'opacity-45 pointer-events-none' : 'opacity-100'
+          showTableBusy && !showBlockingSkeleton ? 'opacity-50 pointer-events-none select-none' : 'opacity-100'
         }`}
       >
-        {showInitialLoading ? (
-          <>
-            <TableSkeletonRows rows={6} />
-            <ProjectListTableLoadingOverlay label={loadingLabel} />
-          </>
+        {showBlockingSkeleton ? <TableSkeletonRows rows={6} /> : null}
+        {showTableBusy ? (
+          <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-siloam-surface/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
+              <Spinner size={18} className="text-siloam-blue" />
+              <span>{loadingLabel}</span>
+            </div>
+          </div>
         ) : null}
         <CapexProjectListMobileAssetList
           assets={paginatedAssets}
@@ -188,12 +148,15 @@ function CapexProjectListTableBlockInner({
           <div className="text-sm text-siloam-text-secondary">
             Showing {footerTotalCount > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} -{' '}
             {Math.min(currentPage * itemsPerPage, footerTotalCount)} of {footerTotalCount} assets
+            {isBackgroundRefetch ? (
+              <span className="ml-2 text-siloam-blue">· Memperbarui…</span>
+            ) : null}
           </div>
           <button
             type="button"
             data-tour="cpl-export"
             onClick={onExportExcel}
-            disabled={footerTotalCount === 0 || isExporting || paginationBusy}
+            disabled={footerTotalCount === 0 || isExporting || showTableBusy}
             className="px-3 py-1.5 bg-emerald-600 text-white rounded-md text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             title={
               footerTotalCount > 0
@@ -211,7 +174,7 @@ function CapexProjectListTableBlockInner({
             <select
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-              disabled={paginationBusy}
+              disabled={showTableBusy}
               className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue disabled:opacity-50"
             >
               {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
@@ -227,9 +190,9 @@ function CapexProjectListTableBlockInner({
               <button
                 type="button"
                 onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1 || paginationBusy}
+                disabled={currentPage === 1 || showTableBusy}
                 className={`px-3 py-1 border border-siloam-border rounded bg-siloam-bg text-sm transition disabled:cursor-not-allowed ${
-                  currentPage === 1 || paginationBusy
+                  currentPage === 1 || showTableBusy
                     ? 'opacity-40'
                     : 'opacity-100 hover:bg-siloam-surface'
                 }`}
@@ -255,7 +218,7 @@ function CapexProjectListTableBlockInner({
                       key={pageNum}
                       type="button"
                       onClick={() => onPageChange(pageNum)}
-                      disabled={paginationBusy}
+                      disabled={showTableBusy}
                       className={`px-3 py-1 border rounded text-sm transition disabled:cursor-not-allowed ${
                         isCurrent
                           ? 'bg-siloam-blue text-white border-siloam-blue opacity-100'
@@ -272,9 +235,9 @@ function CapexProjectListTableBlockInner({
               <button
                 type="button"
                 onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages || paginationBusy}
+                disabled={currentPage === totalPages || showTableBusy}
                 className={`px-3 py-1 border border-siloam-border rounded bg-siloam-bg text-sm transition disabled:cursor-not-allowed ${
-                  currentPage === totalPages || paginationBusy
+                  currentPage === totalPages || showTableBusy
                     ? 'opacity-40'
                     : 'opacity-100 hover:bg-siloam-surface'
                 }`}

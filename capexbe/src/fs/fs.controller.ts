@@ -1,13 +1,12 @@
 import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import { requireAccessTokenFromRequest, getCallerUserId } from '../auth/request-access-token.util';
 import { FsService } from './fs.service';
 import {
   parseFsIdBody,
   parseFsIdParam,
   parseFsIdWithUpdatesBody,
-  parseUserIdBody,
   validateFsCreatePayload,
   validateFsRealizationPayload,
 } from './fs.dto';
@@ -20,7 +19,7 @@ export class FsController {
   @Post('feasibility-studies/list')
   async listStudies(@Req() req: Request, @Body() body: unknown) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = parseUserIdBody(body);
+    const userId = getCallerUserId(req);
     return this.fsService.listFeasibilityStudies(token, userId);
   }
 
@@ -37,7 +36,7 @@ export class FsController {
   async createStudy(@Req() req: Request, @Body() body: unknown) {
     const token = requireAccessTokenFromRequest(req);
     const b = (body ?? {}) as Record<string, unknown>;
-    const userId = parseUserIdBody(body);
+    const userId = getCallerUserId(req);
     const payload = validateFsCreatePayload(b.payload ?? {});
     return this.fsService.createFeasibilityStudy(token, userId, payload);
   }
@@ -63,7 +62,7 @@ export class FsController {
   async saveRealization(@Req() req: Request, @Body() body: unknown) {
     const token = requireAccessTokenFromRequest(req);
     const b = (body ?? {}) as Record<string, unknown>;
-    const userId = parseUserIdBody(body);
+    const userId = getCallerUserId(req);
     const payload = validateFsRealizationPayload(b.payload ?? {});
     return this.fsService.saveRealization(token, userId, payload);
   }

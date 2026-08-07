@@ -15,6 +15,20 @@ export class GrUpdateController {
     return this.grUpdateService.loadPageBundle(token, body);
   }
 
+  @RequirePermission('GR Update', 'view')
+  @Post('master')
+  async master(@Req() req: Request, @Body() body: unknown) {
+    const token = requireAccessTokenFromRequest(req);
+    return this.grUpdateService.loadMaster(token, body);
+  }
+
+  @RequirePermission('GR Update', 'view')
+  @Post('asset-window')
+  async assetWindow(@Req() req: Request, @Body() body: unknown) {
+    const token = requireAccessTokenFromRequest(req);
+    return this.grUpdateService.loadAssetWindow(token, body);
+  }
+
   @RequirePermission('GR Update', 'update')
   @Post('save')
   async save(@Req() req: Request, @Body() body: unknown) {

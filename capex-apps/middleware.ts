@@ -6,7 +6,7 @@ import {
   PUBLIC_PAGE_EXACT,
   validateBeProxyRequest,
 } from '@/lib/auth/edgeApiPolicy';
-import { LOGIN_PATH, POST_LOGIN_PATH } from '@/lib/auth/loginRoute';
+import { LEGACY_LOGIN_PATH, normalizeAppPath } from '@/lib/auth/loginRoute';
 import { checkEdgeRateLimit } from '@/lib/auth/edgeRateLimit';
 import {
   clientIp,
@@ -39,8 +39,7 @@ const AUTH_RATE_LIMITS_DEMO: Record<string, { max: number; windowMs: number }> =
 const BE_PROXY_LIMIT = { max: 180, windowMs: 60 * 1000 };
 
 function isPublicPage(pathname: string): boolean {
-  if (pathname === LOGIN_PATH) return true;
-  return PUBLIC_PAGE_EXACT.has(pathname);
+  return PUBLIC_PAGE_EXACT.has(normalizeAppPath(pathname));
 }
 
 function isBackendSessionEnabled(): boolean {
@@ -178,15 +177,15 @@ export async function middleware(req: NextRequest) {
 
   const pagePermitted = edgeSessionPermits(session);
 
-  if (pathname === LOGIN_PATH && pagePermitted) {
+  if (normalizeAppPath(pathname) === LEGACY_LOGIN_PATH) {
     const url = req.nextUrl.clone();
-    url.pathname = POST_LOGIN_PATH;
+    url.pathname = '/';
     return attachRequestId(NextResponse.redirect(url), req, nonce);
   }
 
   if (!pagePermitted && !isPublicPage(pathname)) {
     const url = req.nextUrl.clone();
-    url.pathname = LOGIN_PATH;
+    url.pathname = '/';
     return attachRequestId(NextResponse.redirect(url), req, nonce);
   }
 

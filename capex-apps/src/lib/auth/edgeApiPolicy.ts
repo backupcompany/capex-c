@@ -25,7 +25,8 @@ export const AUTH_SESSION_PREFIXES = [
 
 export const PROTECTED_API_PREFIXES = ['/api/be'] as const;
 
-export const PUBLIC_PAGE_EXACT = new Set(['/login']);
+/** Root = login when guest, app shell when session; `/login` legacy redirect in middleware. */
+export const PUBLIC_PAGE_EXACT = new Set(['/', '/login']);
 
 export type ApiRouteClass = 'public' | 'session' | 'deny' | 'page';
 

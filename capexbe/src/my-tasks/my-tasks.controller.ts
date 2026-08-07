@@ -1,8 +1,11 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { RequirePermission } from '../auth/decorators/permissions.decorator';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { MyTasksService } from './my-tasks.service';
 import type { MyTasksListQuery, MyTasksSortOption, MyTasksTaskViewMode } from './my-tasks-query';
 
@@ -29,10 +32,7 @@ export class MyTasksController {
   @Post('my-tasks')
   async myTasks(@Req() req: Request, @Body() body: MyTasksBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     const { userId: _uid, periodName, skipCache, ...query } = body;
     return this.myTasksService.loadMyTasksPage(
       token,
@@ -47,10 +47,7 @@ export class MyTasksController {
   @Post('my-tasks/open-count')
   async openCount(@Req() req: Request, @Body() body: MyTasksBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.myTasksService.loadOpenTaskCount(token, userId, body.periodName);
   }
 
@@ -58,10 +55,7 @@ export class MyTasksController {
   @Post('my-tasks/open-for-notifications')
   async openForNotifications(@Req() req: Request, @Body() body: MyTasksBodyDto) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.myTasksService.loadOpenTasksForNotifications(token, userId, body.periodName);
   }
 }

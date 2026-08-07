@@ -3,6 +3,10 @@
 /node_modules
 /build
 
+# Never commit SWC output in src/ — nest --watch recompiles .js and loops forever
+/src/**/*.js
+/src/**/*.js.map
+
 # Logs
 logs
 *.log

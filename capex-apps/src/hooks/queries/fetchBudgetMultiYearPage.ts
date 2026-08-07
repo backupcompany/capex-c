@@ -22,6 +22,20 @@ export type BudgetMultiYearPageBundle = {
 
 const PAGE_STALE_MS = 120_000;
 
+/** Bootstrap shell: metadata only — usage metrics always zero until page-bundle succeeds. */
+export function isMultiYearBootstrapShell(multiYears: BudgetMultiYear[]): boolean {
+  if (!multiYears.length) return false;
+  return multiYears.every((my) => {
+    const b = my.budget ?? {};
+    return (
+      (b.budgetCarryForward ?? 0) === 0 &&
+      (b.budgetAllocated ?? 0) === 0 &&
+      (b.approvedBudget ?? 0) === 0 &&
+      (b.consumedBudget ?? 0) === 0
+    );
+  });
+}
+
 async function resolveBootstrapUserId(queryClient?: QueryClient): Promise<number | null> {
   if (typeof window === 'undefined') return null;
   const fromSession = sessionStorage.getItem('currentUserId');
@@ -97,16 +111,22 @@ async function fetchPageBundleFromNetwork(
 
   if (userId != null && isCapexBeConfigured()) {
     const fromBe = await fetchBudgetMultiYearPageBundleFromBackend(userId);
-    if (fromBe) {
+    if (
+      fromBe &&
+      fromBe.multiYears.length > 0 &&
+      !isMultiYearBootstrapShell(fromBe.multiYears)
+    ) {
       const categories = fromBe.categories.length
         ? fromBe.categories.filter((c) => c.isActive)
         : await loadActiveCategories(queryClient, userId);
       return {
-        multiYears: pickMultiYears(fromBe.multiYears, cachedMultiYears ?? undefined),
+        multiYears: fromBe.multiYears,
         categories,
         periodSummaries: fromBe.periodSummaries.length ? fromBe.periodSummaries : cachedPeriodSummaries,
       };
     }
+    // BE configured — jangan fallback ke bootstrap shell (metadata + Rp 0)
+    return null;
   }
 
   const [multiYears, categories] = await Promise.all([
@@ -127,20 +147,30 @@ async function fetchPageBundleFromNetwork(
  */
 export async function fetchBudgetMultiYearPageBundle(
   queryClient?: QueryClient,
+  userId?: number | null,
 ): Promise<BudgetMultiYearPageBundle> {
-  const userId = await resolveBootstrapUserId(queryClient);
-  const seed = buildBudgetMultiYearPageSeedFromCache(queryClient, userId);
+  const resolvedUserId =
+    userId != null && Number.isFinite(userId)
+      ? userId
+      : await resolveBootstrapUserId(queryClient);
+  const seed = buildBudgetMultiYearPageSeedFromCache(queryClient, resolvedUserId);
 
   if (!isCapexBeConfigured()) {
     return seed;
   }
 
-  const cacheKey = userId != null ? `budget-multi-year:page:${userId}` : 'budget-multi-year:page:anon';
-  return withRequestCache(
-    cacheKey,
-    () => fetchPageBundleFromNetwork(queryClient, userId).then((r) => r ?? seed),
-    PAGE_STALE_MS,
-  );
+  const cacheKey =
+    resolvedUserId != null
+      ? `budget-multi-year:page:${resolvedUserId}`
+      : 'budget-multi-year:page:anon';
+  const network = await fetchPageBundleFromNetwork(queryClient, resolvedUserId);
+  if (network?.multiYears.length && !isMultiYearBootstrapShell(network.multiYears)) {
+    return withRequestCache(cacheKey, () => Promise.resolve(network), PAGE_STALE_MS);
+  }
+  // Keep bootstrap rows visible — never replace painted data with empty/network miss
+  if (seed.multiYears.length) return seed;
+  if (network) return network;
+  return seed;
 }
 
 export async function fetchMultiYearPeriodBudgets(

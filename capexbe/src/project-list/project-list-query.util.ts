@@ -250,6 +250,40 @@ export function assetListSelect(): string {
   return ASSET_LIST_SELECT;
 }
 
+/** GR Update page — minimal columns for GRN table + filters. */
+export function grUpdateAssetListSelect(): string {
+  return `
+  id,
+  asset_code,
+  asset_name,
+  project_id,
+  workflow_set_id,
+  asset_type_id,
+  budget_plan,
+  consumed_budget,
+  po_number,
+  qty,
+  received_qty,
+  is_goods_received,
+  lifecycle_status,
+  projects!inner (
+    id,
+    period_name,
+    project_name,
+    project_code,
+    priority_id,
+    approved_budget,
+    budget_plan,
+    hospital_units_config (
+      id,
+      name,
+      archetype_id,
+      archetypes_config ( id, name )
+    )
+  )
+`;
+}
+
 /** PO Update page — ASSET_LIST_SELECT + PO/GR columns. */
 export function poUpdateAssetListSelect(): string {
   return `
@@ -266,6 +300,8 @@ export function poUpdateAssetListSelect(): string {
   end_target_date,
   catalogue_id,
   po_number,
+  cpr_id,
+  po_date,
   qty,
   received_qty,
   is_goods_received,

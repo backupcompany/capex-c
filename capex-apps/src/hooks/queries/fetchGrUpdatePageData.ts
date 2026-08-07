@@ -30,8 +30,25 @@ function buildGrUpdatePageFromBundle(beBundle: GrUpdateBundle): GrUpdatePageData
     hus,
     projects,
     priorities,
-    statuses: allStatuses,
     tasks: allTasks,
+  } = beBundle;
+
+  if (beBundle.assetLastTaskMap !== undefined && Array.isArray(assets)) {
+    const assetsWithQty = assets.map((asset) => ({
+      ...asset,
+      receivedQty: (asset as { receivedQty?: number }).receivedQty ?? 0,
+      qty: (asset as { qty?: number }).qty ?? 1,
+    }));
+    return {
+      assets: assetsWithQty,
+      masterData: { archetypes, hus, projects, priorities },
+      assetLastTaskMap: beBundle.assetLastTaskMap,
+      tasks: allTasks,
+    };
+  }
+
+  const {
+    statuses: allStatuses,
     taskLogs: allTaskLogs,
   } = beBundle;
 

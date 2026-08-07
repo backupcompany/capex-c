@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { resolveBodyActorUserId } from '../shared/public-id.util';
 import {
   parseProjectListSortBy,
   type ProjectListSortBy,
@@ -50,8 +51,7 @@ const BUDGET_THRESHOLD = 300_000_000;
 
 export function parseProjectListQueryBody(body: unknown): ProjectListQueryBody {
   const b = (body ?? {}) as Record<string, unknown>;
-  const userId = Number(b.userId);
-  if (!Number.isFinite(userId)) throw new BadRequestException('Invalid userId');
+  const userId = resolveBodyActorUserId(body);
   const periodName = String(b.periodName ?? '').trim();
   if (!periodName) throw new BadRequestException('periodName is required');
 

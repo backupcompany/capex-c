@@ -2,8 +2,14 @@ import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
 import { CSRF_HEADER, useBackendSession } from '../auth/authConstants';
 import { authDebug } from '../auth/authDebug';
 import { coordinatedRefreshSession } from '../auth/authRefreshCoordinator';
+import { isAuthProbeComplete } from '../auth/authProbeGate';
 import { isBackendSessionValid } from '../auth/sessionValidity';
+import { hasSessionCookieHint } from '../auth/sessionCookieHint';
 import { getCsrfToken, ensureCsrfToken } from '../auth/csrfToken';
+import {
+  redactOutgoingUserId,
+  redactOutgoingUserIdJson,
+} from '../redactApiUserId';
 
 const MAX_401_RETRIES = 1;
 const MAX_503_RETRIES = 1;
@@ -40,6 +46,14 @@ capexBeAxios.interceptors.request.use(async (config) => {
     if (csrf) {
       config.headers.set(CSRF_HEADER, csrf);
     }
+    const data = config.data;
+    if (data instanceof FormData) {
+      /* multipart — caller omits userId or uses getCallerUserId on BE */
+    } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+      config.data = redactOutgoingUserId(data as Record<string, unknown>);
+    } else if (typeof data === 'string') {
+      config.data = redactOutgoingUserIdJson(data);
+    }
   }
   return config;
 });
@@ -71,7 +85,11 @@ capexBeAxios.interceptors.response.use(
       const refreshed = await coordinatedRefreshSession();
       if (!refreshed) {
         const stillValid = await isBackendSessionValid();
-        if (!stillValid) {
+        if (!stillValid && hasSessionCookieHint()) {
+          if (!isAuthProbeComplete()) {
+            authDebug('axios 401: auth probe pending — skip logout');
+            return Promise.reject(error);
+          }
           authDebug('axios 401: session invalid — cleanup');
           const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
             await import('../auth/authApi');

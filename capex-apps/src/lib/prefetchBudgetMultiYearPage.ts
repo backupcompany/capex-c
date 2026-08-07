@@ -33,7 +33,7 @@ export function prefetchBudgetMultiYearPage(queryClient: QueryClient, userId: nu
 
   void queryClient.prefetchQuery({
     queryKey: qk,
-    queryFn: () => fetchBudgetMultiYearPageBundle(queryClient),
+    queryFn: () => fetchBudgetMultiYearPageBundle(queryClient, userId),
     staleTime: STALE_MS,
   });
 }

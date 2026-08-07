@@ -33,7 +33,14 @@ export const ExecutiveDashboardCapexStatusChart = memo(function ExecutiveDashboa
 
   return (
     <ExecutiveDashboardPanel title="Status Pengajuan CAPEX">
-      <DonutChart title="Status Pengajuan CAPEX" data={chartData} valueFormatter={(value) => String(value)} embedded />
+      <DonutChart
+        title=""
+        data={chartData}
+        valueFormatter={(value) => String(value)}
+        embedded
+        labelMode="legend"
+        compact
+      />
 
       <div className="mt-4 pt-4 border-t border-siloam-border/60 space-y-3 shrink-0">
         {status.assetCount === 0 && status.donutSlices.length > 0 ? (

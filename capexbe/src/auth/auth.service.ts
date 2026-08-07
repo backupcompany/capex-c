@@ -27,6 +27,7 @@ import { CsrfService } from './csrf.service';
 import { SuspiciousLoginService } from './suspicious-login.service';
 import { SupabaseJwtService } from './supabase-jwt.service';
 import type { AuthMeDto, AuthSessionMetaDto } from './auth.types';
+import { encodeUserPublicId } from '../shared/public-id.util';
 import type { ResolvedAppUser } from './auth-user.resolver';
 import { isTlsFetchError } from '../shared/tls-fetch-error';
 import {
@@ -69,7 +70,7 @@ export class AuthService {
 
   toMeDto(user: ResolvedAppUser, sessionMeta?: AuthSessionMetaDto): AuthMeDto {
     return {
-      id: user.id,
+      publicId: encodeUserPublicId(user.id),
       username: user.username,
       email: user.email,
       roles: user.roles,

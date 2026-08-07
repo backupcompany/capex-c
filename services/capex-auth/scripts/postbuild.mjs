@@ -25,6 +25,8 @@ for (const file of await walk(DIST_SRC)) {
   next = next.replaceAll('../../../packages/capex-auth-core/', '../packages/capex-auth-core/');
   // Keep capexbe imports on src/*.ts — @swc-node/register resolves them; dist/*.js breaks DI tokens.
   next = next.replaceAll('../capexbe/dist/src/', '../capexbe/src/');
+  // preload must stay on compiled dist — never symlink preload.js into capexbe/src (nest --watch loops)
+  next = next.replaceAll('../capexbe/src/shared/preload', '../capexbe/dist/src/shared/preload');
   if (next !== code) await writeFile(file, next);
 }
 
@@ -39,12 +41,5 @@ async function link(from, to) {
 await link(join(ROOT, '../../capexbe'), join(DIST, 'capexbe'));
 await mkdir(join(DIST, 'packages'), { recursive: true });
 await link(join(ROOT, '../../packages/capex-auth-core'), join(DIST, 'packages/capex-auth-core'));
-
-// preload.ts is compiled to capexbe/dist — leaf dist/main.js requires ../capexbe/src/shared/preload.js
-const preloadSrcDir = join(DIST, 'capexbe/src/shared');
-const preloadJs = join(preloadSrcDir, 'preload.js');
-const preloadTarget = join(DIST, 'capexbe/dist/src/shared/preload.js');
-await mkdir(preloadSrcDir, { recursive: true });
-await link(preloadTarget, preloadJs);
 
 console.log('OK  postbuild: dist symlinks (capexbe + @capex/auth-core) + paths');

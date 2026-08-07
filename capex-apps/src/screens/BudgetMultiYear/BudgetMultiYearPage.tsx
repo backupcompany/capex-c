@@ -20,7 +20,9 @@ import {
   buildBudgetMultiYearPageSeedFromCache,
   fetchBudgetMultiYearPageBundle,
   fetchMultiYearPeriodBudgets,
+  isMultiYearBootstrapShell,
 } from '@/hooks/queries/fetchBudgetMultiYearPage';
+import { useSessionReady } from '@/stores/authStore';
 import { fetchConfigurationSlicesForUser } from '@/hooks/queries/fetchConfigurationSlices';
 import { cloneDeep } from '@/lib/clone';
 import { isCapexBeConfigured } from '@/lib/capexBeClient';
@@ -379,6 +381,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   showToast,
 }: BudgetMultiYearPageProps) {
   const queryClient = useQueryClient();
+  const sessionReady = useSessionReady();
   const initialPageBundle = useMemo(
     () => buildBudgetMultiYearPageSeedFromCache(queryClient, currentUser.id),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed sekali saat mount
@@ -389,7 +392,9 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   const canEdit = permissions.canOperateOnPage(Page.BudgetMultiYear, 'edit');
   const canCreate = permissions.canOperateOnPage(Page.BudgetMultiYear, 'create');
 
-  const [editedData, setEditedData] = useState<BudgetMultiYear[]>([]);
+  const [editedData, setEditedData] = useState<BudgetMultiYear[]>(() =>
+    initialPageBundle.multiYears.length ? cloneDeep(initialPageBundle.multiYears) : [],
+  );
   const [editedPeriods, setEditedPeriods] = useState<BudgetPeriod[]>(() =>
     allPeriods.length ? cloneDeep(allPeriods) : [],
   );
@@ -423,12 +428,13 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
 
   const pageQuery = useQuery({
     queryKey: queryKeys.budgetMultiYear.page(currentUser.id),
-    queryFn: () => fetchBudgetMultiYearPageBundle(queryClient),
-    enabled: canView && Number.isFinite(currentUser.id),
+    queryFn: () => fetchBudgetMultiYearPageBundle(queryClient, currentUser.id),
+    enabled: canView && Number.isFinite(currentUser.id) && sessionReady,
     staleTime: STALE_MS,
     gcTime: GC_MS,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
+    placeholderData: (prev) => prev ?? initialPageBundle,
   });
 
   const serverMultiYears = pageQuery.data?.multiYears ?? serverMultiYearsRef.current;
@@ -448,9 +454,18 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
 
   useEffect(() => {
     if (!pageQuery.data || isDirty) return;
-    if (!pageQuery.data.multiYears.length && editedData.length > 0) return;
-    serverMultiYearsRef.current = pageQuery.data.multiYears;
-    setEditedData(cloneDeep(pageQuery.data.multiYears));
+    const incoming = pageQuery.data.multiYears;
+    if (!incoming.length && editedData.length > 0) return;
+    if (
+      incoming.length > 0 &&
+      editedData.length > 0 &&
+      isMultiYearBootstrapShell(incoming) &&
+      !isMultiYearBootstrapShell(editedData)
+    ) {
+      return;
+    }
+    serverMultiYearsRef.current = incoming;
+    setEditedData(cloneDeep(incoming));
     if (pageQuery.data.categories.length) {
       setAllCategories(pageQuery.data.categories.filter((c) => c.isActive));
     }
@@ -815,6 +830,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
   const showShell =
     canView &&
     !pageQuery.isError &&
+    editedData.length === 0 &&
     (useBackend ? !pageQuery.isSuccess : !pageQuery.isFetched && !hasInstantSeed);
   const showLoadError = pageQuery.isError && editedData.length === 0;
 

@@ -8,9 +8,7 @@ import React, {
   useRef,
   lazy,
   Suspense,
-  memo,
 } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Zap, FileSpreadsheet } from 'lucide-react';
 import {
   User,
@@ -23,37 +21,25 @@ import * as taskService from '../../services/taskService';
 import * as fsService from '../../services/fsService';
 import { saveFsProjectsViaBackend } from '../../services/fsUpdateApi';
 import { usePermissions } from '../../hooks/usePermissions';
-import { formatCurrency } from '../../lib/formatter';
-import { SpreadsheetTable, SpreadsheetColumn } from '../../components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { TaskFilterPanel } from '../../components/organisms/TaskFilterPanel/TaskFilterPanel';
 import { Dropdown } from '../../components/molecules/Dropdown/Dropdown';
 import { MeetingFilterBar } from '../../components/organisms/MeetingFilterBar/MeetingFilterBar';
-import { FsScreenRefreshChrome } from '../../components/molecules/FsScreenRefreshChrome/FsScreenRefreshChrome';
 import type { FsEnrichedProject } from '../../hooks/queries/fetchFsUpdatePageData';
-import { useFsUpdateMetaQuery, useFsUpdateTableQuery } from '../../hooks/useFsUpdateTableQuery';
-import * as configService from '../../services/configService';
-import {
-  buildScopeFilterPayload,
-  buildScopedArchetypeOptions,
-  buildScopedHuOptions,
-} from '../../lib/scopedFilterOptions';
-import { Spinner } from '../../components/atoms/Spinner/Spinner';
-import {
-  TABLE_PAGE_SIZE_OPTIONS,
-  clampTablePageSize,
-} from '../../lib/table/pageSizeOptions';
-import { useViewportTablePageSize } from '../../lib/table/useViewportTablePageSize';
 import {
   type SortOption,
   type FsEditableProject,
   applyAutoFsApproval,
   buildFsChangeSummaryRows,
   diffChangedFsProjects,
-  isFsUpdateSpecialProject,
   projectsWithNewFsApproval,
-  resolveFsApproval,
   toFsProjectSavePatch,
 } from './fsUpdateHelpers';
+import { useFsUpdateFilterState } from './hooks/useFsUpdateFilterState';
+import { useFsUpdatePageData } from './hooks/useFsUpdatePageData';
+import { FSUpdateSummaryCards } from './FSUpdateSummaryCards';
+import { FSUpdateTableBlock } from './FSUpdateTableBlock';
+import { FsUpdateExtraFilters } from './FsUpdateExtraFilters';
+import { buildFsUpdateColumns } from './buildFsUpdateColumns';
 
 const QuickFsUpdateModal = lazy(() =>
   import('./QuickFsUpdateModal').then((m) => ({ default: m.QuickFsUpdateModal })),
@@ -61,12 +47,6 @@ const QuickFsUpdateModal = lazy(() =>
 const FsSmartMigrationModal = lazy(() =>
   import('./FsSmartMigrationModal').then((m) => ({ default: m.FsSmartMigrationModal })),
 );
-
-const STALE_MS = 120_000;
-const SEARCH_DEBOUNCE_MS = 200;
-
-type FsProjectEditEntry = { original: FsEditableProject; current: FsEditableProject };
-
 const FSProposalModal = lazy(() =>
   import('../../components/organisms/FSProposalModal/FSProposalModal').then((m) => ({
     default: m.FSProposalModal,
@@ -78,6 +58,8 @@ const SORT_OPTIONS: { label: string; value: SortOption }[] = [
   { label: 'HU Name (A-Z)', value: 'huName_asc' },
   { label: 'Budget Plan (Highest First)', value: 'budgetPlan_desc' },
 ];
+
+type FsProjectEditEntry = { original: FsEditableProject; current: FsEditableProject };
 
 interface FSUpdatePageProps {
   periodName: string;
@@ -94,47 +76,6 @@ interface FSUpdatePageProps {
   onDataChange: () => void;
 }
 
-const FsUpdateExtraFilters = memo(function FsUpdateExtraFilters({
-  showOnlyNotFSApproved,
-  onShowOnlyNotFSApprovedChange,
-  focusNeedingApproval,
-  onFocusNeedingApprovalChange,
-}: {
-  showOnlyNotFSApproved: boolean;
-  onShowOnlyNotFSApprovedChange: (checked: boolean) => void;
-  focusNeedingApproval: boolean;
-  onFocusNeedingApprovalChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center">
-        <input
-          id="show-only-not-fs-approved"
-          type="checkbox"
-          checked={showOnlyNotFSApproved}
-          onChange={(e) => onShowOnlyNotFSApprovedChange(e.target.checked)}
-          className="h-4 w-4 rounded border-siloam-border text-siloam-blue focus:ring-siloam-blue"
-        />
-        <label htmlFor="show-only-not-fs-approved" className="ml-2 text-sm font-medium text-siloam-text-primary">
-          Show only projects not FS Approved (Default)
-        </label>
-      </div>
-      <div className="flex items-center">
-        <input
-          id="focus-approval"
-          type="checkbox"
-          checked={focusNeedingApproval}
-          onChange={(e) => onFocusNeedingApprovalChange(e.target.checked)}
-          className="h-4 w-4 rounded border-siloam-border text-siloam-blue focus:ring-siloam-blue"
-        />
-        <label htmlFor="focus-approval" className="ml-2 text-sm font-medium text-siloam-text-primary">
-          Focus on items needing Approval
-        </label>
-      </div>
-    </div>
-  );
-});
-
 export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
   periodName,
   currentUser,
@@ -144,7 +85,6 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
   showToast,
   onDataChange,
 }) => {
-  const queryClient = useQueryClient();
   const permissions = usePermissions(currentUser, allRoles);
   const canView = permissions.canOperateOnPage(Page.FSUpdate, 'view');
   const canEdit = permissions.canOperateOnPage(Page.FSUpdate, 'edit');
@@ -153,174 +93,103 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
   const [editMap, setEditMap] = useState<Map<string, FsProjectEditEntry>>(new Map());
   const isDirty = editMap.size > 0;
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedHUs, setSelectedHUs] = useState<string[]>([]);
-  const [focusNeedingApproval, setFocusNeedingApproval] = useState(false);
-  const [showOnlyNotFSApproved, setShowOnlyNotFSApproved] = useState(true);
-  const [sortBy, setSortBy] = useState<SortOption>('projectName_asc');
-  const [meetingFilters, setMeetingFilters] = useState<{ archetype: string | null }>({ archetype: null });
-  const [selectedProjectForFS, setSelectedProjectForFS] = useState<FsEnrichedProject | null>(null);
-  const [viewFS, setViewFS] = useState<FeasibilityStudy | null>(null);
-  const [isQuickFsModalOpen, setIsQuickFsModalOpen] = useState(false);
-  const [isFsMigrationOpen, setIsFsMigrationOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const tableScrollHostRef = useRef<HTMLDivElement>(null);
-  const { pageSize: viewportPageSize, maxHeightPx } = useViewportTablePageSize(tableScrollHostRef);
-  const [pageSizeOverride, setPageSizeOverride] = useState<number | null>(null);
-  const itemsPerPage = pageSizeOverride ?? viewportPageSize;
 
-  useEffect(() => {
-    setIsPageDirty(isDirty);
-  }, [isDirty, setIsPageDirty]);
-
-  const [masterArchetypes, setMasterArchetypes] = useState<
-    Awaited<ReturnType<typeof configService.getAllArchetypesConfig>>
-  >([]);
-  const [masterHus, setMasterHus] = useState<
-    Awaited<ReturnType<typeof configService.getAllHospitalUnitsConfig>>
-  >([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      configService.getAllArchetypesConfig(),
-      configService.getAllHospitalUnitsConfig(),
-    ]).then(([archetypes, hus]) => {
-      if (!cancelled) {
-        setMasterArchetypes(archetypes);
-        setMasterHus(hus);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const scopeFilter = useMemo(
-    () => buildScopeFilterPayload(permissions.userScopes, masterArchetypes, masterHus),
-    [permissions.userScopes, masterArchetypes, masterHus],
-  );
-
-  const metaQuery = useFsUpdateMetaQuery(
-    periodName,
-    currentUser.id,
-    canView,
-    scopeFilter,
-    STALE_MS,
-  );
-
+  const filterState = useFsUpdateFilterState(periodName);
   const {
-    tableQuery,
-    rows: serverRows,
-    totalCount,
-    totalPages,
-    isBlockingLoad,
-    isBackgroundRefresh,
-    isFilterRefreshing,
+    searchTerm,
+    setSearchTerm,
+    debouncedSearch,
     isSearchStaging,
-    isTableFetching,
-  } = useFsUpdateTableQuery({
+    selectedHUs,
+    setSelectedHUs,
+    focusNeedingApproval,
+    setFocusNeedingApproval,
+    showOnlyNotFSApproved,
+    setShowOnlyNotFSApproved,
+    sortBy,
+    setSortBy,
+    meetingFilters,
+    setMeetingFilters,
+    currentPage,
+    setCurrentPage,
+    pageSizeOverride,
+    setPageSizeOverride,
+  } = filterState;
+
+  const pageData = useFsUpdatePageData({
     periodName,
     userId: currentUser.id,
     canView,
-    page: currentPage,
-    pageSize: itemsPerPage,
-    search: searchTerm,
-    searchDebounceMs: SEARCH_DEBOUNCE_MS,
+    userScopes: permissions.userScopes,
+    tableScrollHostRef,
+    debouncedSearch,
+    isSearchStaging,
     selectedHUs,
     sortBy,
     showOnlyNotFSApproved,
     focusNeedingApproval,
     meetingArchetype: meetingFilters.archetype,
-    scopeFilter,
-    staleTime: STALE_MS,
+    currentPage,
+    setCurrentPage,
+    pageSizeOverride,
+    showToast,
   });
 
-  const fsSummary = metaQuery.data?.summary ?? {
-    submittedQty: 0,
-    submittedAmountIdr: 0,
-    approvedQty: 0,
-    approvedAmountIdr: 0,
-    notApprovedQty: 0,
-  };
+  const {
+    tableQuery,
+    serverRows,
+    fsSummary,
+    filterOptions,
+    scopedArchetypeOptions,
+    huOptions,
+    totalCount,
+    totalPages,
+    isBlockingLoad,
+    showTableBusy,
+    footerTotalCount,
+    showPagination,
+    tableMaxHeight,
+    itemsPerPage,
+    viewportPageSize,
+    isMetaLoading,
+    invalidateFsUpdateQueries,
+  } = pageData;
 
-  const filterArchetypes = masterArchetypes;
-  const filterHus = masterHus;
+  const [selectedProjectForFS, setSelectedProjectForFS] = useState<FsEnrichedProject | null>(null);
+  const [viewFS, setViewFS] = useState<FeasibilityStudy | null>(null);
+  const [isQuickFsModalOpen, setIsQuickFsModalOpen] = useState(false);
+  const [isFsMigrationOpen, setIsFsMigrationOpen] = useState(false);
 
-  const filterOptions = useMemo(() => {
-    const base = metaQuery.data?.filterOptions ?? tableQuery.data?.filterOptions ?? { archetypes: [], hus: [] };
-    if (permissions.userScopes.all) return base;
+  useEffect(() => {
+    setIsPageDirty(isDirty);
+  }, [isDirty, setIsPageDirty]);
 
-    const scopedArch = buildScopedArchetypeOptions(filterArchetypes, permissions.userScopes, filterHus);
-    const scopedHu = buildScopedHuOptions(filterHus, filterArchetypes, permissions.userScopes);
-    const archSet = new Set(scopedArch);
-    const huSet = new Set(scopedHu);
-
-    return {
-      archetypes:
-        scopedArch.length > 0
-          ? base.archetypes.filter((a) => archSet.has(a))
-          : base.archetypes.filter((a) => permissions.userScopes.archetypes.has(a)),
-      hus:
-        scopedHu.length > 0
-          ? base.hus.filter((h) => huSet.has(h))
-          : base.hus.filter((h) => permissions.userScopes.hus.has(h)),
-    };
-  }, [metaQuery.data?.filterOptions, tableQuery.data?.filterOptions, permissions.userScopes, filterArchetypes, filterHus]);
+  useEffect(() => {
+    setEditMap(new Map());
+  }, [periodName]);
 
   const paginatedData = useMemo(
     () => serverRows.map((row) => editMap.get(row.id)?.current ?? (row as FsEditableProject)),
     [serverRows, editMap],
   );
 
-  const hasListData = totalCount > 0 || paginatedData.length > 0;
-  const showTableBusy = isFilterRefreshing || isTableFetching;
-  const tableMaxHeight = `min(70vh, ${maxHeightPx}px)`;
-
-  useEffect(() => {
-    if (tableQuery.isError) {
-      console.error('Error loading FS Update data:', tableQuery.error);
-      showToast('Failed to load project data.', 'error');
-    }
-  }, [tableQuery.isError, tableQuery.error, showToast]);
-
-  useEffect(() => {
-    if (metaQuery.isError) {
-      console.error('Error loading FS Update meta:', metaQuery.error);
-    }
-  }, [metaQuery.isError, metaQuery.error]);
-
-  useEffect(() => {
-    setEditMap(new Map());
-    setCurrentPage(1);
-    setSearchTerm('');
-    setSelectedHUs([]);
-    setFocusNeedingApproval(false);
-    setShowOnlyNotFSApproved(true);
-    setSortBy('projectName_asc');
-    setMeetingFilters({ archetype: null });
-    setPageSizeOverride(null);
-  }, [periodName]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchTerm,
-    selectedHUs,
-    focusNeedingApproval,
-    showOnlyNotFSApproved,
-    sortBy,
-    meetingFilters.archetype,
-    itemsPerPage,
-    periodName,
-  ]);
-
   const handleMeetingFilterChange = useCallback(
     (filters: { archetype: string | null; assetTypeGroup: string | null }) => {
       setMeetingFilters({ archetype: filters.archetype });
     },
-    [],
+    [setMeetingFilters],
   );
+
+  useEffect(() => {
+    if (
+      meetingFilters.archetype &&
+      scopedArchetypeOptions.length > 0 &&
+      !scopedArchetypeOptions.includes(meetingFilters.archetype)
+    ) {
+      setMeetingFilters({ archetype: null });
+    }
+  }, [meetingFilters.archetype, scopedArchetypeOptions, setMeetingFilters]);
 
   const mergeRowPatch = useCallback((original: FsEditableProject, patch: FsEditableProject) => {
     const merged = applyAutoFsApproval({ ...original, ...patch });
@@ -363,17 +232,6 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
     },
     [serverRows],
   );
-
-  const invalidateFsUpdateQueries = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ['screen', 'fs-update', 'query', periodName, currentUser.id],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['screen', 'fs-update', 'meta', periodName, currentUser.id],
-      }),
-    ]);
-  }, [queryClient, periodName, currentUser.id]);
 
   const handleSaveFSProposal = useCallback(
     async (fsData: Omit<FeasibilityStudy, 'createdAt' | 'updatedAt'>) => {
@@ -477,26 +335,6 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
     setPageActions({ onSave: handleSave, onCancel: handleCancel, getSummary: getChangeSummary });
   }, [handleSave, handleCancel, getChangeSummary, setPageActions]);
 
-  const scopedArchetypeOptions = useMemo(
-    () => buildScopedArchetypeOptions(filterArchetypes, permissions.userScopes, filterHus),
-    [filterArchetypes, filterHus, permissions.userScopes],
-  );
-
-  const huOptions = useMemo(
-    () => buildScopedHuOptions(filterHus, filterArchetypes, permissions.userScopes),
-    [filterHus, filterArchetypes, permissions.userScopes],
-  );
-
-  useEffect(() => {
-    if (
-      meetingFilters.archetype &&
-      scopedArchetypeOptions.length > 0 &&
-      !scopedArchetypeOptions.includes(meetingFilters.archetype)
-    ) {
-      setMeetingFilters({ archetype: null });
-    }
-  }, [meetingFilters.archetype, scopedArchetypeOptions]);
-
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? '';
 
   const viewFsProject = useMemo(() => {
@@ -504,112 +342,15 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
     return paginatedData.find((p) => p.id === viewFS.projectId) ?? null;
   }, [viewFS, paginatedData]);
 
-  const columns: SpreadsheetColumn<FsEditableProject>[] = useMemo(
-    () => [
-      { header: 'Project Code', accessor: 'projectCode' },
-      { header: 'Project Name', accessor: 'projectName' },
-      {
-        header: 'AX Code',
-        accessor: 'axCode',
-        isEditable: (item) => canEdit && !isFsUpdateSpecialProject(item),
-      },
-      {
-        header: 'Budget Plan',
-        accessor: 'budgetPlan',
-        isNumeric: true,
-        formatCellDisplay: (value) => formatCurrency(Number(value) || 0),
-      },
-      {
-        header: 'Approved Budget',
-        accessor: 'approvedBudget',
-        isNumeric: true,
-        isEditable: (item) => canEdit && !isFsUpdateSpecialProject(item),
-      },
-      {
-        header: 'Target Budget Start',
-        accessor: 'targetBudgetStart',
-        isEditable: canEdit,
-        editorType: 'date',
-      },
-      {
-        header: 'Budget Revenue Permonth',
-        accessor: 'budgetRevenuePermonth',
-        isNumeric: true,
-        isEditable: canEdit,
-      },
-      {
-        header: 'Assets Not FS Approved',
-        accessor: (item) => item.assetsNotFSApprovedCount ?? 0,
-        align: 'center',
-        numericDisplay: 'plain',
-      },
-      {
-        header: 'FS Status',
-        accessor: (item) => item.fsStatus || 'Not Submitted',
-        formatCellDisplay: (_, item) => {
-          const status = item.fsStatus || 'Not Submitted';
-          let statusColorClass = 'text-siloam-text-secondary';
-          if (status === 'Approved' || status === 'Approved with Notes') {
-            statusColorClass = 'text-siloam-green font-medium';
-          } else if (status === 'Pending') {
-            statusColorClass = 'text-warning font-medium';
-          } else if (status === 'Rejected') {
-            statusColorClass = 'text-danger font-medium';
-          }
-          return <span className={statusColorClass}>{status}</span>;
-        },
-      },
-      {
-        header: 'FS Action',
-        accessor: (item) => item.id,
-        align: 'center',
-        formatCellDisplay: (_, project) => {
-          const status = project.fsStatus || 'Not Submitted';
-          if (isFsUpdateSpecialProject(project)) {
-            return <span className="text-xs text-siloam-text-secondary">N/A</span>;
-          }
-          if (status === 'Not Submitted') {
-            return canCreateFS ? (
-              <button
-                type="button"
-                onClick={() => setSelectedProjectForFS(project)}
-                className="px-3 py-1 bg-siloam-blue text-white text-xs rounded-lg hover:bg-siloam-blue/90"
-              >
-                Create FS
-              </button>
-            ) : (
-              <span className="text-xs text-siloam-text-secondary">View only</span>
-            );
-          }
-          return (
-            <button
-              type="button"
-              onClick={() => void handleViewFS(project)}
-              className="px-3 py-1 border border-siloam-border text-siloam-text-primary text-xs rounded-lg hover:bg-siloam-bg"
-            >
-              View FS
-            </button>
-          );
-        },
-      },
-      {
-        header: 'FS Approval',
-        accessor: (item) => resolveFsApproval(item),
-        align: 'center',
-        formatCellDisplay: (_, project) => (
-          <div className="flex justify-center items-center h-full px-4 py-3">
-            <input
-              type="checkbox"
-              checked={resolveFsApproval(project)}
-              onChange={(e) => handleFSApprovalChange(project.id, e.target.checked)}
-              disabled={!canEdit || isFsUpdateSpecialProject(project)}
-              className="h-5 w-5 text-siloam-blue rounded border-gray-300 focus:ring-siloam-blue disabled:opacity-50"
-              title="FS Approval - Check when FS is approved"
-            />
-          </div>
-        ),
-      },
-    ],
+  const columns = useMemo(
+    () =>
+      buildFsUpdateColumns({
+        canEdit,
+        canCreateFS,
+        onFsApprovalChange: handleFSApprovalChange,
+        onViewFS: handleViewFS,
+        onCreateFS: setSelectedProjectForFS,
+      }),
     [canEdit, canCreateFS, handleFSApprovalChange, handleViewFS],
   );
 
@@ -629,31 +370,28 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-3">
+      <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-bold">Feasibility Study (FS) & Approved Budget Updates</h2>
-          {isBlockingLoad ? (
-            <p className="text-xs text-siloam-text-secondary mt-1 flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full border-2 border-siloam-blue border-t-transparent animate-spin" />
-              Memuat data…
-            </p>
-          ) : isBackgroundRefresh ? (
-            <p className="text-xs text-siloam-text-secondary mt-1">Memperbarui data di latar…</p>
-          ) : null}
+          <h2 className="text-xl font-bold text-siloam-text-primary">
+            Feasibility Study (FS) & Approved Budget Updates
+          </h2>
+          <p className="mt-1 text-sm text-siloam-text-secondary">
+            Periode <span className="font-medium text-siloam-text-primary">{periodName}</span>
+          </p>
         </div>
         {isDirty && canEdit ? (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg"
+              className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg text-sm"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void handleSave()}
-              className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90"
+              className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 text-sm"
             >
               Save Changes
             </button>
@@ -661,48 +399,7 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">
-            Total FS yang Diajukan (Jumlah QTY)
-          </p>
-          <p className="mt-1 text-2xl font-bold text-siloam-text-primary">
-            {fsSummary.submittedQty.toLocaleString('id-ID')}
-          </p>
-        </div>
-        <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">
-            Total FS Amount (Diajukan)
-          </p>
-          <p className="mt-1 text-2xl font-bold text-siloam-blue">
-            {formatCurrency(fsSummary.submittedAmountIdr)}
-          </p>
-        </div>
-        <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">
-            Total FS Approved Qty
-          </p>
-          <p className="mt-1 text-2xl font-bold text-siloam-green">
-            {fsSummary.approvedQty.toLocaleString('id-ID')}
-          </p>
-        </div>
-        <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">
-            Total FS Amount (Approved)
-          </p>
-          <p className="mt-1 text-2xl font-bold text-siloam-green">
-            {formatCurrency(fsSummary.approvedAmountIdr)}
-          </p>
-        </div>
-        <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-siloam-text-secondary">
-            Total FS Belum Diapproved
-          </p>
-          <p className="mt-1 text-2xl font-bold text-warning">
-            {fsSummary.notApprovedQty.toLocaleString('id-ID')}
-          </p>
-        </div>
-      </div>
+      <FSUpdateSummaryCards summary={fsSummary} isLoading={isMetaLoading} />
 
       <MeetingFilterBar
         onFilterChange={handleMeetingFilterChange}
@@ -763,129 +460,28 @@ export const FSUpdatePage: React.FC<FSUpdatePageProps> = ({
         </div>
       </TaskFilterPanel>
 
-      <div className="bg-siloam-surface rounded-xl shadow-soft p-6 relative min-h-[20rem] flex flex-col">
-        <FsScreenRefreshChrome
-          isBlockingLoad={isBlockingLoad}
-          isBackgroundRefresh={isBackgroundRefresh}
-          isFilterRefreshing={isFilterRefreshing}
-          hasListData={hasListData}
-          blockingMessage="Memuat data project…"
-          filterMessage="Memuat data terbaru…"
-        />
-        <div className="bg-siloam-blue/10 p-3 rounded-lg text-sm text-siloam-blue mb-4 flex-shrink-0">
-          <strong>Note:</strong> Approved Budget for &apos;Network Pipeline&apos; and &apos;General & Routine
-          Assets&apos; projects are automatically synced with their Budget Plan and cannot be edited here.
-        </div>
-        <div
-          ref={tableScrollHostRef}
-          className="relative flex-1 min-h-[16rem]"
-          aria-busy={showTableBusy}
-        >
-          {showTableBusy && paginatedData.length > 0 ? (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-surface/70 backdrop-blur-[1px]">
-              <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
-                <Spinner size={18} className="text-siloam-blue" />
-                <span>{isSearchStaging ? 'Mencari…' : 'Memuat data terbaru…'}</span>
-              </div>
-            </div>
-          ) : null}
-          {isBlockingLoad ? (
-            <div className="flex flex-col items-center justify-center py-12 text-sm text-siloam-text-secondary gap-2">
-              <Spinner size={20} className="text-siloam-blue" />
-              <span>Memuat data project…</span>
-            </div>
-          ) : paginatedData.length > 0 ? (
-            <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
-              <SpreadsheetTable
-                columns={columns}
-                data={paginatedData}
-                onDataChange={handleDataChange}
-                rowHeaderAccessor="projectName"
-                virtualizeRows="auto"
-                maxHeight={tableMaxHeight}
-              />
-            </div>
-          ) : (
-            <div className="py-12 text-center text-sm text-siloam-text-secondary">
-              {tableQuery.isError ? (
-                <span>Gagal memuat data. Periksa koneksi backend lalu refresh halaman.</span>
-              ) : totalCount > 0 ? (
-                <span>
-                  Tidak ada project yang cocok dengan filter saat ini. Coba matikan &quot;Show only
-                  projects not FS Approved&quot; atau reset filter.
-                </span>
-              ) : (
-                <span>Tidak ada data project untuk periode {periodName}.</span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {totalCount > 0 || showTableBusy ? (
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-siloam-border">
-          <div className="text-sm text-siloam-text-secondary">
-            Showing {Math.min(totalCount, (currentPage - 1) * itemsPerPage + 1)} -{' '}
-            {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} projects
-            {pageSizeOverride == null ? (
-              <span className="ml-2 text-xs text-siloam-text-secondary/80">
-                (auto {itemsPerPage} rows/viewport)
-              </span>
-            ) : null}
-            {showTableBusy ? (
-              <span className="ml-2 text-xs text-siloam-blue">· Memperbarui…</span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-siloam-text-secondary">Per page:</label>
-              <select
-                value={pageSizeOverride == null ? 'auto' : String(pageSizeOverride)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === 'auto') {
-                    setPageSizeOverride(null);
-                  } else {
-                    setPageSizeOverride(clampTablePageSize(Number(v)));
-                  }
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
-              >
-                <option value="auto">Auto ({viewportPageSize})</option>
-                {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {totalPages > 1 ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1 || showTableBusy}
-                  className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-siloam-text-secondary">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || showTableBusy}
-                  className="px-3 py-1 border border-siloam-border rounded bg-siloam-bg hover:bg-siloam-surface disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                >
-                  Next
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <FSUpdateTableBlock
+        tableScrollHostRef={tableScrollHostRef}
+        columns={columns}
+        data={paginatedData}
+        onDataChange={handleDataChange}
+        periodName={periodName}
+        tableMaxHeight={tableMaxHeight}
+        isBlockingLoad={isBlockingLoad}
+        showTableBusy={showTableBusy}
+        isSearchStaging={isSearchStaging}
+        isTableError={tableQuery.isError}
+        totalCount={totalCount}
+        footerTotalCount={footerTotalCount}
+        showPagination={showPagination}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        viewportPageSize={viewportPageSize}
+        pageSizeOverride={pageSizeOverride}
+        onPageChange={setCurrentPage}
+        onPageSizeOverrideChange={setPageSizeOverride}
+      />
 
       {canEdit ? (
         <Suspense fallback={null}>

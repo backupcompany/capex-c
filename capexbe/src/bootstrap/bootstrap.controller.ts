@@ -1,33 +1,26 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { requireAccessTokenFromRequest } from '../auth/request-access-token.util';
+import {
+  getCallerUserId,
+  requireAccessTokenFromRequest,
+} from '../auth/request-access-token.util';
 import { BootstrapService } from './bootstrap.service';
-
-class BootstrapBodyDto {
-  userId!: number;
-}
 
 @Controller('bootstrap')
 export class BootstrapController {
   constructor(private readonly bootstrapService: BootstrapService) {}
 
   @Post()
-  async bootstrap(@Req() req: Request, @Body() body: BootstrapBodyDto) {
+  async bootstrap(@Req() req: Request) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.bootstrapService.loadAppInitPack(token, userId);
   }
 
   @Post('users-directory')
-  async usersDirectory(@Req() req: Request, @Body() body: BootstrapBodyDto) {
+  async usersDirectory(@Req() req: Request) {
     const token = requireAccessTokenFromRequest(req);
-    const userId = Number(body?.userId);
-    if (!Number.isFinite(userId)) {
-      throw new UnauthorizedException('Invalid userId');
-    }
+    const userId = getCallerUserId(req);
     return this.bootstrapService.loadUsersDirectory(token, userId);
   }
 }

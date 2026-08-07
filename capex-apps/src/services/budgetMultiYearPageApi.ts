@@ -10,6 +10,40 @@ export type BudgetMultiYearPageBundle = {
   periodSummaries: BudgetPeriod[];
 };
 
+function num(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeMultiYears(raw: unknown): BudgetMultiYear[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const o = item as Record<string, unknown>;
+      const budgetRaw = (o.budget ?? o) as Record<string, unknown>;
+      const name = String(o.name ?? '').trim();
+      const startYear = num(o.startYear ?? o.start_year);
+      const endYear = num(o.endYear ?? o.end_year);
+      if (!name) return null;
+      return {
+        name,
+        startYear,
+        endYear,
+        budget: {
+          budgetPlan: num(budgetRaw.budgetPlan ?? budgetRaw.budget_plan),
+          budgetCarryForward: num(budgetRaw.budgetCarryForward ?? budgetRaw.budget_carry_forward),
+          budgetAllocated: num(budgetRaw.budgetAllocated ?? budgetRaw.budget_allocated),
+          approvedBudget: num(budgetRaw.approvedBudget ?? budgetRaw.approved_budget),
+          consumedBudget: num(budgetRaw.consumedBudget ?? budgetRaw.consumed_budget),
+          assetCount: num(budgetRaw.assetCount ?? budgetRaw.asset_count),
+          noBudgetAssetCount: num(budgetRaw.noBudgetAssetCount ?? budgetRaw.no_budget_asset_count),
+        },
+      };
+    })
+    .filter((r): r is BudgetMultiYear => r != null);
+}
+
 async function resolveAccessToken(): Promise<string | null> {
   if (useBackendSession() && typeof window !== 'undefined') {
     return null;
@@ -56,7 +90,7 @@ export async function fetchBudgetMultiYearPageBundleFromBackend(
   );
   if (!result) return null;
   return {
-    multiYears: Array.isArray(result.multiYears) ? result.multiYears : [],
+    multiYears: normalizeMultiYears(result.multiYears),
     categories: Array.isArray(result.categories) ? result.categories : [],
     periodSummaries: Array.isArray(result.periodSummaries) ? result.periodSummaries : [],
   };

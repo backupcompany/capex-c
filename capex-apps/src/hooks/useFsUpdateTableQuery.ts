@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { FsEnrichedProject } from '@/hooks/queries/fetchFsUpdatePageData';
 import {
   fetchFsUpdateMetaFromBackend,
@@ -7,7 +7,6 @@ import {
   type FsUpdateQueryBody,
 } from '@/services/fsUpdateApi';
 import type { FsScopeFilterPayload } from '@/services/fsApi';
-import { useDebouncedValue } from '@/screens/BudgetHU/useDebouncedValue';
 import type { SortOption } from '@/screens/FSUpdatePage/fsUpdateHelpers';
 
 export type FsUpdateTableQueryParams = {
@@ -16,8 +15,7 @@ export type FsUpdateTableQueryParams = {
   canView: boolean;
   page: number;
   pageSize: number;
-  search: string;
-  searchDebounceMs?: number;
+  debouncedSearch: string;
   selectedHUs: string[];
   sortBy: SortOption;
   showOnlyNotFSApproved: boolean;
@@ -55,8 +53,7 @@ export function useFsUpdateTableQuery({
   canView,
   page,
   pageSize,
-  search,
-  searchDebounceMs = 200,
+  debouncedSearch,
   selectedHUs,
   sortBy,
   showOnlyNotFSApproved,
@@ -65,9 +62,6 @@ export function useFsUpdateTableQuery({
   scopeFilter,
   staleTime = DEFAULT_STALE_MS,
 }: FsUpdateTableQueryParams) {
-  const debouncedSearch = useDebouncedValue(search, searchDebounceMs);
-  const isSearchStaging = search.trim() !== debouncedSearch.trim();
-
   const queryKey = useMemo(
     () =>
       [
@@ -125,28 +119,23 @@ export function useFsUpdateTableQuery({
     enabled: !!periodName.trim() && canView,
     staleTime,
     refetchOnWindowFocus: false,
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
   });
 
   const rows = (tableQuery.data?.rows ?? []) as unknown as FsEnrichedProject[];
   const totalCount = tableQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  const isBlockingLoad = tableQuery.isPending && rows.length === 0;
-  const isBackgroundRefresh =
-    rows.length > 0 && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
-  const isFilterRefreshing = isSearchStaging || (tableQuery.isFetching && rows.length > 0);
+  const isBlockingLoad =
+    tableQuery.isPending && rows.length === 0 && !tableQuery.isPlaceholderData;
+  const isTableFetching = tableQuery.isFetching && !tableQuery.isPending;
 
   return {
     tableQuery,
     rows,
     totalCount,
     totalPages,
-    debouncedSearch,
-    isSearchStaging,
     isBlockingLoad,
-    isBackgroundRefresh,
-    isFilterRefreshing,
-    isTableFetching: tableQuery.isFetching,
+    isTableFetching,
   };
 }

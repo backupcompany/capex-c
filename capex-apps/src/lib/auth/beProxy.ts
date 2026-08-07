@@ -1,5 +1,6 @@
 import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { redactOutgoingUserIdJson } from '../redactApiUserId';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from './authBff';
 import { CSRF_COOKIE, CSRF_HEADER } from './authConstants';
 import { REQUEST_ID_HEADER, resolveRequestId } from '../http/requestId';
@@ -55,7 +56,11 @@ function shouldClearSessionOn401(bodyText: string): boolean {
     const msg = String((JSON.parse(bodyText) as { message?: unknown }).message ?? '').toLowerCase();
     if (!msg) return true;
     if (msg.includes('invalid userid')) return false;
+    if (msg.includes('invalid publicuserid')) return false;
+    if (msg.includes('user context mismatch')) return false;
     if (msg.includes('forbidden')) return false;
+    if (msg.includes('rls session failed')) return false;
+    if (msg.includes('invalid csrf')) return false;
     return true;
   } catch {
     return true;
@@ -101,11 +106,18 @@ async function forwardBePost(
   outboundHeaders[REQUEST_ID_HEADER] = resolveRequestId(incomingHeaders.get('x-request-id'));
 
   const bePath = path.startsWith('/') ? path : `/${path}`;
+  let outboundBody: string | ArrayBuffer = body;
+  if (
+    typeof body === 'string' &&
+    (!contentType || contentType.includes('application/json'))
+  ) {
+    outboundBody = redactOutgoingUserIdJson(body);
+  }
   try {
     return await fetch(`${base}${bePath}`, {
       method: 'POST',
       headers: outboundHeaders,
-      body,
+      body: outboundBody,
       cache: 'no-store',
     });
   } catch (err) {

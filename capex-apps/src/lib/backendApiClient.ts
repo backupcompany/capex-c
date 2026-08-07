@@ -8,6 +8,7 @@ import {
   isAxiosNetworkError,
 } from './http/capexBeAxios';
 import { capexBeRequestUrl, isCapexBeConfigured } from './capexBeClient';
+import { redactOutgoingUserId } from './redactApiUserId';
 
 export type PostBackendOptions = {
   /** Telemetry source key, e.g. `fsApproval.bundle` */
@@ -49,7 +50,7 @@ export async function postBackend<T>(
     const headers: Record<string, string> = {};
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
-    const data = await capexBeAxiosPost<T>(capexBeRequestUrl(path), body, {
+    const data = await capexBeAxiosPost<T>(capexBeRequestUrl(path), redactOutgoingUserId(body), {
       headers,
       withCredentials: cookieMode ? true : undefined,
       retryOn401: cookieMode,

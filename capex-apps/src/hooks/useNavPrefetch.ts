@@ -10,6 +10,7 @@ type PermissionsLike = {
 };
 
 export function useNavPrefetch(options: {
+  enabled?: boolean;
   queryClient: QueryClient;
   selectedPeriodName: string;
   selectedArchetypeId?: string | null;
@@ -18,6 +19,7 @@ export function useNavPrefetch(options: {
   permissions: PermissionsLike;
 }) {
   const {
+    enabled = true,
     queryClient,
     selectedPeriodName,
     selectedArchetypeId,
@@ -28,7 +30,7 @@ export function useNavPrefetch(options: {
 
   return useCallback(
     (page: Page) => {
-      if (!currentUser?.id) return;
+      if (!enabled || !currentUser?.id) return;
       prefetchRouteOnIntent({
         queryClient,
         routePage: page,
@@ -40,6 +42,6 @@ export function useNavPrefetch(options: {
         canAccessConfiguration: permissions.canAccessPage(Page.Configuration),
       });
     },
-    [queryClient, selectedPeriodName, selectedArchetypeId, selectedHuId, currentUser, permissions],
+    [enabled, queryClient, selectedPeriodName, selectedArchetypeId, selectedHuId, currentUser, permissions],
   );
 }
