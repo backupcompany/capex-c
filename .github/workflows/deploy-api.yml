@@ -54,7 +54,6 @@ jobs:
   deploy:
     name: Build, push, deploy
     needs: security
-    if: github.repository_owner != 'backupcompany'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

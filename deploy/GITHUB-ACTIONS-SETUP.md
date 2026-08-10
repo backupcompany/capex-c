@@ -1,8 +1,12 @@
 # GitHub Actions CI/CD — setup checklist
 
+Repo: **https://github.com/backupcompany/capex-c**
+
 Production deploy = **2 containers** (`capex-web` + `capex-api` monolith) via SSH + Docker Compose.
 
 Workflows: `.github/workflows/deploy-web.yml`, `.github/workflows/deploy-api.yml`, `verify-microservices.yml` (CI only).
+
+Images: `ghcr.io/backupcompany/capex-api`, `ghcr.io/backupcompany/capex-web`
 
 ---
 
@@ -11,7 +15,7 @@ Workflows: `.github/workflows/deploy-web.yml`, `.github/workflows/deploy-api.yml
 | Secret | Required | Example / notes |
 |--------|----------|-----------------|
 | `VPS_HOST` | yes | `43.134.46.149` |
-| `VPS_SSH_KEY` | yes | Private key for user `ubuntu` (full PEM, including `BEGIN`/`END`) |
+| `VPS_SSH_KEY` | yes | Private key for user `ubuntu` — use `~/.ssh/cgp_vps_deploy` (already on VPS) |
 | `DEPLOY_PATH` | yes | `/opt/capex-deploy` |
 | `GHCR_TOKEN` | yes | GitHub PAT with `read:packages` (pull images on VPS) |
 | `GHCR_USERNAME` | no | Defaults to `github.actor` if empty |

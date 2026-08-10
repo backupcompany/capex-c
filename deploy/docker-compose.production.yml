@@ -6,7 +6,7 @@ name: capex-production
 
 services:
   capex-api:
-    image: ${CAPEX_API_IMAGE:-ghcr.io/shg-erp-cgp/capex-api:latest}
+    image: ${CAPEX_API_IMAGE:-ghcr.io/backupcompany/capex-api:latest}
     container_name: capex-api
     restart: unless-stopped
     ports:
@@ -24,7 +24,7 @@ services:
       start_period: 45s
 
   capex-web:
-    image: ${CAPEX_WEB_IMAGE:-ghcr.io/shg-erp-cgp/capex-web:latest}
+    image: ${CAPEX_WEB_IMAGE:-ghcr.io/backupcompany/capex-web:latest}
     container_name: capex-web
     restart: unless-stopped
     ports:
