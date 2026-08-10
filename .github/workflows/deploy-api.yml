@@ -130,7 +130,7 @@ jobs:
             fi
 
             echo "Running local smoke test..."
-            curl -fsS http://127.0.0.1:8082/ || {
+            curl -fsS http://127.0.0.1:8082/health || {
               echo "capex-api smoke test failed."
               docker logs --tail=150 capex-api || true
               exit 1

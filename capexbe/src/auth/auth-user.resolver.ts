@@ -164,6 +164,28 @@ export class AuthUserResolver {
     };
   }
 
+  async resolveAppUserByEmail(client: SupabaseClient, email: string): Promise<ResolvedAppUser> {
+    const normalized = email.trim().toLowerCase();
+    const { data: row, error } = await client
+      .from('users')
+      .select('id, username, email, auth_id')
+      .eq('email', normalized)
+      .maybeSingle();
+    if (error || !row?.id) {
+      throw new UnauthorizedException('User lookup failed');
+    }
+    const assignments = await this.loadAssignments(this.createServiceReadClient(), row.id);
+    const roles = [
+      ...new Set(assignments.map((a) => roleNameToSlug(a.roleName))),
+    ] as EnterpriseRoleSlug[];
+    return {
+      ...(row as AppUserRow),
+      id: Number(row.id),
+      roles,
+      assignments,
+    };
+  }
+
   private async loadAssignments(
     client: SupabaseClient,
     userId: number,

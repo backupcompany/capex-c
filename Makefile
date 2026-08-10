@@ -155,11 +155,29 @@ check-env:
 	  s.on('connect',()=>{ console.log('OK  Redis —', url); s.destroy(); process.exit(0); }); \
 	  s.on('timeout',()=>{ s.destroy(); console.warn('WARN Redis not reachable at', host+':'+port,'— run: make redis-up (perf-cache uses memory until then)'); process.exit(0); }); \
 	  s.on('error',()=>{ console.warn('WARN Redis not reachable at', host+':'+port,'— run: make redis-up (perf-cache uses memory until then)'); process.exit(0); });"
-	@echo "==> Testing Supabase (anon key)..."
+	@echo "==> Testing API health..."
 	@cd $(BE_DIR) && node -e "require('dotenv').config(); \
+	  const vps=process.env.USE_VPS_POSTGRES==='1'||process.env.USE_VPS_POSTGRES==='true'; \
 	  fetch(process.env.SUPABASE_URL+'/auth/v1/health',{headers:{apikey:process.env.SUPABASE_ANON_KEY}}) \
-	    .then(r=>console.log(r.status===200?'OK  Supabase Auth health':'WARN Supabase Auth', r.status)) \
-	    .catch(e=>{ console.error('FAIL Supabase', e.message); process.exit(1); });"
+	    .then(r=>console.log(r.status===200?(vps?'OK  VPS PostgREST':'OK  Supabase Auth health'):'WARN API health', r.status)) \
+	    .catch(e=>{ console.error('FAIL API health', e.message); process.exit(1); });"
+
+postgrest-up:
+	@echo "==> PostgREST → VPS Postgres (tunnel must be open on :5433)"
+	@chmod +x deploy/postgres/run-postgrest-local.sh
+	@PROXY_PORT=54321 PGRST_PORT=13000 deploy/postgres/run-postgrest-local.sh up
+
+postgrest-down:
+	@chmod +x deploy/postgres/run-postgrest-local.sh
+	@deploy/postgres/run-postgrest-local.sh down
+
+seed-vps-demo:
+	@echo "==> Seed demo user on VPS Postgres (demo@capex.local / demo123)"
+	@set -a && . capexbe/.env && set +a && psql "$$DATABASE_URL" -f deploy/postgres/seed-demo-user.sql
+
+vps-dev-up: postgrest-up seed-vps-demo
+	@echo "OK  VPS dev — tunnel: ssh -N -L 5433:127.0.0.1:5432 capex-vps"
+	@echo "    login: demo@capex.local / demo123"
 
 run: stop ensure-install check-env
 	@test -f $(AUTH_DIR)/.env || (echo "Copy $(AUTH_DIR)/.env.example → .env" && exit 1)

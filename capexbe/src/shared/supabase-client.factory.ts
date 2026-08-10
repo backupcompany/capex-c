@@ -1,11 +1,24 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabaseHttpsFetch } from './supabase-https-fetch';
 
+function isHttpUrl(input: RequestInfo | URL): boolean {
+  const raw =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : (input as Request).url;
+  return raw.startsWith('http://');
+}
+
 /** Node https fetch so win-ca / NODE_EXTRA_CA_CERTS apply on Windows corporate networks. */
 export function supabaseFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  if (isHttpUrl(input)) {
+    return fetch(input, init);
+  }
   return supabaseHttpsFetch(input, init);
 }
 

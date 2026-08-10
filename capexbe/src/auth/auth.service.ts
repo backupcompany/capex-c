@@ -38,6 +38,7 @@ import {
 } from '../shared/supabase-client.factory';
 import { supabaseHttpsFetch } from '../shared/supabase-https-fetch';
 import { generateCodeChallenge, generateCodeVerifier } from './oauth-pkce.util';
+import { getDemoLoginCredentials, isVpsPostgresMode } from '../shared/vps-postgres.util';
 
 function cookieOptions(maxAgeSec: number) {
   const secure = process.env.NODE_ENV === 'production';
@@ -251,6 +252,10 @@ export class AuthService {
     res: Response,
     meta?: { ip?: string; userAgent?: string },
   ): Promise<AuthMeDto> {
+    if (isVpsPostgresMode()) {
+      return this.loginVpsDummy(email, password, res, meta);
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
     const lockId = this.lockout.buildIdentifier(normalizedEmail, meta?.ip);
     await this.lockout.assertNotLocked(lockId);
@@ -302,6 +307,32 @@ export class AuthService {
     await this.lockout.clearFailures(lockId);
     return this.establishSession(appUser, data.user.id, res, {
       email,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+  }
+
+  /** VPS Postgres demo — no Supabase Auth; fixed credentials + public.users row. */
+  private async loginVpsDummy(
+    email: string,
+    password: string,
+    res: Response,
+    meta?: { ip?: string; userAgent?: string },
+  ): Promise<AuthMeDto> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const demo = getDemoLoginCredentials();
+    if (normalizedEmail !== demo.email || password !== demo.password) {
+      throw new UnauthorizedException('Invalid email or password (VPS demo: demo@capex.local / demo123)');
+    }
+
+    const client = this.users.createServiceReadClient();
+    const appUser = await this.users.resolveAppUserByEmail(client, demo.email);
+    const authId =
+      appUser.auth_id?.trim() ||
+      `11111111-1111-1111-1111-${String(appUser.id).padStart(12, '0').slice(-12)}`;
+
+    return this.establishSession(appUser, authId, res, {
+      email: demo.email,
       ip: meta?.ip,
       userAgent: meta?.userAgent,
     });

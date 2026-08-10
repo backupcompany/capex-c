@@ -1,0 +1,39 @@
+# Production VPS — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
+# On VPS: copy to /opt/capex-deploy/docker-compose.yml
+# Env: deploy/.env.vps.example → /opt/capex-deploy/.env (secrets — never commit)
+
+name: capex-production
+
+services:
+  capex-api:
+    image: ${CAPEX_API_IMAGE:-ghcr.io/shg-erp-cgp/capex-api:latest}
+    container_name: capex-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8082"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 8082
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+  capex-web:
+    image: ${CAPEX_WEB_IMAGE:-ghcr.io/shg-erp-cgp/capex-web:latest}
+    container_name: capex-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+    depends_on:
+      capex-api:
+        condition: service_healthy

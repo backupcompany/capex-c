@@ -88,7 +88,7 @@ jobs:
 
             APP_DIR="${{ secrets.DEPLOY_PATH }}"
             GHCR_USERNAME="${{ secrets.GHCR_USERNAME }}"
-            GHCR_TOKEN="${{ secrets.GHCR_PAT }}"
+            GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
 
             if [ -z "$APP_DIR" ]; then
               echo "DEPLOY_PATH secret is missing."
@@ -100,7 +100,7 @@ jobs:
             fi
 
             if [ -z "$GHCR_TOKEN" ]; then
-              echo "GHCR_PAT is missing."
+              echo "GHCR_TOKEN is missing."
               exit 1
             fi
 
@@ -115,5 +115,22 @@ jobs:
 
             docker compose pull capex-web
             docker compose up -d --force-recreate --no-deps capex-web
+
+            echo "Waiting for capex-web to boot..."
+            sleep 10
+
+            if ! docker ps --format "{{.Names}} {{.Status}}" | grep "capex-web" | grep -q "Up"; then
+              echo "capex-web is not running."
+              docker logs --tail=150 capex-web || true
+              exit 1
+            fi
+
+            curl -fsS http://127.0.0.1:8080/ >/dev/null || {
+              echo "capex-web smoke test failed."
+              docker logs --tail=150 capex-web || true
+              exit 1
+            }
+
+            echo "CAPEX Web deployed successfully."
 
             docker image prune -f || true
