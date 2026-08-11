@@ -8,10 +8,11 @@ export function scheduleIdlePrefetch(fn: () => void, timeoutMs = 4_000): void {
       /* best-effort warm */
     }
   };
-  if ('requestIdleCallback' in window) {
+  // Prefer typeof check — `in` narrowing can collapse Window to `never` under strict TS.
+  if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(run, { timeout: timeoutMs });
   } else {
-    window.setTimeout(run, 1_500);
+    globalThis.setTimeout(run, 1_500);
   }
 }
 

@@ -1,6 +1,11 @@
-# Production VPS — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
-# On VPS: copy to /opt/capex-deploy/docker-compose.yml
+# Production VM — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
+# Monorepo: images built from capexbe/ + capex-apps/ (not separate repos).
+# On VM: copy to /opt/capex-deploy/docker-compose.yml
 # Env: deploy/.env.vps.example → /opt/capex-deploy/.env (secrets — never commit)
+#
+# Caddy (gateway, host network) — see deploy/caddy/Caddyfile.capex:
+#   capex.cgp-ai.com     → 127.0.0.1:8080  (capex-web)
+#   capex-api.cgp-ai.com → 127.0.0.1:8082  (capex-api)
 
 name: capex-production
 
@@ -16,8 +21,19 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8082
+    networks:
+      - default
+      - database-net
+      - redis-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/health"]
+      # node:alpine has no wget/curl — use fetch (Node 22)
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -34,6 +50,16 @@ services:
     environment:
       NODE_ENV: production
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+    networks:
+      - default
     depends_on:
       capex-api:
         condition: service_healthy
+
+networks:
+  database-net:
+    external: true
+  # Shared Redis (cgp-redis on cgp-cgolangp_default)
+  redis-net:
+    name: ${COMPOSE_REDIS_NETWORK:-cgp-cgolangp_default}
+    external: true

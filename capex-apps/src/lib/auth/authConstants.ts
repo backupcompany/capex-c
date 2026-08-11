@@ -19,14 +19,36 @@ export function useBackendSession(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim());
 }
 
-/** Azure Entra ID SSO via backend OAuth (enabled by default). */
-export function isAzureSsoEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ENABLE_AZURE_SSO !== 'false';
+export type CapexAuthMode = 'password' | 'sso' | 'both';
+
+function getAuthMode(): CapexAuthMode {
+  const raw = (
+    process.env.NEXT_PUBLIC_CAPEX_AUTH_MODE ||
+    process.env.CAPEX_AUTH_MODE ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (raw === 'password' || raw === 'sso' || raw === 'both') return raw;
+  if (process.env.NEXT_PUBLIC_ENABLE_AZURE_SSO === 'false') return 'password';
+  if (process.env.NEXT_PUBLIC_CAPEX_DEMO_MODE === 'true') return 'both';
+  if (process.env.NODE_ENV === 'production') return 'sso';
+  return 'both';
 }
 
-/** Password form — dev/demo only; production uses Microsoft SSO. */
+/** Azure Entra ID SSO via backend OAuth. */
+export function isAzureSsoEnabled(): boolean {
+  const mode = getAuthMode();
+  return mode === 'sso' || mode === 'both';
+}
+
+/** Email/password form on login page. */
 export function isPasswordLoginEnabled(): boolean {
-  if (process.env.NEXT_PUBLIC_CAPEX_DEMO_MODE === 'true') return true;
   if (process.env.NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN === 'true') return true;
-  return process.env.NODE_ENV !== 'production';
+  const mode = getAuthMode();
+  return mode === 'password' || mode === 'both';
+}
+
+export function getCapexAuthMode(): CapexAuthMode {
+  return getAuthMode();
 }

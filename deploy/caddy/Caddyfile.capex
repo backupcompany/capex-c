@@ -1,0 +1,15 @@
+# Paste / replace the capex.* blocks in the live gateway Caddyfile:
+#   /ops-agentic/workspaces/gateway/Caddyfile
+# Then: docker exec gateway-caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# Ports must match deploy/docker-compose.production.yml (localhost bind).
+
+capex.cgp-ai.com {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8080
+}
+
+capex-api.cgp-ai.com {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8082
+}

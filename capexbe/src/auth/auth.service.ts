@@ -634,7 +634,9 @@ export class AuthService {
   }
 
   private oauthCallbackUrl(): string {
-    return `${this.frontendOrigin()}/api/auth/azure/callback`;
+    const path = (process.env.OAUTH_CALLBACK_PATH || '/api/auth/azure/callback').trim();
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    return `${this.frontendOrigin()}${normalized}`;
   }
 
   sanitizeOAuthReturnTo(raw?: string): string {

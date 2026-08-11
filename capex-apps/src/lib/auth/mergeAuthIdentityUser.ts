@@ -63,9 +63,11 @@ export function mergeAuthIdentityUser(
   },
 ): User {
   const cached = readCachedAuthUser();
+  const previousCandidate = options?.previous ?? null;
   const previous =
-    options?.previous?.publicId === identity.publicId || options?.previous?.id === identity.id
-      ? options.previous
+    previousCandidate &&
+    (previousCandidate.publicId === identity.publicId || previousCandidate.id === identity.id)
+      ? previousCandidate
       : cached?.publicId === identity.publicId || cached?.id === identity.id
         ? cached
         : null;

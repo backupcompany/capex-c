@@ -23,16 +23,16 @@ pgcrypto, uuid-ossp, pg_trgm, citext, vector (jika tor/AI ikut)
 
 `capexbe/.env` dengan `USE_VPS_POSTGRES=1` → API baca DB VPS via PostgREST lokal (bukan Supabase Cloud).
 
-**Terminal 1 — SSH tunnel**
+**Satu perintah (auto tunnel + PostgREST):**
 ```bash
-ssh -N -L 5433:127.0.0.1:5432 capex-vps
+make run               # check-env → ensure-vps-dev → BE + FE
 ```
 
-**Terminal 2 — PostgREST + seed (sekali) + app**
+Atau manual:
 ```bash
-make postgrest-up      # :54321 → VPS via tunnel
+make ensure-vps-dev    # ssh tunnel :5433 + PostgREST :54321
 make seed-vps-demo     # user demo Super Admin (idempotent)
-make run               # BE + FE
+make run
 ```
 
 **Dummy login**

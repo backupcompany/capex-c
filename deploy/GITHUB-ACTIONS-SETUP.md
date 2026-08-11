@@ -1,8 +1,10 @@
 # GitHub Actions CI/CD — setup checklist
 
-Repo: **https://github.com/backupcompany/capex-c**
+Repo: **https://github.com/backupcompany/capex-c** (monorepo)
 
 Production deploy = **2 containers** (`capex-web` + `capex-api` monolith) via SSH + Docker Compose.
+
+**VM layout / Caddy / first boot:** see [`deploy/VM-SETUP.md`](./VM-SETUP.md).
 
 Workflows: `.github/workflows/deploy-web.yml`, `.github/workflows/deploy-api.yml`, `verify-microservices.yml` (CI only).
 
@@ -19,8 +21,9 @@ Images: `ghcr.io/backupcompany/capex-api`, `ghcr.io/backupcompany/capex-web`
 | `DEPLOY_PATH` | yes | `/opt/capex-deploy` |
 | `GHCR_TOKEN` | yes | GitHub PAT with `read:packages` (pull images on VPS) |
 | `GHCR_USERNAME` | no | Defaults to `github.actor` if empty |
-| `NEXT_PUBLIC_CAPEXBE_URL` | yes (web build) | Public API URL baked into FE image, e.g. `https://capex-api.siloamhospitals.com` |
-| `PUBLIC_API_URL` | no | Optional post-deploy smoke test from CI (e.g. `https://capex-api.siloamhospitals.com/health`) |
+| `NEXT_PUBLIC_CAPEXBE_URL` | yes (web build) | Public API URL baked into FE image, e.g. `https://capex.cgp-ai.com` |
+| `CAPEX_AUTH_MODE` | no | `password` (default), `sso`, or `both` — baked into FE image; see `deploy/AUTH-SSO-SETUP.md` |
+| `PUBLIC_API_URL` | no | Optional post-deploy smoke test from CI (e.g. `https://capex-api.../health`) |
 
 **Note:** `deploy-web.yml` and `deploy-api.yml` both use `GHCR_TOKEN`. (Legacy name `GHCR_PAT` is no longer used.)
 
@@ -68,10 +71,12 @@ Start stack manually once (before CI):
 ssh capex-vps 'cd /opt/capex-deploy && docker compose pull && docker compose up -d'
 ```
 
-Gateway (Caddy/nginx) should proxy:
+Gateway Caddy blocks: `deploy/caddy/Caddyfile.capex`
 
-- Public site → `127.0.0.1:8080` (`capex-web`)
-- API (if exposed) → `127.0.0.1:8082` (`capex-api`)
+- `capex.cgp-ai.com` → `127.0.0.1:8080` (`capex-web`)
+- `capex-api.cgp-ai.com` → `127.0.0.1:8082` (`capex-api`)
+
+(Do **not** use old port `3002` from multi-repo aldryan setup.)
 
 ---
 

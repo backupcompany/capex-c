@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppBootstrapPayload } from '@/hooks/queries/fetchAppBootstrapData';
 import { fetchConfigurationSlicesForUser } from '@/hooks/queries/fetchConfigurationSlices';
@@ -31,7 +31,6 @@ import {
   excludeUserManagedConfigurationSlices,
   toRenderableConfigurationPack,
   isUserManagedConfigurationSlice,
-  isConfigurationTabReady,
   type ConfigurationTab,
 } from '@/features/configuration/core/configurationPageUtils';
 import type { User, UserRole } from '@/types';
@@ -267,7 +266,10 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
     }
 
     const seq = ++activeTabLoadSeqRef.current;
-    setActiveTabLoadStatus(areSlicesPresent(required) ? 'idle' : 'loading');
+    setActiveTabLoadStatus((prev) => {
+      const next = areSlicesPresent(required) ? 'idle' : 'loading';
+      return prev === next ? prev : next;
+    });
 
     let cancelled = false;
     void (async () => {
@@ -307,14 +309,11 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
     [ensureSlices],
   );
 
-  const partialPack = configQuery.data ?? readDiskSeed();
+  const partialPack = useMemo(
+    () => configQuery.data ?? readDiskSeed(),
+    [configQuery.data, readDiskSeed],
+  );
   const pack = toRenderableConfigurationPack(partialPack);
-
-  useEffect(() => {
-    if (isConfigurationTabReady(partialPack, activeTab)) {
-      setActiveTabLoadStatus('idle');
-    }
-  }, [partialPack, activeTab]);
   const hasDiskOrSeed =
     hasMinimalConfigurationOnDisk(userId) ||
     isMinimalConfigurationReady(readBootstrapSeed());

@@ -56,7 +56,8 @@ const nextConfig: NextConfig = {
   webpack: (config, { dev, isServer }) => {
     if (dev && disableHmr && !isServer) {
       config.plugins = config.plugins?.filter(
-        (plugin) => plugin?.constructor?.name !== 'HotModuleReplacementPlugin',
+        (plugin: { constructor?: { name?: string } }) =>
+          plugin?.constructor?.name !== 'HotModuleReplacementPlugin',
       );
     }
     return config;

@@ -17,31 +17,31 @@ function num(v: unknown): number {
 
 function normalizeMultiYears(raw: unknown): BudgetMultiYear[] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== 'object') return null;
-      const o = item as Record<string, unknown>;
-      const budgetRaw = (o.budget ?? o) as Record<string, unknown>;
-      const name = String(o.name ?? '').trim();
-      const startYear = num(o.startYear ?? o.start_year);
-      const endYear = num(o.endYear ?? o.end_year);
-      if (!name) return null;
-      return {
-        name,
-        startYear,
-        endYear,
-        budget: {
-          budgetPlan: num(budgetRaw.budgetPlan ?? budgetRaw.budget_plan),
-          budgetCarryForward: num(budgetRaw.budgetCarryForward ?? budgetRaw.budget_carry_forward),
-          budgetAllocated: num(budgetRaw.budgetAllocated ?? budgetRaw.budget_allocated),
-          approvedBudget: num(budgetRaw.approvedBudget ?? budgetRaw.approved_budget),
-          consumedBudget: num(budgetRaw.consumedBudget ?? budgetRaw.consumed_budget),
-          assetCount: num(budgetRaw.assetCount ?? budgetRaw.asset_count),
-          noBudgetAssetCount: num(budgetRaw.noBudgetAssetCount ?? budgetRaw.no_budget_asset_count),
-        },
-      };
-    })
-    .filter((r): r is BudgetMultiYear => r != null);
+  const out: BudgetMultiYear[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const budgetRaw = (o.budget ?? o) as Record<string, unknown>;
+    const name = String(o.name ?? '').trim();
+    const startYear = num(o.startYear ?? o.start_year);
+    const endYear = num(o.endYear ?? o.end_year);
+    if (!name) continue;
+    out.push({
+      name,
+      startYear,
+      endYear,
+      budget: {
+        budgetPlan: num(budgetRaw.budgetPlan ?? budgetRaw.budget_plan),
+        budgetCarryForward: num(budgetRaw.budgetCarryForward ?? budgetRaw.budget_carry_forward),
+        budgetAllocated: num(budgetRaw.budgetAllocated ?? budgetRaw.budget_allocated),
+        approvedBudget: num(budgetRaw.approvedBudget ?? budgetRaw.approved_budget),
+        consumedBudget: num(budgetRaw.consumedBudget ?? budgetRaw.consumed_budget),
+        assetCount: num(budgetRaw.assetCount ?? budgetRaw.asset_count),
+        noBudgetAssetCount: num(budgetRaw.noBudgetAssetCount ?? budgetRaw.no_budget_asset_count),
+      },
+    });
+  }
+  return out;
 }
 
 async function resolveAccessToken(): Promise<string | null> {

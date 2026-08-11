@@ -314,15 +314,19 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
   const canView = permissions.canOperateOnPage(Page.CapexProjectList, 'view');
 
   const listUserScopes = useMemo(
-    () => ({
+    (): UserScopesForCapex => ({
       all: permissions.userScopes.all,
       hus: permissions.userScopes.hus,
       archetypes: permissions.userScopes.archetypes,
+      archetypeIds: permissions.userScopes.archetypeIds,
+      huIds: permissions.userScopes.huIds,
     }),
     [
       permissions.userScopes.all,
       [...permissions.userScopes.hus].sort().join('\u0001'),
       [...permissions.userScopes.archetypes].sort().join('\u0001'),
+      [...permissions.userScopes.archetypeIds].sort().join('\u0001'),
+      [...permissions.userScopes.huIds].sort().join('\u0001'),
     ],
   );
   const userScopesRef = useRef<UserScopesForCapex>(permissions.userScopes);

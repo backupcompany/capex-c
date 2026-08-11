@@ -61,7 +61,7 @@ export PGRST_SERVER_PORT="$PGRST_PORT"
 export PGRST_JWT_SECRET="${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET required for VPS PostgREST}"
 export PROXY_PORT PGRST_PORT
 
-echo "==> PostgREST :${PGRST_PORT} → ${DATABASE_URL/@*/@***}"
+echo "==> PostgREST :${PGRST_PORT} → $(echo "$DATABASE_URL" | sed -E 's|://([^:/]+):([^@]+)@|://\1:***@|')"
 nohup "$PGRST_BIN" >/tmp/capex-postgrest.log 2>&1 &
 echo $! >"$PID_FILE"
 

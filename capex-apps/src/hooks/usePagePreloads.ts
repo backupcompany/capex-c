@@ -106,7 +106,13 @@ export function usePagePreloads(options: UsePagePreloadsOptions): PagePreloads {
         }),
       );
     });
-  }, [routePage, currentUser?.id, selectedPeriodName, currentBudgetPeriod?.id, hideUnassignedBdd]);
+  }, [
+    routePage,
+    currentUser?.id,
+    selectedPeriodName,
+    currentBudgetPeriod?.periodName,
+    hideUnassignedBdd,
+  ]);
 
   return preloads;
 }

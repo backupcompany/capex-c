@@ -75,6 +75,7 @@ jobs:
             NEXT_PUBLIC_CAPEXBE_URL=${{ secrets.NEXT_PUBLIC_CAPEXBE_URL }}
             NEXT_PUBLIC_USE_BACKEND_SESSION=true
             NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK=false
+            NEXT_PUBLIC_CAPEX_AUTH_MODE=${{ secrets.CAPEX_AUTH_MODE || 'password' }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0

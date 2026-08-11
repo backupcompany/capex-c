@@ -43,10 +43,11 @@ export function assertProductionCors(): void {
   }
 }
 
+import { isPasswordLoginEnabledInMode } from './auth-mode.util';
+
 export function isPasswordLoginDisabled(): boolean {
   if (process.env.CAPEX_DEMO_MODE === 'true') return false;
-  if (process.env.DISABLE_PASSWORD_LOGIN === 'true') return true;
-  return process.env.NODE_ENV === 'production';
+  return !isPasswordLoginEnabledInMode();
 }
 
 /** Comma-separated email domains allowed for SSO exchange (empty = no restriction). */

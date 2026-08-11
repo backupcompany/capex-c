@@ -10,6 +10,7 @@ import { clearSupabaseSessionAfterExchange } from './signInForExchange';
 import { readCachedAuthUser } from '../authSessionCache';
 import { mergeAuthIdentityUser } from './mergeAuthIdentityUser';
 import { normalizeAuthEmail, normalizeAuthPassword } from './normalizeAuthInput';
+import { isDefinitiveUnauthenticated } from './sessionValidity';
 
 export type AuthSessionMeta = {
   accessExpiresAt: number;
@@ -122,7 +123,7 @@ export async function probeBackendSession(options?: {
         }
       } else {
         const recheck = await fetchAuthSession();
-        if (recheck != null && !recheck.authenticated) {
+        if (isDefinitiveUnauthenticated(recheck)) {
           clearStaleClientSessionHints();
           void clearServerAuthCookies();
           session = recheck;

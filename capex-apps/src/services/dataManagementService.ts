@@ -1433,84 +1433,84 @@ export const executeSmartMigration = async (
     }
 
     try {
-        const totalRowsForProgress = await parseExcelRowCount(file);
-        const jobId = createMigrationJobId();
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append(
-            'meta',
-            JSON.stringify({
-                target,
-                periodName,
-                mapping,
-                userId: currentUser.id,
-                currentUser: { id: currentUser.id, username: currentUser.username },
-                selectedAssetTypeId,
-                jobId,
+                const totalRowsForProgress = await parseExcelRowCount(file);
+                const jobId = createMigrationJobId();
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append(
+                    'meta',
+                    JSON.stringify({
+                        target,
+                        periodName,
+                        mapping,
+                        userId: currentUser.id,
+                        currentUser: { id: currentUser.id, username: currentUser.username },
+                        selectedAssetTypeId,
+                        jobId,
             }),
-        );
-        onProgress?.({
-            stage: 'preparing',
-            processedRows: 0,
-            totalRows: totalRowsForProgress,
-            message: `Memulai migrasi ${target} di server…`,
-        });
+                );
+                onProgress?.({
+                    stage: 'preparing',
+                    processedRows: 0,
+                    totalRows: totalRowsForProgress,
+                    message: `Memulai migrasi ${target} di server…`,
+                });
 
-        const pollStop = { stopped: false };
-        const pollPromise = pollBackendMigrationProgress(
-            jobId,
-            currentUser.id,
-            bearerToken,
-            onProgress,
-            pollStop,
-        );
+                const pollStop = { stopped: false };
+                const pollPromise = pollBackendMigrationProgress(
+                    jobId,
+                    currentUser.id,
+                    bearerToken,
+                    onProgress,
+                    pollStop,
+                );
 
-        let res: Response;
-        try {
-            const headers: Record<string, string> = {};
-            if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
-            res = await authenticatedFetch(capexBeRequestUrl('/smart-migration/execute'), {
-                method: 'POST',
-                headers,
-                credentials: 'include',
-                body: fd,
-                retryOn401: useBackendSession(),
-            });
-        } finally {
-            pollStop.stopped = true;
-            await pollPromise.catch(() => undefined);
-            const finalProgress = await fetchBackendMigrationProgress(
-                jobId,
-                currentUser.id,
-                bearerToken,
-            );
-            if (finalProgress) onProgress?.(finalProgress);
-        }
+                let res: Response;
+                try {
+                    const headers: Record<string, string> = {};
+                    if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
+                    res = await authenticatedFetch(capexBeRequestUrl('/smart-migration/execute'), {
+                        method: 'POST',
+                        headers,
+                        credentials: 'include',
+                        body: fd,
+                        retryOn401: useBackendSession(),
+                    });
+                } finally {
+                    pollStop.stopped = true;
+                    await pollPromise.catch(() => undefined);
+                    const finalProgress = await fetchBackendMigrationProgress(
+                        jobId,
+                        currentUser.id,
+                        bearerToken,
+                    );
+                    if (finalProgress) onProgress?.(finalProgress);
+                }
 
-        if (res.ok) {
-            const serverResult = (await res.json()) as MigrationResult;
-            if (serverResult.successCount > 0) {
-                invalidateRequestCache();
+                if (res.ok) {
+                    const serverResult = (await res.json()) as MigrationResult;
+                    if (serverResult.successCount > 0) {
+                        invalidateRequestCache();
+                    }
+                    onProgress?.({
+                        stage: 'done',
+                        processedRows: serverResult.totalRows || totalRowsForProgress,
+                        totalRows: serverResult.totalRows || totalRowsForProgress,
+                        message: serverResult.success
+                            ? 'Migrasi selesai.'
+                            : 'Migrasi selesai dengan error pada sebagian baris.',
+                    });
+                    return serverResult;
+                }
+
+                const errBody = await res.text().catch(() => '');
+                throw new Error(
+                    `Server migrasi gagal (${res.status})${errBody ? `: ${errBody.slice(0, 200)}` : ''}`,
+                );
+        } catch (e) {
+            console.warn('capexbe smart-migration error:', e);
+                throw e instanceof Error ? e : new Error(String(e));
             }
-            onProgress?.({
-                stage: 'done',
-                processedRows: serverResult.totalRows || totalRowsForProgress,
-                totalRows: serverResult.totalRows || totalRowsForProgress,
-                message: serverResult.success
-                    ? 'Migrasi selesai.'
-                    : 'Migrasi selesai dengan error pada sebagian baris.',
-            });
-            return serverResult;
-        }
-
-        const errBody = await res.text().catch(() => '');
-        throw new Error(
-            `Server migrasi gagal (${res.status})${errBody ? `: ${errBody.slice(0, 200)}` : ''}`,
-        );
-    } catch (e) {
-        console.warn('capexbe smart-migration error:', e);
-        throw e instanceof Error ? e : new Error(String(e));
-    }
 };
 // --- Utilities & Backups ---
 

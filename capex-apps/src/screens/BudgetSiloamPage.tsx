@@ -280,8 +280,9 @@ const BudgetPeriodPageInner: React.FC<BudgetPeriodPageProps> = ({
         skipCache: true,
       });
       let confirmed = freshShell.budgetPeriod ? cloneDeep(freshShell.budgetPeriod) : next;
+      let freshCat: Awaited<ReturnType<typeof fetchBudgetSiloamCategorySlice>> = null;
       if (selectedCategoryId) {
-        const freshCat = await fetchBudgetSiloamCategorySlice(
+        freshCat = await fetchBudgetSiloamCategorySlice(
           periodName,
           selectedCategoryId,
           currentUser.id,

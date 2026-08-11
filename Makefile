@@ -41,7 +41,7 @@ CORE_PORT := 3016
 MIGRATION_PORT := 3017
 AUTH_PORT := 3018
 
-.PHONY: help setup install env ensure-install run run-tunnel run-tunnel-demo run-public run-be run-fe run-notifications run-audit run-backup run-config run-mom-daily-summary run-asset-timeline run-duplicate-detection run-user-admin run-procurement run-fs run-monitoring run-reporting run-executive-summary run-tasks run-core run-smart-migration run-auth run-all-leaf stop check check-env logs public-url tunnel-help tunnel-cf redis-up redis-down redis-status compose-env compose-config compose-build compose-up compose-down compose-verify compose-logs build-all-leaf verify-leaf-build sync-leaf-env shadow-notifications shadow-phase2 shadow-phase4 shadow-mom-daily-summary shadow-asset-timeline shadow-duplicate-detection shadow-user-admin shadow-procurement shadow-fs shadow-monitoring shadow-reporting shadow-executive-summary shadow-tasks shadow-core shadow-smart-migration shadow-auth verify-bff-routing verify-phase1 verify-phase2 verify-phase3 verify-phase4 verify-phase5a verify-phase5b verify-phase5c verify-phase5d verify-phase5 verify-phase6 verify-phase7a verify-phase7b verify-phase7c verify-phase7d verify-phase7e verify-phase8 verify-phase10 verify-microservices verify-microservices-static verify-compose-config verify-bff-health verify-cross-hu-scope verify-phase11 verify-all verify-auth-core-typecheck
+.PHONY: help setup install env ensure-install run run-tunnel run-tunnel-demo run-public run-be run-fe run-notifications run-audit run-backup run-config run-mom-daily-summary run-asset-timeline run-duplicate-detection run-user-admin run-procurement run-fs run-monitoring run-reporting run-executive-summary run-tasks run-core run-smart-migration run-auth run-all-leaf stop check check-env ensure-vps-dev postgrest-up postgrest-down seed-vps-demo vps-dev-up logs public-url tunnel-help tunnel-cf redis-up redis-down redis-status compose-env compose-config compose-build compose-up compose-down compose-verify compose-logs build-all-leaf verify-leaf-build sync-leaf-env shadow-notifications shadow-phase2 shadow-phase4 shadow-mom-daily-summary shadow-asset-timeline shadow-duplicate-detection shadow-user-admin shadow-procurement shadow-fs shadow-monitoring shadow-reporting shadow-executive-summary shadow-tasks shadow-core shadow-smart-migration shadow-auth verify-bff-routing verify-phase1 verify-phase2 verify-phase3 verify-phase4 verify-phase5a verify-phase5b verify-phase5c verify-phase5d verify-phase5 verify-phase6 verify-phase7a verify-phase7b verify-phase7c verify-phase7d verify-phase7e verify-phase8 verify-phase10 verify-microservices verify-microservices-static verify-compose-config verify-bff-health verify-cross-hu-scope verify-phase11 verify-all verify-auth-core-typecheck
 
 help:
 	@echo "CAPEX dev commands:"
@@ -49,7 +49,8 @@ help:
 	@echo "  make setup      Copy env templates + npm install (first time)"
 	@echo "  make install    npm install in backend + frontend"
 	@echo "  make env        Copy .env.example → .env / .env.local (skip if exists)"
-	@echo "  make check      Verify env files + Supabase connectivity"
+	@echo "  make check      Verify env + VPS tunnel/PostgREST (auto) + API health"
+	@echo "  make ensure-vps-dev  Start SSH tunnel :5433 + PostgREST :54321 (USE_VPS_POSTGRES=1)"
 	@echo "  make run        Start backend (:$(BE_PORT)) + auth (:$(AUTH_PORT)) + frontend (:$(FE_PORT))"
 	@echo "  make run-tunnel     Dev mode for tunnel (HMR off, no WS errors)"
 	@echo "  make run-tunnel-demo Production + cloudflared (best for sharing)"
@@ -132,7 +133,7 @@ check-env:
 	@cd $(BE_DIR) && node -e "require('dotenv').config(); \
 	  const u=process.env.SUPABASE_URL, a=process.env.SUPABASE_ANON_KEY, s=process.env.SUPABASE_SERVICE_ROLE_KEY; \
 	  if(!u||!a||!s) { console.error('FAIL: missing SUPABASE_* in capexbe/.env'); process.exit(1); } \
-	  console.log('OK  capexbe/.env —', u);"
+	  console.log('OK  capexbe/.env —', u, '| auth:', process.env.CAPEX_AUTH_MODE||'(default)');"
 	@echo "==> Checking frontend env..."
 	@cd $(FE_DIR) && node -e " \
 	  const fs=require('fs'); \
@@ -140,7 +141,9 @@ check-env:
 	  const m={...parse('.env'),...parse('.env.local')}; \
 	  if(!m.NEXT_PUBLIC_CAPEXBE_URL) { console.error('FAIL: missing NEXT_PUBLIC_CAPEXBE_URL in capex-apps/.env or .env.local'); process.exit(1); } \
 	  if(m.NEXT_PUBLIC_SUPABASE_URL||m.NEXT_PUBLIC_SUPABASE_ANON_KEY) { console.warn('WARN: NEXT_PUBLIC_SUPABASE_* no longer needed on FE — move to capexbe/.env only'); } \
-	  console.log('OK  capex-apps env — BE', m.NEXT_PUBLIC_CAPEXBE_URL);"
+	  console.log('OK  capex-apps env — BE', m.NEXT_PUBLIC_CAPEXBE_URL, '| auth:', m.NEXT_PUBLIC_CAPEX_AUTH_MODE||'(default)');"
+	@chmod +x deploy/postgres/ensure-vps-dev.sh
+	@deploy/postgres/ensure-vps-dev.sh
 	@echo "==> Redis cache (optional)..."
 	@cd $(BE_DIR) && node -e " \
 	  require('dotenv').config(); \
@@ -158,18 +161,24 @@ check-env:
 	@echo "==> Testing API health..."
 	@cd $(BE_DIR) && node -e "require('dotenv').config(); \
 	  const vps=process.env.USE_VPS_POSTGRES==='1'||process.env.USE_VPS_POSTGRES==='true'; \
+	  if(vps && !process.env.DATABASE_URL){ console.error('FAIL: USE_VPS_POSTGRES=1 but DATABASE_URL missing'); process.exit(1); } \
 	  fetch(process.env.SUPABASE_URL+'/auth/v1/health',{headers:{apikey:process.env.SUPABASE_ANON_KEY}}) \
 	    .then(r=>console.log(r.status===200?(vps?'OK  VPS PostgREST':'OK  Supabase Auth health'):'WARN API health', r.status)) \
-	    .catch(e=>{ console.error('FAIL API health', e.message); process.exit(1); });"
+	    .catch(e=>{ console.error('FAIL API health', e.message, vps?'— tunnel/PostgREST? run: make ensure-vps-dev':''); process.exit(1); });"
 
-postgrest-up:
-	@echo "==> PostgREST → VPS Postgres (tunnel must be open on :5433)"
-	@chmod +x deploy/postgres/run-postgrest-local.sh
-	@PROXY_PORT=54321 PGRST_PORT=13000 deploy/postgres/run-postgrest-local.sh up
+ensure-vps-dev:
+	@chmod +x deploy/postgres/ensure-vps-dev.sh
+	@deploy/postgres/ensure-vps-dev.sh
+
+postgrest-up: ensure-vps-dev
+	@true
 
 postgrest-down:
 	@chmod +x deploy/postgres/run-postgrest-local.sh
 	@deploy/postgres/run-postgrest-local.sh down
+	@-test -f /tmp/capex-pg-tunnel.pid && kill "$$(cat /tmp/capex-pg-tunnel.pid)" 2>/dev/null || true
+	@-rm -f /tmp/capex-pg-tunnel.pid
+	@echo "==> SSH tunnel stopped (if we started it)"
 
 seed-vps-demo:
 	@echo "==> Seed demo user on VPS Postgres (demo@capex.local / demo123)"

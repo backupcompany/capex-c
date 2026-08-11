@@ -2,6 +2,7 @@ import type { BudgetItem, BudgetPeriod } from '@/types';
 import { ProjectStatus } from '@/types';
 import type { DashboardSnapshot } from '@/services/dashboardSnapshotApi';
 import { EMPTY_DASHBOARD_STATS, PROJECT_STATUS_CHART_COLORS, withProjectStatusChartColors } from './constants';
+import type { DashboardStats } from './types';
 
 function categoryDisplayName(
   names: Record<string, string> | undefined,
