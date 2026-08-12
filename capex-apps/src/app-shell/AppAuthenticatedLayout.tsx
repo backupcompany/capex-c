@@ -9,6 +9,8 @@ import { SessionExpiryWarning } from '@/components/auth/SessionExpiryWarning';
 import { AppRouteRenderer, type AppRouteRendererProps } from '@/components/app-shell/AppRouteRenderer';
 import { AppShellChrome } from '@/components/app-shell/AppShellChrome';
 import { APP_SHELL_PAGES_WITH_FILTERS } from '@/components/app-shell/appShellPagesWithFilters';
+import { BackendServiceBanner } from '@/components/app-shell/BackendServiceBanner';
+import { RouteScreenFallback } from '@/components/app-shell/RouteScreenFallback';
 import { ToastProvider, type ShowToastOptions } from '@/contexts/ToastContext';
 import type { Page, ChangeSummary, User, UserRole, BudgetPeriod, Archetype, HospitalUnit, Notification } from '@/types';
 import type { NavItemConfig } from '@/constants';
@@ -57,6 +59,8 @@ export type AppAuthenticatedLayoutProps = {
   onModalDiscard: () => void;
   toast: ToastState;
   dismissToast: () => void;
+  /** True when app bootstrap API failed — shell still renders. */
+  backendServiceDown?: boolean;
 };
 
 export function AppAuthenticatedLayout({
@@ -96,6 +100,7 @@ export function AppAuthenticatedLayout({
   onModalDiscard,
   toast,
   dismissToast,
+  backendServiceDown = false,
 }: AppAuthenticatedLayoutProps) {
   return (
     <ToastProvider showToast={showToast}>
@@ -147,7 +152,8 @@ export function AppAuthenticatedLayout({
           />
 
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <Suspense fallback={null}>
+            {backendServiceDown ? <BackendServiceBanner /> : null}
+            <Suspense fallback={<RouteScreenFallback routePage={routePage} />}>
               <AppRouteRenderer routePage={routePage} currentUser={currentUser} {...routeRendererProps} />
             </Suspense>
           </main>

@@ -1,13 +1,12 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Response } from 'express';
-import { CSRF_COOKIE, CSRF_HEADER } from './auth.constants';
+import { CSRF_COOKIE, CSRF_HEADER, cookieSecureFlag } from './auth.constants';
 
 function cookieOptions(maxAgeSec: number) {
-  const secure = process.env.NODE_ENV === 'production';
   return {
     httpOnly: false,
-    secure,
+    secure: cookieSecureFlag(),
     sameSite: 'strict' as const,
     path: '/',
     maxAge: maxAgeSec * 1000,

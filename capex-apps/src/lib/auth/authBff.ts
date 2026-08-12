@@ -86,8 +86,8 @@ export async function proxyAuthToBackend(
     headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
   });
 
-  applySetCookiesToResponse(out, collectSetCookies(res));
-  applyBackendSetCookies(cookieStore, collectSetCookies(res));
+  await applySetCookiesToResponse(out, collectSetCookies(res));
+  await applyBackendSetCookies(cookieStore, collectSetCookies(res));
 
   if (path === '/logout' && res.ok) {
     out.cookies.delete(ACCESS_COOKIE);
@@ -129,8 +129,8 @@ export async function proxyAuthRedirectToBackend(
   const location = res.headers.get('location');
   if (location && res.status >= 300 && res.status < 400) {
     const out = NextResponse.redirect(location, res.status === 303 ? 303 : 302);
-    applySetCookiesToResponse(out, collectSetCookies(res));
-    applyBackendSetCookies(cookieStore, collectSetCookies(res));
+    await applySetCookiesToResponse(out, collectSetCookies(res));
+    await applyBackendSetCookies(cookieStore, collectSetCookies(res));
     return out;
   }
 
@@ -139,7 +139,7 @@ export async function proxyAuthRedirectToBackend(
     status: res.status,
     headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
   });
-  applySetCookiesToResponse(out, collectSetCookies(res));
-  applyBackendSetCookies(cookieStore, collectSetCookies(res));
+  await applySetCookiesToResponse(out, collectSetCookies(res));
+  await applyBackendSetCookies(cookieStore, collectSetCookies(res));
   return out;
 }

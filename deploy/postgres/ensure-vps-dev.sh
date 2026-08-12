@@ -70,7 +70,8 @@ else
   echo "OK  SSH tunnel :${PG_LOCAL_PORT}"
 fi
 
-if curl -sf "http://127.0.0.1:${PROXY_PORT}/auth/v1/health" >/dev/null 2>&1; then
+if curl -sf "http://127.0.0.1:${PROXY_PORT}/auth/v1/health" >/dev/null 2>&1 \
+  && curl -sf "http://127.0.0.1:${PROXY_PORT}/rest/v1/users?select=id&limit=1" >/dev/null 2>&1; then
   echo "OK  PostgREST already up :${PROXY_PORT}"
   exit 0
 fi

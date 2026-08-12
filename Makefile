@@ -184,9 +184,14 @@ seed-vps-demo:
 	@echo "==> Seed demo user on VPS Postgres (demo@capex.local / demo123)"
 	@set -a && . capexbe/.env && set +a && psql "$$DATABASE_URL" -f deploy/postgres/seed-demo-user.sql
 
+seed-infosec:
+	@echo "==> Seed InfoSec pentest users (admin + viewer) — passwords via INFOSEC_* env"
+	@set -a && . capexbe/.env && set +a && psql "$$DATABASE_URL" -f deploy/postgres/seed-infosec-pentest-users.sql
+
 vps-dev-up: postgrest-up seed-vps-demo
 	@echo "OK  VPS dev — tunnel: ssh -N -L 5433:127.0.0.1:5432 capex-vps"
 	@echo "    login: demo@capex.local / demo123"
+	@echo "    InfoSec: make seed-infosec + set INFOSEC_* in capexbe/.env"
 
 run: stop ensure-install check-env
 	@test -f $(AUTH_DIR)/.env || (echo "Copy $(AUTH_DIR)/.env.example → .env" && exit 1)

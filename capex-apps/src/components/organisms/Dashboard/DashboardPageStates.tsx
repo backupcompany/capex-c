@@ -68,9 +68,8 @@ export const DashboardChartsSkeleton = memo(function DashboardChartsSkeleton() {
 export const DashboardBackendUnavailable = memo(function DashboardBackendUnavailable() {
   return (
     <div className="text-center p-8 bg-siloam-surface rounded-xl shadow-soft text-siloam-text-secondary">
-      Dashboard data is unavailable. Ensure the API is running and{' '}
-      <code className="text-xs">NEXT_PUBLIC_CAPEXBE_URL</code> is set, or enable Supabase fallback for
-      development.
+      Dashboard UI loaded, but API returned no data. Check capex-api / PostgREST and sign-in session —
+      not a missing frontend bundle.
     </div>
   );
 });

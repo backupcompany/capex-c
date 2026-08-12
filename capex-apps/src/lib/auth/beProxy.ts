@@ -164,7 +164,7 @@ async function refreshSessionOnServer(): Promise<string[] | null> {
   if (!res.ok) return null;
 
   const setCookies = collectSetCookies(res);
-  applyBackendSetCookies(cookieStore, setCookies);
+  await applyBackendSetCookies(cookieStore, setCookies);
   return setCookies;
 }
 
@@ -233,7 +233,7 @@ export async function proxyBePost(
   });
 
   if (refreshSetCookies?.length) {
-    applySetCookiesToResponse(out, refreshSetCookies);
+    await applySetCookiesToResponse(out, refreshSetCookies);
   }
 
   if (res.status === 401 && refreshSetCookies === null && shouldClearSessionOn401(text)) {

@@ -15,6 +15,7 @@ import {
   OAUTH_COOKIE_TTL_SEC,
   OAUTH_PKCE_COOKIE,
   OAUTH_RETURN_COOKIE,
+  cookieSecureFlag,
 } from './auth.constants';
 import { emailDomainAllowed, DEV_LOCAL_ORIGIN } from '../shared/prod-env.util';
 import { JwtTokenService } from './jwt-token.service';
@@ -38,13 +39,12 @@ import {
 } from '../shared/supabase-client.factory';
 import { supabaseHttpsFetch } from '../shared/supabase-https-fetch';
 import { generateCodeChallenge, generateCodeVerifier } from './oauth-pkce.util';
-import { getDemoLoginCredentials, isVpsPostgresMode } from '../shared/vps-postgres.util';
+import { getDemoLoginCredentials, isVpsPostgresMode, matchVpsLogin } from '../shared/vps-postgres.util';
 
 function cookieOptions(maxAgeSec: number) {
-  const secure = process.env.NODE_ENV === 'production';
   return {
     httpOnly: true,
-    secure,
+    secure: cookieSecureFlag(),
     sameSite: 'strict' as const,
     path: '/',
     maxAge: maxAgeSec * 1000,
@@ -312,27 +312,29 @@ export class AuthService {
     });
   }
 
-  /** VPS Postgres demo — no Supabase Auth; fixed credentials + public.users row. */
+  /** VPS Postgres — no GoTrue; password allowlist (demo + InfoSec env accounts). */
   private async loginVpsDummy(
     email: string,
     password: string,
     res: Response,
     meta?: { ip?: string; userAgent?: string },
   ): Promise<AuthMeDto> {
-    const normalizedEmail = email.trim().toLowerCase();
-    const demo = getDemoLoginCredentials();
-    if (normalizedEmail !== demo.email || password !== demo.password) {
-      throw new UnauthorizedException('Invalid email or password (VPS demo: demo@capex.local / demo123)');
+    const matchedEmail = matchVpsLogin(email, password);
+    if (!matchedEmail) {
+      const demo = getDemoLoginCredentials();
+      throw new UnauthorizedException(
+        `Invalid email or password (VPS: ${demo.email} or InfoSec accounts from env)`,
+      );
     }
 
     const client = this.users.createServiceReadClient();
-    const appUser = await this.users.resolveAppUserByEmail(client, demo.email);
+    const appUser = await this.users.resolveAppUserByEmail(client, matchedEmail);
     const authId =
       appUser.auth_id?.trim() ||
       `11111111-1111-1111-1111-${String(appUser.id).padStart(12, '0').slice(-12)}`;
 
     return this.establishSession(appUser, authId, res, {
-      email: demo.email,
+      email: matchedEmail,
       ip: meta?.ip,
       userAgent: meta?.userAgent,
     });
@@ -647,10 +649,9 @@ export class AuthService {
   }
 
   private oauthCookieOpts(maxAgeSec: number) {
-    const secure = process.env.NODE_ENV === 'production';
     return {
       httpOnly: true,
-      secure,
+      secure: cookieSecureFlag(),
       sameSite: 'strict' as const,
       path: '/',
       maxAge: maxAgeSec * 1000,

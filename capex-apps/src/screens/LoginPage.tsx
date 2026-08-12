@@ -100,7 +100,7 @@ export const LoginPage = memo(function LoginPage() {
       return;
     }
     if (!useBackendSession()) {
-      setError('Backend session belum diaktifkan.');
+      setError('Frontend loaded — backend session off. Set NEXT_PUBLIC_USE_BACKEND_SESSION=true.');
       return;
     }
 
@@ -181,6 +181,14 @@ export const LoginPage = memo(function LoginPage() {
                 <MicrosoftIcon />
                 {isLoading ? 'Membuka Microsoft…' : 'Masuk dengan Microsoft'}
               </button>
+            )}
+
+            {!azureSsoEnabled && !passwordLoginEnabled && (
+              <div className="mb-4 rounded-xl bg-amber-50/90 p-3 text-sm text-amber-900">
+                Login UI loaded, but no method enabled. Set{' '}
+                <code className="text-xs">NEXT_PUBLIC_CAPEX_AUTH_MODE=password</code> (or{' '}
+                <code className="text-xs">both</code>).
+              </div>
             )}
 
             {passwordLoginEnabled && (

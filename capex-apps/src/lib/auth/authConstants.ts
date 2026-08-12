@@ -32,7 +32,7 @@ function getAuthMode(): CapexAuthMode {
   if (raw === 'password' || raw === 'sso' || raw === 'both') return raw;
   if (process.env.NEXT_PUBLIC_ENABLE_AZURE_SSO === 'false') return 'password';
   if (process.env.NEXT_PUBLIC_CAPEX_DEMO_MODE === 'true') return 'both';
-  if (process.env.NODE_ENV === 'production') return 'sso';
+  // Explicit CAPEX_AUTH_MODE=sso for Microsoft-only. Do not hide password form just because NODE_ENV=production.
   return 'both';
 }
 

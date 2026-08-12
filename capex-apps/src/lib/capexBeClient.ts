@@ -8,12 +8,20 @@ import {
 } from './http/capexBeAxios';
 
 export function isCapexBeConfigured(): boolean {
-  return !!process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim();
+  if (process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim()) return true;
+  if (process.env.CAPEXBE_URL?.trim()) return true;
+  // Browser talks to same-origin /api/be — do not blank pages when only server CAPEXBE_URL is set.
+  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_BACKEND_SESSION !== 'false') {
+    return true;
+  }
+  return false;
 }
 
 function beBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_CAPEXBE_URL?.replace(/\/$/, '') ?? '';
-  if (!base.trim()) throw new Error('NEXT_PUBLIC_CAPEXBE_URL is not set');
+  const base = (process.env.NEXT_PUBLIC_CAPEXBE_URL || process.env.CAPEXBE_URL || '')
+    .replace(/\/$/, '')
+    .trim();
+  if (!base) throw new Error('CAPEXBE_URL / NEXT_PUBLIC_CAPEXBE_URL is not set');
   return base;
 }
 

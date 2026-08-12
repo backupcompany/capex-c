@@ -3,13 +3,33 @@
 # Then: docker exec gateway-caddy caddy reload --config /etc/caddy/Caddyfile
 #
 # Ports must match deploy/docker-compose.production.yml (localhost bind).
+#
+# Siloam DEV — DNS A records → 10.201.130.4
+# HTTP only until TLS certs are issued; switch to bare hostnames (https) after certs.
+# Browser uses FE domain; API domain is optional (BFF still proxies /api/* → capex-api).
 
-capex.cgp-ai.com {
+http://dev-capexpro.siloamhospitals.com {
 	encode gzip zstd
 	reverse_proxy 127.0.0.1:8080
 }
 
-capex-api.cgp-ai.com {
+http://dev-capexpro-api.siloamhospitals.com {
 	encode gzip zstd
 	reverse_proxy 127.0.0.1:8082
 }
+
+# Optional: same FE via IP (until DNS ready)
+http://10.201.130.4 {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8080
+}
+
+# Legacy / other env (HTTPS once certs exist):
+# capex.cgp-ai.com {
+# 	encode gzip zstd
+# 	reverse_proxy 127.0.0.1:8080
+# }
+# capex-api.cgp-ai.com {
+# 	encode gzip zstd
+# 	reverse_proxy 127.0.0.1:8082
+# }

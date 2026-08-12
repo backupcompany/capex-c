@@ -20,6 +20,7 @@ import {
   applySecurityHeaders,
   buildContentSecurityPolicy,
   generateCspNonce,
+  requestIsHttps,
 } from '@/lib/security/csp';
 
 const AUTH_RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
@@ -56,21 +57,33 @@ function ensureRequestId(req: NextRequest, requestHeaders: Headers): string {
   return id;
 }
 
-function attachRequestId(res: NextResponse, req: NextRequest, nonce?: string): NextResponse {
+function attachRequestId(
+  res: NextResponse,
+  req: NextRequest,
+  nonce?: string,
+  enforceHttps?: boolean,
+): NextResponse {
   const existing = req.headers.get('x-request-id');
   const id = existing?.trim() || crypto.randomUUID();
   res.headers.set('x-request-id', id);
-  applySecurityHeaders(res, { nonce, isProd: process.env.NODE_ENV === 'production' });
+  applySecurityHeaders(res, {
+    nonce,
+    isProd: process.env.NODE_ENV === 'production',
+    enforceHttps: Boolean(enforceHttps),
+  });
   return res;
 }
 
-function forwardWithNonce(req: NextRequest, nonce: string): NextResponse {
+function forwardWithNonce(req: NextRequest, nonce: string, enforceHttps: boolean): NextResponse {
   const isProd = process.env.NODE_ENV === 'production';
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
   // Next.js stamps framework scripts from the *request* CSP nonce, not only the response header.
   if (isProd) {
-    requestHeaders.set('Content-Security-Policy', buildContentSecurityPolicy(nonce, true));
+    requestHeaders.set(
+      'Content-Security-Policy',
+      buildContentSecurityPolicy(nonce, true, { enforceHttps }),
+    );
   }
   ensureRequestId(req, requestHeaders);
   return NextResponse.next({ request: { headers: requestHeaders } });
@@ -107,6 +120,7 @@ function rateLimitBeProxy(req: NextRequest): NextResponse | null {
 export async function middleware(req: NextRequest) {
   const isProd = process.env.NODE_ENV === 'production';
   const nonce = isProd ? generateCspNonce() : undefined;
+  const enforceHttps = requestIsHttps(req.headers);
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
@@ -119,34 +133,39 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/css/') ||
     /\.(?:css|ttf|otf|woff2?|eot)$/i.test(pathname)
   ) {
-    const res = attachRequestId(NextResponse.next(), req, nonce);
+    const res = attachRequestId(NextResponse.next(), req, nonce, enforceHttps);
     return res;
   }
 
   if (!requestIpAllowed(req)) {
-    return attachRequestId(jsonError(403, 'Forbidden'), req, nonce);
+    return attachRequestId(jsonError(403, 'Forbidden'), req, nonce, enforceHttps);
   }
 
   if (!isBackendSessionEnabled()) {
     if (isProd) {
-      return attachRequestId(jsonError(503, 'Backend session is required in production'), req, nonce);
+      return attachRequestId(
+        jsonError(503, 'Backend session is required in production'),
+        req,
+        nonce,
+        enforceHttps,
+      );
     }
-    const res = forwardWithNonce(req, nonce ?? generateCspNonce());
-    return attachRequestId(res, req, nonce);
+    const res = forwardWithNonce(req, nonce ?? generateCspNonce(), enforceHttps);
+    return attachRequestId(res, req, nonce, enforceHttps);
   }
 
   const authLimited = rateLimitAuthRoute(req);
-  if (authLimited) return attachRequestId(authLimited, req, nonce);
+  if (authLimited) return attachRequestId(authLimited, req, nonce, enforceHttps);
 
   const routeClass = classifyApiRoute(pathname);
 
   if (routeClass === 'public') {
-    const res = forwardWithNonce(req, nonce ?? generateCspNonce());
-    return attachRequestId(res, req, nonce);
+    const res = forwardWithNonce(req, nonce ?? generateCspNonce(), enforceHttps);
+    return attachRequestId(res, req, nonce, enforceHttps);
   }
 
   if (routeClass === 'deny') {
-    return attachRequestId(jsonError(404, 'Not found'), req, nonce);
+    return attachRequestId(jsonError(404, 'Not found'), req, nonce, enforceHttps);
   }
 
   const session = await resolveEdgeSession(req);
@@ -158,21 +177,21 @@ export async function middleware(req: NextRequest) {
       : edgeSessionPermits(session);
 
     if (!permitted) {
-      return attachRequestId(jsonError(401, 'Authentication required'), req, nonce);
+      return attachRequestId(jsonError(401, 'Authentication required'), req, nonce, enforceHttps);
     }
 
     if (beProxy) {
       const beLimited = rateLimitBeProxy(req);
-      if (beLimited) return attachRequestId(beLimited, req, nonce);
+      if (beLimited) return attachRequestId(beLimited, req, nonce, enforceHttps);
 
       const beCheck = validateBeProxyRequest(req);
       if (!beCheck.ok) {
-        return attachRequestId(jsonError(beCheck.status, beCheck.message), req, nonce);
+        return attachRequestId(jsonError(beCheck.status, beCheck.message), req, nonce, enforceHttps);
       }
     }
 
-    const res = forwardWithNonce(req, nonce ?? generateCspNonce());
-    return attachRequestId(res, req, nonce);
+    const res = forwardWithNonce(req, nonce ?? generateCspNonce(), enforceHttps);
+    return attachRequestId(res, req, nonce, enforceHttps);
   }
 
   const pagePermitted = edgeSessionPermits(session);
@@ -180,17 +199,17 @@ export async function middleware(req: NextRequest) {
   if (normalizeAppPath(pathname) === LEGACY_LOGIN_PATH) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
-    return attachRequestId(NextResponse.redirect(url), req, nonce);
+    return attachRequestId(NextResponse.redirect(url), req, nonce, enforceHttps);
   }
 
   if (!pagePermitted && !isPublicPage(pathname)) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
-    return attachRequestId(NextResponse.redirect(url), req, nonce);
+    return attachRequestId(NextResponse.redirect(url), req, nonce, enforceHttps);
   }
 
-  const res = forwardWithNonce(req, nonce ?? generateCspNonce());
-  return attachRequestId(res, req, nonce);
+  const res = forwardWithNonce(req, nonce ?? generateCspNonce(), enforceHttps);
+  return attachRequestId(res, req, nonce, enforceHttps);
 }
 
 export const config = {

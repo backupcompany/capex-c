@@ -41,6 +41,17 @@ make run
 | Email | `demo@capex.local` |
 | Password | `demo123` |
 
+**InfoSec pentest accounts** (PDF §18.3):
+```bash
+make seed-infosec   # users 227/228 + Viewer role matrix
+# Set INFOSEC_ADMIN_* / INFOSEC_VIEWER_* passwords in capexbe/.env (gitignored)
+```
+
+| Email | Role | Scope |
+|-------|------|-------|
+| `capex.infosec.admin@siloamhospitals.com` | Super Admin | All |
+| `capex.infosec.viewer@siloamhospitals.com` | Viewer | HU-SHMK |
+
 JWT keys di `.env` harus match `SUPABASE_JWT_SECRET` (generate: `./deploy/postgres/generate-vps-jwt-keys.sh`).
 
 Kembali ke Supabase Cloud: set `USE_VPS_POSTGRES=0`, restore `SUPABASE_URL` cloud + cloud anon/service keys.

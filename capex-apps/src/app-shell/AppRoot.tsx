@@ -527,9 +527,11 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             if (probeUser) {
               applyProbeUser(probeUser, me.user.roles, me.user.idleTimeoutMs);
             }
-            const csrfOk = await ensureCsrfToken();
-            if (!cancelled && csrfOk) {
+            // Unblock page queries even if CSRF cookie is missing (HTTP / Secure mismatch).
+            // Mutations still bootstrap CSRF via withCsrfHeadersAsync.
+            if (!cancelled) {
               useAuthStore.getState().setSessionReady(true);
+              void ensureCsrfToken();
             }
             if (initialBootstrap?.users?.length) {
               setDataInitialized(true);
@@ -537,9 +539,8 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             return;
           }
           if (me == null && hasSessionCookies) {
-            if (initialBootstrap?.users?.length) {
-              setDataInitialized(true);
-            }
+            // Transient probe failure — do not leave shell half-open with sessionReady=false.
+            finishUnauthenticated({ clearServer: false });
             return;
           }
           finishUnauthenticated();
@@ -548,7 +549,17 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
         finishUnauthenticated();
       } catch {
-        if (!cancelled) setDataInitialized(true);
+        // Probe/network failure must not blank the app — show login or keep shell with sessionReady.
+        if (!cancelled) {
+          setDataInitialized(true);
+          const cached = readCachedAuthUser();
+          if (cached && hasSessionCookies) {
+            applyProbeUser(cached);
+            useAuthStore.getState().setSessionReady(true);
+          } else {
+            finishUnauthenticated({ clearServer: false });
+          }
+        }
       } finally {
         if (!cancelled) {
           markAuthProbeComplete();
@@ -618,10 +629,12 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     if (!bootstrapQuery.isError) return;
     console.error('Error initializing application:', bootstrapQuery.error);
     setDataInitialized(true);
+    // Keep shell open — bootstrap failure is a BE problem, not a missing FE bundle.
+    if (useAuthStore.getState().status === 'authenticated') {
+      useAuthStore.getState().setSessionReady(true);
+    }
     showToast(
-      `Error initializing application: ${
-        bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : 'Unknown error'
-      }. Please check console for details.`,
+      'Frontend loaded. Backend bootstrap failed — check capex-api / PostgREST.',
       'error',
     );
   }, [bootstrapQuery.isError, bootstrapQuery.error, showToast]);
@@ -1271,6 +1284,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       onModalDiscard={handleModalDiscard}
       toast={toast}
       dismissToast={dismissToast}
+      backendServiceDown={bootstrapQuery.isError}
     />
   );
 };

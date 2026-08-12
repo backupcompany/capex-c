@@ -304,7 +304,12 @@ async function loginWithServerPassword(
       };
     }
   } catch {
-    return { user: null, roles: [], error: 'Network error ke backend login' };
+    return {
+      user: null,
+      roles: [],
+      error:
+        'Frontend loaded — backend login unreachable. Start capexbe (and make ensure-vps-dev if VPS).',
+    };
   }
 }
 

@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { NextResponse } from 'next/server';
 import {
   ACCESS_COOKIE,
@@ -7,6 +7,7 @@ import {
   OAUTH_RETURN_COOKIE,
   REFRESH_COOKIE,
 } from './authConstants';
+import { shouldUseSecureCookies } from '../security/csp';
 
 /** Cookies forwarded to capexbe auth routes (session + short-lived OAuth PKCE). */
 const PROXY_COOKIE_NAMES = new Set([
@@ -27,11 +28,11 @@ export function authCookieHeaderFromStore(
     .join('; ');
 }
 
-export function applyBackendSetCookies(
+export async function applyBackendSetCookies(
   cookieStore: Awaited<ReturnType<typeof cookies>>,
   setCookies: string[],
-): void {
-  const secure = process.env.NODE_ENV === 'production';
+): Promise<void> {
+  const secure = shouldUseSecureCookies(await headers());
   for (const raw of setCookies) {
     const parts = raw.split(';').map((p) => p.trim());
     const [nameValue, ...attrs] = parts;
@@ -77,13 +78,16 @@ export function collectSetCookies(res: Response): string[] {
   return typeof res.headers.getSetCookie === 'function'
     ? res.headers.getSetCookie()
     : res.headers.get('set-cookie')
-      ? [res.headers.get('set-cookie') as string]
-      : [];
+    ? [res.headers.get('set-cookie') as string]
+    : [];
 }
 
 /** Mirror backend Set-Cookie onto a BFF NextResponse for the browser. */
-export function applySetCookiesToResponse(res: NextResponse, rawCookies: string[]): void {
-  const secure = process.env.NODE_ENV === 'production';
+export async function applySetCookiesToResponse(
+  res: NextResponse,
+  rawCookies: string[],
+): Promise<void> {
+  const secure = shouldUseSecureCookies(await headers());
   for (const raw of rawCookies) {
     const parts = raw.split(';').map((p) => p.trim());
     const [nameValue, ...attrs] = parts;

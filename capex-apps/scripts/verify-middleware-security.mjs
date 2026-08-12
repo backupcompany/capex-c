@@ -41,7 +41,8 @@ const REQUIRED_EDGE_CHECKS = [
       'x-nonce',
       'applySecurityHeaders',
       'buildContentSecurityPolicy',
-      "requestHeaders.set('Content-Security-Policy'",
+      'Content-Security-Policy',
+      'requestIsHttps',
     ],
     label: 'middleware BE proxy gate + CSP nonce on request',
   },
@@ -52,8 +53,8 @@ const REQUIRED_EDGE_CHECKS = [
   },
   {
     file: 'src/lib/security/csp.ts',
-    mustInclude: ["'strict-dynamic'", 'upgrade-insecure-requests'],
-    label: 'CSP builder uses strict-dynamic in prod',
+    mustInclude: ["'strict-dynamic'", 'upgrade-insecure-requests', 'requestIsHttps', 'enforceHttps'],
+    label: 'CSP builder gates HTTPS upgrades on proto',
   },
   {
     file: 'next.config.ts',
