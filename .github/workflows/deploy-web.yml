@@ -72,10 +72,10 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/capex-web:latest
             ghcr.io/${{ github.repository_owner }}/capex-web:${{ github.sha }}
           build-args: |
-            NEXT_PUBLIC_CAPEXBE_URL=${{ secrets.NEXT_PUBLIC_CAPEXBE_URL }}
+            NEXT_PUBLIC_CAPEXBE_URL=${{ secrets.NEXT_PUBLIC_CAPEXBE_URL || 'http://capex-api:3001' }}
             NEXT_PUBLIC_USE_BACKEND_SESSION=true
             NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK=false
-            NEXT_PUBLIC_CAPEX_AUTH_MODE=${{ secrets.CAPEX_AUTH_MODE || 'password' }}
+            NEXT_PUBLIC_CAPEX_AUTH_MODE=${{ secrets.CAPEX_AUTH_MODE || 'sso' }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0

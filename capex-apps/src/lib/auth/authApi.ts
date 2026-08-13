@@ -139,11 +139,16 @@ export async function probeBackendSession(options?: {
       return session;
     }
     return lastProbeResult?.authenticated ? lastProbeResult : null;
-  })().finally(() => {
-    probeInFlight = null;
-  });
+  })();
 
-  return probeInFlight;
+  const request = probeInFlight;
+  try {
+    return await request;
+  } finally {
+    if (probeInFlight === request) {
+      probeInFlight = null;
+    }
+  }
 }
 
 /** True when startup should call /api/auth/session (session cookies or OAuth in progress). */
@@ -384,25 +389,43 @@ export async function changePasswordBackend(
 export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
   if (!useBackendSession()) return null;
   if (sessionInFlight) return sessionInFlight;
-  sessionInFlight = (async () => {
+
+  const request = (async () => {
     try {
       const res = await authFetch('/session', { method: 'GET' });
-      if (res.status === 503) {
-        // Auth leaf mid-restart — keep session, do not treat as logged out.
+
+      // Transient gateway/backend failures — never treat as logged out.
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
         return null;
       }
-      if (!res.ok) return { authenticated: false };
+
+      // /session is public and returns 200 + {authenticated:false} for guests.
+      // Only treat explicit auth failures as definitive anonymous.
+      if (res.status === 401 || res.status === 403) {
+        return { authenticated: false };
+      }
+
+      if (!res.ok) {
+        return null;
+      }
+
       const data = (await res.json()) as AuthSessionResponse;
       const session = data.user?.session ?? data.session;
       if (session) updateSessionMeta(session);
       return data;
     } catch {
       return null;
-    } finally {
-      sessionInFlight = null;
     }
   })();
-  return sessionInFlight;
+
+  sessionInFlight = request;
+  try {
+    return await request;
+  } finally {
+    if (sessionInFlight === request) {
+      sessionInFlight = null;
+    }
+  }
 }
 
 export async function logoutBackend(options?: {

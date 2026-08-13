@@ -547,11 +547,23 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             }
             return;
           }
-          if (me == null && hasSessionCookies) {
-            // Transient probe failure — do not leave shell half-open with sessionReady=false.
+
+          // null = unknown (502/503/network). Do NOT clear session / force login.
+          if (me == null) {
+            const cached = readCachedAuthUser();
+            if (cached && (hasSessionCookies || ssoReturn)) {
+              applyProbeUser(cached);
+              if (!cancelled) {
+                useAuthStore.getState().setSessionReady(true);
+                setDataInitialized(true);
+              }
+              return;
+            }
             finishUnauthenticated({ clearServer: false });
             return;
           }
+
+          // Definitive { authenticated: false } from /session
           finishUnauthenticated();
           return;
         }

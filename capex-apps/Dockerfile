@@ -1,29 +1,48 @@
-FROM node:22-alpine
+# Build from capex-apps/:
+#   docker build -f Dockerfile -t capex-web \
+#     --build-arg NEXT_PUBLIC_CAPEXBE_URL=http://capex-api:3001 \
+#     --build-arg NEXT_PUBLIC_CAPEX_AUTH_MODE=sso \
+#     .
 
+FROM node:22-alpine AS build
 WORKDIR /app
 
-ARG NEXT_PUBLIC_CAPEXBE_URL
+ARG NEXT_PUBLIC_CAPEXBE_URL=http://capex-api:3001
 ARG NEXT_PUBLIC_USE_BACKEND_SESSION=true
 ARG NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK=false
-ARG NEXT_PUBLIC_CAPEX_AUTH_MODE=password
+ARG NEXT_PUBLIC_CAPEX_AUTH_MODE=sso
 
 ENV NEXT_PUBLIC_CAPEXBE_URL=$NEXT_PUBLIC_CAPEXBE_URL
 ENV NEXT_PUBLIC_USE_BACKEND_SESSION=$NEXT_PUBLIC_USE_BACKEND_SESSION
 ENV NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK=$NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK
 ENV NEXT_PUBLIC_CAPEX_AUTH_MODE=$NEXT_PUBLIC_CAPEX_AUTH_MODE
+ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY scripts ./scripts
-
-RUN npm install
+RUN npm ci
 
 COPY . .
-
 RUN npm run build:secure
 
-# Runtime (docker-compose / k8s) — NOT build-args:
-#   JWT_ACCESS_SECRET=<same as capexbe>
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Runtime only (not baked): JWT_ACCESS_SECRET must match API
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/next.config.* ./
+COPY --from=build /app/middleware.ts ./middleware.ts
+
+RUN chown -R node:node /app
 
 EXPOSE 3000
 
+USER node
 CMD ["npm", "start"]

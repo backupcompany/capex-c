@@ -1,0 +1,17 @@
+# Used when building API from repo root: docker build -f capexbe/Dockerfile .
+.git
+.github
+**/.next
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+**/artifacts
+**/*.dump
+capex-apps
+services
+deploy
+docs
+*.md
+.DS_Store

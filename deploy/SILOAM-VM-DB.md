@@ -21,7 +21,20 @@ SUPABASE_URL=http://capex-postgrest
 
 Host debug only (from VM shell): `http://127.0.0.1:54321`
 
-## One-time bring-up
+## One-time bring-up (recommended)
+
+```bash
+cd /opt/capex-pro/app/capex-c   # or your repo path
+cp deploy/.env.vps.example deploy/.env.compose   # fill secrets
+docker compose -f deploy/docker-compose.siloam.yml --env-file deploy/.env.compose up -d --build
+./deploy/postgres/restore-dump-on-vm.sh ./deploy/postgres/artifacts/capex.dump
+docker restart capex-postgrest-engine capex-postgrest
+```
+
+API listens on **3001 inside** the container (`127.0.0.1:8082` on host).  
+Web BFF must use `http://capex-api:3001` (not `:8082`, not `127.0.0.1`).
+
+## Alternate: split compose
 
 ```bash
 cd /opt/capex-deploy

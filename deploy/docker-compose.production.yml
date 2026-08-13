@@ -1,16 +1,11 @@
-# Production / Siloam DEV — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
-# Monorepo: images built from capexbe/ + capex-apps/ (not separate repos).
-# On VM: copy to /opt/capex-deploy/docker-compose.yml
-# Env: deploy/.env.vps.example → /opt/capex-deploy/.env (secrets — never commit)
+# Production / Siloam — pull GHCR images (CI) OR build locally via docker-compose.siloam.yml
 #
-# Local DB stack (no Tencent tunnel):
-#   docker compose -f docker-compose.db.yml --env-file .env up -d
-#   → network `capex-db`, services capex-postgres + capex-postgrest
-# API must use SUPABASE_URL=http://capex-postgrest (Docker DNS), never 127.0.0.1:54321.
+# Prefer one-shot on VM:
+#   docker compose -f deploy/docker-compose.siloam.yml --env-file deploy/.env.compose up -d --build
 #
-# Caddy (gateway, host network) — see deploy/caddy/Caddyfile.capex:
-#   capex.cgp-ai.com     → 127.0.0.1:8080  (capex-web)
-#   capex-api.cgp-ai.com → 127.0.0.1:8082  (capex-api)
+# This file: image-only deploy when GHCR already has builds.
+# API listens on 3001 inside the container (matches Dockerfile). Host maps 8082→3001.
+# Web BFF must use SUPABASE/API URL: http://capex-api:3001 (not 127.0.0.1).
 
 name: capex-production
 
@@ -20,13 +15,12 @@ services:
     container_name: capex-api
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:8082:3001"
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      PORT: 8082
-      # Prefer compose DB network; override in .env if needed.
+      PORT: 3001
       USE_VPS_POSTGRES: ${USE_VPS_POSTGRES:-1}
       SUPABASE_URL: ${SUPABASE_URL:-http://capex-postgrest}
     networks:
@@ -34,13 +28,12 @@ services:
       - capex-db
       - redis-net
     healthcheck:
-      # node:alpine has no wget/curl — use fetch (Node 22)
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 15s
       timeout: 5s
@@ -58,18 +51,19 @@ services:
     environment:
       NODE_ENV: production
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+      CAPEXBE_URL: ${CAPEXBE_URL:-http://capex-api:3001}
+      NEXT_PUBLIC_CAPEXBE_URL: ${NEXT_PUBLIC_CAPEXBE_URL:-http://capex-api:3001}
     networks:
       - default
+      - capex-db
     depends_on:
       capex-api:
         condition: service_healthy
 
 networks:
-  # Created by: docker compose -f docker-compose.db.yml up -d
   capex-db:
     external: true
     name: capex-db
-  # Shared Redis — set COMPOSE_REDIS_NETWORK if name differs on Siloam
   redis-net:
     name: ${COMPOSE_REDIS_NETWORK:-capex-redis_default}
     external: true

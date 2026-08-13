@@ -1,0 +1,157 @@
+# Siloam VM — one-shot stack (DB + PostgREST + Redis + API + Web).
+# From repo root on VM:
+#   cp deploy/.env.vps.example deploy/.env.compose   # fill secrets
+#   docker compose -f deploy/docker-compose.siloam.yml --env-file deploy/.env.compose up -d --build
+#
+# Runtime path:
+#   capex-web → capex-api:3001 → capex-postgrest → capex-postgres
+# Host debug: web :8080, api :8082, postgres :5433, postgrest :54321
+
+name: capex-siloam
+
+services:
+  capex-postgres:
+    image: ${CAPEX_POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    container_name: capex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-capex}
+      POSTGRES_USER: ${POSTGRES_USER:-capex_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - capex_pg_data:/var/lib/postgresql/data
+      - ./postgres/vm-bootstrap/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+    networks: [capex-db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-capex_app} -d ${POSTGRES_DB:-capex}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  capex-postgrest-engine:
+    image: ${CAPEX_POSTGREST_IMAGE:-postgrest/postgrest:v12.2.3}
+    container_name: capex-postgrest-engine
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgresql://${POSTGRES_USER:-capex_app}:${POSTGRES_PASSWORD}@capex-postgres:5432/${POSTGRES_DB:-capex}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: ${POSTGRES_USER:-capex_app}
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:?set SUPABASE_JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "50000"
+    depends_on:
+      capex-postgres:
+        condition: service_healthy
+    networks:
+      capex-db:
+        aliases: [postgrest]
+
+  capex-postgrest:
+    image: nginx:1.27-alpine
+    container_name: capex-postgrest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:54321:80"
+    volumes:
+      - ./postgres/postgrest-nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [capex-postgrest-engine]
+    networks: [capex-db]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/auth/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  capex-redis:
+    image: redis:7-alpine
+    container_name: capex-redis
+    restart: unless-stopped
+    networks: [capex-db]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  capex-api:
+    build:
+      context: ..
+      dockerfile: capexbe/Dockerfile
+    image: ${CAPEX_API_IMAGE:-capex-api:local}
+    container_name: capex-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:3001"
+    env_file: [.env.compose]
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      USE_VPS_POSTGRES: ${USE_VPS_POSTGRES:-1}
+      SUPABASE_URL: ${SUPABASE_URL:-http://capex-postgrest}
+      REDIS_URL: ${REDIS_URL:-redis://capex-redis:6379}
+    depends_on:
+      capex-postgrest:
+        condition: service_healthy
+      capex-redis:
+        condition: service_healthy
+    networks: [capex-db]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+
+  capex-web:
+    build:
+      context: ../capex-apps
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CAPEXBE_URL: ${NEXT_PUBLIC_CAPEXBE_URL:-http://capex-api:3001}
+        NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
+        NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK: "false"
+        NEXT_PUBLIC_CAPEX_AUTH_MODE: ${CAPEX_AUTH_MODE:-sso}
+    image: ${CAPEX_WEB_IMAGE:-capex-web:local}
+    container_name: capex-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:3000"
+    env_file: [.env.compose]
+    environment:
+      NODE_ENV: production
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      # Runtime BFF→API (overrides bake if set)
+      CAPEXBE_URL: ${CAPEXBE_URL:-http://capex-api:3001}
+      NEXT_PUBLIC_CAPEXBE_URL: ${NEXT_PUBLIC_CAPEXBE_URL:-http://capex-api:3001}
+    depends_on:
+      capex-api:
+        condition: service_healthy
+    networks: [capex-db]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok||r.status===307||r.status===308?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+
+volumes:
+  capex_pg_data:
+
+networks:
+  capex-db:
+    name: capex-db
