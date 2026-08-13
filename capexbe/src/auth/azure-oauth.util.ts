@@ -26,6 +26,8 @@ export function azureAuthorizeUrl(
     scope: 'openid email profile offline_access',
     code_challenge: opts.codeChallenge,
     code_challenge_method: 'S256',
+    // Always show account picker so a failed SSO can retry with a different Microsoft account.
+    prompt: 'select_account',
   });
   if (opts.state) params.set('state', opts.state);
   return `https://login.microsoftonline.com/${encodeURIComponent(cfg.tenantId)}/oauth2/v2.0/authorize?${params}`;

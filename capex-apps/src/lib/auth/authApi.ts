@@ -150,9 +150,12 @@ export async function probeBackendSession(options?: {
 export function shouldRunAuthSessionProbe(options: {
   hasSessionCookies?: boolean;
   oauthCallback?: boolean;
+  /** Client flag after leaving for Microsoft SSO (sessionStorage). */
+  ssoReturn?: boolean;
 }): boolean {
   if (!useBackendSession()) return false;
   if (options.oauthCallback) return true;
+  if (options.ssoReturn) return true;
   if (options.hasSessionCookies) return true;
   return false;
 }

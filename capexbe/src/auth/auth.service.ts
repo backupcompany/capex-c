@@ -50,7 +50,9 @@ function cookieOptions(maxAgeSec: number) {
   return {
     httpOnly: true,
     secure: cookieSecureFlag(),
-    sameSite: 'strict' as const,
+    // Lax: session cookies set on Azure OAuth callback must survive Microsoft → Capex top-level redirect.
+    // Strict is dropped for that landing request, so / never sees capex_access and FE skips session probe.
+    sameSite: 'lax' as const,
     path: '/',
     maxAge: maxAgeSec * 1000,
   };
@@ -679,6 +681,9 @@ export class AuthService {
       );
     }
 
+    // Fresh SSO attempt — drop any prior Capex session so a failed account cannot stick.
+    this.clearAuthCookies(res);
+
     const returnTo = this.sanitizeOAuthReturnTo(returnToRaw);
     const verifier = generateCodeVerifier();
     const challenge = generateCodeChallenge(verifier);
@@ -705,8 +710,19 @@ export class AuthService {
     if (msg.includes('error getting user email') || msg.includes('did not return an email')) {
       return 'Microsoft tidak mengirim email. Pastikan scope email aktif di Azure App.';
     }
-    if (msg.includes('access_denied')) {
-      return 'Login Microsoft dibatalkan atau akun tidak diizinkan.';
+    if (msg.includes('access_denied') || msg.includes('consent_required')) {
+      return 'Login Microsoft dibatalkan. Silakan coba lagi dengan akun yang benar.';
+    }
+    if (
+      msg.includes('tidak terdaftar') ||
+      msg.includes('tidak memiliki akses') ||
+      msg.includes('not registered') ||
+      msg.includes('unauthorized')
+    ) {
+      return 'Akun Microsoft salah atau belum terdaftar di Capex Pro. Coba akun lain atau hubungi admin.';
+    }
+    if (msg.includes('tidak diizinkan') || msg.includes('not allowed') || msg.includes('domain')) {
+      return 'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam Hospitals, atau coba akun lain.';
     }
     return raw;
   }
@@ -727,9 +743,10 @@ export class AuthService {
     res.clearCookie(OAUTH_PKCE_COOKIE, { path: '/' });
     res.clearCookie(OAUTH_RETURN_COOKIE, { path: '/' });
 
+    /** Always land on login with a clear error; reset session so another account can be tried. */
     const failRedirect = (message: string) => {
-      const q = returnTo.includes('?') ? '&' : '?';
-      return `${frontend}${returnTo}${q}oauth_error=${encodeURIComponent(this.humanizeOAuthError(message))}`;
+      this.clearAuthCookies(res);
+      return `${frontend}/?oauth_error=${encodeURIComponent(this.humanizeOAuthError(message))}`;
     };
 
     if (oauthError?.trim()) {
@@ -741,7 +758,7 @@ export class AuthService {
       return failRedirect('Login Microsoft dibatalkan atau kode OAuth tidak diterima.');
     }
     if (!pkceVerifier?.trim()) {
-      return failRedirect('Sesi OAuth kedaluwarsa. Coba login lagi.');
+      return failRedirect('Sesi OAuth kedaluwarsa. Coba login lagi dengan akun Microsoft Anda.');
     }
 
     const azure = getAzureOAuthConfig();

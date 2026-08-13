@@ -488,14 +488,23 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     void (async () => {
       try {
         if (useBackendSession()) {
-          const { probeOAuthCallbackIfPresent, isOAuthCallbackFromUrl } =
+          const { probeOAuthCallbackIfPresent, isOAuthCallbackFromUrl, SSO_RETURN_STORAGE_KEY } =
             await import('@/lib/authAzure');
           await probeOAuthCallbackIfPresent();
+
+          let ssoReturn = false;
+          try {
+            ssoReturn = sessionStorage.getItem(SSO_RETURN_STORAGE_KEY) === '1';
+            if (ssoReturn) sessionStorage.removeItem(SSO_RETURN_STORAGE_KEY);
+          } catch {
+            /* ignore */
+          }
 
           if (
             !shouldRunAuthSessionProbe({
               hasSessionCookies,
               oauthCallback: isOAuthCallbackFromUrl(),
+              ssoReturn,
             })
           ) {
             finishUnauthenticated({ clearServer: false });

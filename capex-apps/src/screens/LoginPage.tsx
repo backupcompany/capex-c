@@ -69,7 +69,13 @@ export const LoginPage = memo(function LoginPage() {
 
   useEffect(() => {
     const oauthError = consumeOAuthError();
-    if (oauthError) setError(oauthError);
+    if (oauthError) {
+      setError(oauthError);
+      // Failed SSO must leave a clean login surface so another Microsoft account can be tried.
+      setSessionCookieHint(false);
+      invalidateAuthProbeCache();
+      void import('../lib/auth/authApi').then((m) => m.clearServerAuthCookies());
+    }
   }, []);
 
   const handleMicrosoftSignIn = async () => {
@@ -77,10 +83,13 @@ export const LoginPage = memo(function LoginPage() {
     setIsLoading(true);
     try {
       const result = await signInWithAzure();
-      if (result.error) setError(result.error.message);
+      if (result.error) {
+        setError(result.error.message);
+        setIsLoading(false);
+      }
+      // On success, browser navigates away to Microsoft — leave loading until unload.
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Gagal membuka login Microsoft.');
-    } finally {
       setIsLoading(false);
     }
   };

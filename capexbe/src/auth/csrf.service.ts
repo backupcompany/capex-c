@@ -7,7 +7,8 @@ function cookieOptions(maxAgeSec: number) {
   return {
     httpOnly: false,
     secure: cookieSecureFlag(),
-    sameSite: 'strict' as const,
+    // Match session cookies (Lax) — set together on OAuth callback redirect.
+    sameSite: 'lax' as const,
     path: '/',
     maxAge: maxAgeSec * 1000,
   };

@@ -3,17 +3,29 @@
  */
 
 export const OAUTH_ERROR_STORAGE_KEY = 'auth_oauth_error';
+/** Set before navigating to Microsoft; forces /auth/session probe on return even if cookies miss SSR. */
+export const SSO_RETURN_STORAGE_KEY = 'capex_sso_return';
 
 export const humanizeOAuthError = (raw: string): string => {
   const msg = decodeURIComponent(raw).toLowerCase();
-  if (msg.includes('unable to exchange external code')) {
-    return 'Konfigurasi Azure belum benar. Periksa Redirect URI di Azure dan provider Azure di Supabase Dashboard.';
+  if (msg.includes('unable to exchange external code') || msg.includes('redirect_uri')) {
+    return 'Konfigurasi Azure belum benar. Periksa Redirect URI di Azure App Registration.';
   }
-  if (msg.includes('error getting user email')) {
-    return 'Microsoft tidak mengirim email. Pastikan scope email aktif di provider Azure.';
+  if (msg.includes('error getting user email') || msg.includes('did not return an email')) {
+    return 'Microsoft tidak mengirim email. Pastikan scope email aktif di Azure App.';
   }
-  if (msg.includes('access_denied')) {
-    return 'Login Microsoft dibatalkan atau akun tidak diizinkan mengakses aplikasi ini.';
+  if (msg.includes('access_denied') || msg.includes('consent_required')) {
+    return 'Login Microsoft dibatalkan. Silakan coba lagi dengan akun yang benar.';
+  }
+  if (
+    msg.includes('tidak terdaftar') ||
+    msg.includes('tidak memiliki akses') ||
+    msg.includes('akun microsoft salah')
+  ) {
+    return 'Akun Microsoft salah atau belum terdaftar di Capex Pro. Coba akun lain atau hubungi admin.';
+  }
+  if (msg.includes('tidak diizinkan') || msg.includes('siloamhospitals')) {
+    return 'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam, atau coba akun lain.';
   }
   return raw;
 };
@@ -70,6 +82,19 @@ export const signInWithAzure = async (): Promise<{ error: Error | null }> => {
   if (typeof window === 'undefined') {
     return { error: new Error('Login Microsoft hanya tersedia di browser.') };
   }
+  // Reset prior SSO failure state so a new account attempt is not blocked by stale cookies/hints.
+  try {
+    sessionStorage.removeItem(OAUTH_ERROR_STORAGE_KEY);
+    sessionStorage.setItem(SSO_RETURN_STORAGE_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+  const { clearServerAuthCookies, invalidateAuthProbeCache, setSessionCookieHint } =
+    await import('./auth/authApi');
+  invalidateAuthProbeCache();
+  setSessionCookieHint(false);
+  await clearServerAuthCookies();
+
   const path = window.location.pathname || POST_LOGIN_PATH;
   const returnTarget = path === LOGIN_PATH ? POST_LOGIN_PATH : path;
   const returnTo = encodeURIComponent(sanitizeOAuthReturnTo(returnTarget, POST_LOGIN_PATH));
