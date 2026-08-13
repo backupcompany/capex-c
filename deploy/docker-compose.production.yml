@@ -1,7 +1,12 @@
-# Production VM — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
+# Production / Siloam DEV — CI/CD deploys 2 GHCR images (monolith capex-api + capex-web BFF).
 # Monorepo: images built from capexbe/ + capex-apps/ (not separate repos).
 # On VM: copy to /opt/capex-deploy/docker-compose.yml
 # Env: deploy/.env.vps.example → /opt/capex-deploy/.env (secrets — never commit)
+#
+# Local DB stack (no Tencent tunnel):
+#   docker compose -f docker-compose.db.yml --env-file .env up -d
+#   → network `capex-db`, services capex-postgres + capex-postgrest
+# API must use SUPABASE_URL=http://capex-postgrest (Docker DNS), never 127.0.0.1:54321.
 #
 # Caddy (gateway, host network) — see deploy/caddy/Caddyfile.capex:
 #   capex.cgp-ai.com     → 127.0.0.1:8080  (capex-web)
@@ -21,9 +26,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8082
+      # Prefer compose DB network; override in .env if needed.
+      USE_VPS_POSTGRES: ${USE_VPS_POSTGRES:-1}
+      SUPABASE_URL: ${SUPABASE_URL:-http://capex-postgrest}
     networks:
       - default
-      - database-net
+      - capex-db
       - redis-net
     healthcheck:
       # node:alpine has no wget/curl — use fetch (Node 22)
@@ -57,9 +65,11 @@ services:
         condition: service_healthy
 
 networks:
-  database-net:
+  # Created by: docker compose -f docker-compose.db.yml up -d
+  capex-db:
     external: true
-  # Shared Redis (cgp-redis on cgp-cgolangp_default)
+    name: capex-db
+  # Shared Redis — set COMPOSE_REDIS_NETWORK if name differs on Siloam
   redis-net:
-    name: ${COMPOSE_REDIS_NETWORK:-cgp-cgolangp_default}
+    name: ${COMPOSE_REDIS_NETWORK:-capex-redis_default}
     external: true

@@ -12,14 +12,18 @@ export function requestIsHttps(requestHeaders?: Headers | null): boolean {
 }
 
 /**
- * Cookie Secure flag — do NOT tie to NODE_ENV alone (breaks HTTP LAN / IP access).
- * COOKIE_SECURE=0|false forces off; =1|true forces on; else follow HTTPS proto / FORCE_HTTPS.
+ * Cookie Secure flag — HTTPS only (httpOnly session cookies never go over cleartext).
+ * COOKIE_SECURE=0|false forces off; =1|true forces on; else x-forwarded-proto / FORCE_HTTPS / https FRONTEND_URL.
  */
 export function shouldUseSecureCookies(requestHeaders?: Headers | null): boolean {
   const override = process.env.COOKIE_SECURE?.trim().toLowerCase();
   if (override === '0' || override === 'false') return false;
   if (override === '1' || override === 'true') return true;
-  return requestIsHttps(requestHeaders);
+  if (requestIsHttps(requestHeaders)) return true;
+  const fe = (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_SITE_URL || '')
+    .trim()
+    .toLowerCase();
+  return fe.startsWith('https://');
 }
 
 export function buildContentSecurityPolicy(

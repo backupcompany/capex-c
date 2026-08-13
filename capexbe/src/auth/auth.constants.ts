@@ -3,12 +3,14 @@ export const REFRESH_COOKIE = 'capex_refresh';
 export const CSRF_COOKIE = 'capex_csrf';
 export const CSRF_HEADER = 'X-CSRF-Token';
 
-/** Cookie Secure — not NODE_ENV alone (breaks HTTP LAN/domain before TLS). */
+/** Cookie Secure — HTTPS only. Not NODE_ENV alone (breaks HTTP LAN before TLS). */
 export function cookieSecureFlag(): boolean {
   const override = process.env.COOKIE_SECURE?.trim().toLowerCase();
   if (override === '0' || override === 'false') return false;
   if (override === '1' || override === 'true') return true;
-  return process.env.FORCE_HTTPS === '1' || process.env.FORCE_HTTPS === 'true';
+  if (process.env.FORCE_HTTPS === '1' || process.env.FORCE_HTTPS === 'true') return true;
+  const fe = (process.env.FRONTEND_URL || '').trim().toLowerCase();
+  return fe.startsWith('https://');
 }
 
 /** Short-lived PKCE verifier for Azure OAuth (httpOnly, cleared after callback). */

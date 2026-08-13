@@ -46,7 +46,7 @@ export function assertProductionCors(): void {
 import { isPasswordLoginEnabledInMode } from './auth-mode.util';
 
 export function isPasswordLoginDisabled(): boolean {
-  if (process.env.CAPEX_DEMO_MODE === 'true') return false;
+  // CAPEX_AUTH_MODE is source of truth (sso = no password form/API).
   return !isPasswordLoginEnabledInMode();
 }
 

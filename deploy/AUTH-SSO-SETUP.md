@@ -1,6 +1,9 @@
-# Azure SSO setup — Capex Pro @ capex.cgp-ai.com
+# Azure SSO — Capex Pro (direct Entra OAuth, no Supabase Auth broker)
 #
-# See deploy/.env.production.example for full production env.
+# Flow:
+#   Browser → Capex /api/auth/azure/start → Microsoft
+#          → Capex /api/auth/azure/callback → BE exchanges code
+#          → lookup public.users by email → Capex session cookies
 
 ## Auth mode switch
 
@@ -12,65 +15,70 @@
 
 Set on **both**:
 - `capexbe/.env` → `CAPEX_AUTH_MODE=...`
-- `capex-apps/.env` → `NEXT_PUBLIC_CAPEX_AUTH_MODE=...` (baked in Docker build)
-
-**Now:** `password` — form login while SSO config is fixed.  
-**Go-live SSO:** change to `sso` + rebuild web image.
+- `capex-apps/.env` → `NEXT_PUBLIC_CAPEX_AUTH_MODE=...`
 
 ---
 
-## Azure App Registration (Capex App)
+## Azure App Registration
 
 | Field | Value |
 |-------|-------|
-| Tenant ID | `c0946df4-4494-48d6-8091-eb4a5c18a316` |
-| Client ID | `34a1836d-8b2b-4cdc-ba97-5ebb085ab39c` |
-| Client Secret | Set in **Supabase Dashboard only** — rotate if exposed |
+| Tenant ID | `5db61118-5d18-4bfd-97fd-bc52cdad9c51` |
+| Client ID | `c0946df4-4494-48d6-8091-eb4a5c18a316` |
+| Client Secret | `AZURE_CLIENT_SECRET` in **capexbe/.env only** |
 
-### Redirect URI di Azure (Web) — WAJIB ini
+### Redirect URI di Azure (Web) — langsung ke Capex
 
 ```
-https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback
+http://localhost:3000/api/auth/azure/callback
+https://dev-capexpro.siloamhospitals.com/api/auth/azure/callback
+https://capexpro.siloamhospitals.com/api/auth/azure/callback
 ```
 
-`https://capex.cgp-ai.com/auth/callback` **bukan** redirect URI Azure — itu URL Capex setelah Supabase selesai.
+**Tidak** pakai `*.supabase.co/auth/v1/callback` — Capex sudah lepas dari Supabase Auth.
 
 ---
 
-## Supabase Dashboard
+## Env (capexbe)
 
-1. **Authentication → Providers → Azure**
-   - Client ID + Secret dari Azure
-   - Tenant URL optional: `https://login.microsoftonline.com/c0946df4-4494-48d6-8091-eb4a5c18a316`
+```env
+AZURE_TENANT_ID=5db61118-5d18-4bfd-97fd-bc52cdad9c51
+AZURE_CLIENT_ID=c0946df4-4494-48d6-8091-eb4a5c18a316
+AZURE_CLIENT_SECRET=...
 
-2. **Authentication → URL Configuration → Redirect URLs** (tambahkan):
-   ```
-   https://capex.cgp-ai.com/api/auth/azure/callback
-   https://capex.cgp-ai.com/auth/callback
-   http://localhost:3000/api/auth/azure/callback
-   http://localhost:3000/auth/callback
-   ```
-
-3. **Site URL:** `https://capex.cgp-ai.com`
-
----
-
-## OAuth flow (sudah di code)
-
+CAPEX_AUTH_MODE=sso
+FRONTEND_URL=https://dev-capexpro.siloamhospitals.com
+CORS_ORIGINS=https://dev-capexpro.siloamhospitals.com
+OAUTH_CALLBACK_PATH=/api/auth/azure/callback
+ALLOWED_EMAIL_DOMAINS=siloamhospitals.com
 ```
-Login → /api/auth/azure/start → Supabase authorize (Azure)
-     → Azure login → Supabase /auth/v1/callback
-     → redirect ke FRONTEND_URL + OAUTH_CALLBACK_PATH (?code=...)
-     → capexbe exchange → httpOnly session cookies
+
+FE:
+
+```env
+NEXT_PUBLIC_CAPEX_AUTH_MODE=sso
+NEXT_PUBLIC_USE_BACKEND_SESSION=true
 ```
 
 ---
 
-## Production checklist (SSO go-live)
+## Local SSO testing (bisa bareng VPS Postgres)
 
-- [ ] Azure redirect = Supabase `/auth/v1/callback`
-- [ ] Supabase Azure provider configured
-- [ ] Supabase redirect URLs include capex.cgp-ai.com paths
+Karena OAuth langsung ke Azure, **tidak** butuh Supabase Auth cloud.
+
+1. Pastikan user email Microsoft ada di `public.users` (local Postgres)
+2. Azure redirect include `localhost:3000/...`
+3. Set `CAPEX_AUTH_MODE=sso` + Azure env di BE
+4. `make run` (PostgREST lokal kalau `USE_VPS_POSTGRES=1`)
+5. Login page → **Masuk dengan Microsoft**
+
+---
+
+## Production checklist
+
+- [ ] Azure redirect URIs = Capex callback URLs (bukan Supabase)
+- [ ] `AZURE_*` secrets di VPS `/opt/capex-deploy/.env`
+- [ ] `CAPEX_AUTH_MODE=sso`
 - [ ] `ALLOWED_EMAIL_DOMAINS=siloamhospitals.com`
-- [ ] `CAPEX_AUTH_MODE=sso` on BE + FE build
-- [ ] User email exists in `public.users` before first SSO login
+- [ ] Email user ada di `public.users` sebelum first login
+- [ ] `SUPABASE_URL=http://capex-postgrest` (Docker DNS — see SILOAM-VM-DB.md)

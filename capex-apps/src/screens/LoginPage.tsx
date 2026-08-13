@@ -158,7 +158,7 @@ export const LoginPage = memo(function LoginPage() {
             </h1>
             <p className="mb-6 text-sm leading-relaxed text-[#4a6a8a]">
               {azureSsoEnabled && !passwordLoginEnabled
-                ? 'Masuk dengan akun Microsoft Siloam Hospitals. Hanya karyawan internal yang terdaftar di Capex Pro.'
+                ? 'Masuk dengan akun Microsoft Siloam Hospitals. Hanya karyawan yang sudah terdaftar di Capex Pro.'
                 : 'Selamat Datang di Capex Pro. Kelola Anggaran & Pengadaan Alat Kesehatan Rumah Sakit Anda.'}
             </p>
 
@@ -195,7 +195,7 @@ export const LoginPage = memo(function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {azureSsoEnabled && (
                   <div className="relative py-1 text-center text-xs uppercase tracking-wide text-[#4a6a8a]">
-                    <span className="bg-[rgba(220,240,255,0.88)] px-2">atau email & password (dev)</span>
+                    <span className="bg-[rgba(220,240,255,0.88)] px-2">atau email & password</span>
                     <div className="absolute inset-x-0 top-1/2 -z-10 border-t border-[#b8d4e8]" aria-hidden />
                   </div>
                 )}

@@ -12,25 +12,27 @@ export function getDemoLoginCredentials(): { email: string; password: string } {
 
 export type VpsLoginAccount = { email: string; password: string };
 
+function pushEnvLogin(
+  accounts: VpsLoginAccount[],
+  emailEnv: string,
+  passwordEnv: string,
+): void {
+  const email = (process.env[emailEnv] || '').trim().toLowerCase();
+  const password = process.env[passwordEnv] || '';
+  if (email && password) accounts.push({ email, password });
+}
+
 /**
- * VPS password allowlist (no GoTrue). Demo + optional InfoSec pentest accounts from env.
- * Passwords must come from env — never commit real InfoSec passwords.
+ * VPS password allowlist (no GoTrue). Demo + optional accounts from env.
+ * Passwords must come from env — never commit real secrets.
  */
 export function getVpsLoginAccounts(): VpsLoginAccount[] {
   const accounts: VpsLoginAccount[] = [getDemoLoginCredentials()];
-
-  const adminEmail = (process.env.INFOSEC_ADMIN_EMAIL || '').trim().toLowerCase();
-  const adminPassword = process.env.INFOSEC_ADMIN_PASSWORD || '';
-  if (adminEmail && adminPassword) {
-    accounts.push({ email: adminEmail, password: adminPassword });
-  }
-
-  const viewerEmail = (process.env.INFOSEC_VIEWER_EMAIL || '').trim().toLowerCase();
-  const viewerPassword = process.env.INFOSEC_VIEWER_PASSWORD || '';
-  if (viewerEmail && viewerPassword) {
-    accounts.push({ email: viewerEmail, password: viewerPassword });
-  }
-
+  pushEnvLogin(accounts, 'INFOSEC_ADMIN_EMAIL', 'INFOSEC_ADMIN_PASSWORD');
+  pushEnvLogin(accounts, 'INFOSEC_VIEWER_EMAIL', 'INFOSEC_VIEWER_PASSWORD');
+  pushEnvLogin(accounts, 'SSO_TEST_EMAIL', 'SSO_TEST_PASSWORD');
+  pushEnvLogin(accounts, 'PENTEST_1_EMAIL', 'PENTEST_1_PASSWORD');
+  pushEnvLogin(accounts, 'PENTEST_2_EMAIL', 'PENTEST_2_PASSWORD');
   return accounts;
 }
 

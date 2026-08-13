@@ -32,13 +32,18 @@ import { encodeUserPublicId } from '../shared/public-id.util';
 import type { ResolvedAppUser } from './auth-user.resolver';
 import { isTlsFetchError } from '../shared/tls-fetch-error';
 import {
-  getSupabaseAnonKey,
-  getSupabaseUrl,
   createSupabaseClient,
   getSupabaseServiceKey,
 } from '../shared/supabase-client.factory';
-import { supabaseHttpsFetch } from '../shared/supabase-https-fetch';
 import { generateCodeChallenge, generateCodeVerifier } from './oauth-pkce.util';
+import {
+  azureAuthorizeUrl,
+  azureAuthIdForEmail,
+  emailFromAzureIdToken,
+  exchangeAzureAuthCode,
+  getAzureOAuthConfig,
+} from './azure-oauth.util';
+import { isSsoLoginEnabled } from '../shared/auth-mode.util';
 import { getDemoLoginCredentials, isVpsPostgresMode, matchVpsLogin } from '../shared/vps-postgres.util';
 
 function cookieOptions(maxAgeSec: number) {
@@ -649,21 +654,29 @@ export class AuthService {
   }
 
   private oauthCookieOpts(maxAgeSec: number) {
+    // Lax: Microsoft → Capex callback is cross-site top-level; Strict drops PKCE cookies.
     return {
       httpOnly: true,
       secure: cookieSecureFlag(),
-      sameSite: 'strict' as const,
+      sameSite: 'lax' as const,
       path: '/',
       maxAge: maxAgeSec * 1000,
     };
   }
 
-  /** Build Supabase Azure authorize URL and store PKCE verifier in httpOnly cookies. */
+  /**
+   * Direct Azure Entra OAuth (no Supabase Auth broker).
+   * Browser → Microsoft → Capex callback → Capex session cookies.
+   */
   startAzureOAuth(returnToRaw: string | undefined, res: Response): string {
-    const base = getSupabaseUrl().replace(/\/$/, '');
-    const anonKey = getSupabaseAnonKey();
-    if (!base || !anonKey) {
-      throw new ServiceUnavailableException('Supabase not configured for Azure OAuth');
+    if (!isSsoLoginEnabled()) {
+      throw new ServiceUnavailableException('SSO is disabled (CAPEX_AUTH_MODE)');
+    }
+    const azure = getAzureOAuthConfig();
+    if (!azure) {
+      throw new ServiceUnavailableException(
+        'Azure SSO not configured — set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET',
+      );
     }
 
     const returnTo = this.sanitizeOAuthReturnTo(returnToRaw);
@@ -674,26 +687,23 @@ export class AuthService {
     res.cookie(OAUTH_PKCE_COOKIE, verifier, this.oauthCookieOpts(OAUTH_COOKIE_TTL_SEC));
     res.cookie(OAUTH_RETURN_COOKIE, returnTo, this.oauthCookieOpts(OAUTH_COOKIE_TTL_SEC));
 
-    const params = new URLSearchParams({
-      provider: 'azure',
-      redirect_to: callbackUrl,
-      code_challenge: challenge,
-      code_challenge_method: 's256',
-      scopes: 'openid email profile',
-    });
-
-    return `${base}/auth/v1/authorize?${params.toString()}&apikey=${encodeURIComponent(anonKey)}`;
+    return azureAuthorizeUrl(azure, { redirectUri: callbackUrl, codeChallenge: challenge });
   }
 
   humanizeOAuthError(raw: string): string {
     const msg = decodeURIComponent(raw).toLowerCase();
-    if (msg.includes('unable to exchange external code')) {
+    if (
+      msg.includes('redirect_uri') ||
+      msg.includes('aadi') ||
+      msg.includes('invalid_client') ||
+      msg.includes('unauthorized_client')
+    ) {
       return (
-        'Konfigurasi Azure belum benar. Periksa Redirect URI di Azure (Web) dan provider Azure di Supabase Dashboard.'
+        'Konfigurasi Azure belum benar. Periksa Redirect URI di Azure App (harus sama dengan Capex callback) dan Client Secret.'
       );
     }
-    if (msg.includes('error getting user email')) {
-      return 'Microsoft tidak mengirim email. Pastikan scope email aktif di provider Azure.';
+    if (msg.includes('error getting user email') || msg.includes('did not return an email')) {
+      return 'Microsoft tidak mengirim email. Pastikan scope email aktif di Azure App.';
     }
     if (msg.includes('access_denied')) {
       return 'Login Microsoft dibatalkan atau akun tidak diizinkan.';
@@ -701,7 +711,7 @@ export class AuthService {
     return raw;
   }
 
-  /** Exchange OAuth PKCE code for Supabase token, then establish backend session. */
+  /** Exchange Azure auth code → email → Capex session (no Supabase Auth). */
   async completeAzureOAuth(
     code: string | undefined,
     pkceVerifier: string | undefined,
@@ -734,52 +744,40 @@ export class AuthService {
       return failRedirect('Sesi OAuth kedaluwarsa. Coba login lagi.');
     }
 
-    const base = getSupabaseUrl().replace(/\/$/, '');
-    const anonKey = getSupabaseAnonKey();
-    if (!base || !anonKey) {
-      return failRedirect('Supabase belum dikonfigurasi di server.');
+    const azure = getAzureOAuthConfig();
+    if (!azure) {
+      return failRedirect('Azure SSO belum dikonfigurasi di server.');
     }
 
-    let accessToken: string;
+    const callbackUrl = this.oauthCallbackUrl();
+    let email: string;
     try {
-      const tokenRes = await supabaseHttpsFetch(`${base}/auth/v1/token?grant_type=pkce`, {
-        method: 'POST',
-        headers: {
-          apikey: anonKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          auth_code: code.trim(),
-          code_verifier: pkceVerifier.trim(),
-        }),
+      const tokens = await exchangeAzureAuthCode(azure, {
+        code: code.trim(),
+        codeVerifier: pkceVerifier.trim(),
+        redirectUri: callbackUrl,
       });
-
-      const text = await tokenRes.text();
-      if (!tokenRes.ok) {
-        let detail = text;
-        try {
-          const parsed = JSON.parse(text) as { msg?: string; message?: string; error_description?: string };
-          detail = parsed.error_description ?? parsed.msg ?? parsed.message ?? text;
-        } catch {
-          /* raw */
-        }
-        return failRedirect(detail || 'Gagal menukar kode OAuth.');
-      }
-
-      const payload = JSON.parse(text) as { access_token?: string };
-      accessToken = payload.access_token?.trim() ?? '';
-      if (!accessToken) {
-        return failRedirect('Token OAuth tidak diterima dari Supabase.');
-      }
+      email = emailFromAzureIdToken(tokens.idToken, azure);
     } catch (e) {
-      if (isTlsFetchError(e)) {
-        return failRedirect('Server tidak dapat menghubungi Supabase Auth (TLS).');
-      }
-      throw e;
+      return failRedirect(e instanceof Error ? e.message : 'Gagal menukar kode OAuth Azure.');
+    }
+
+    if (!emailDomainAllowed(email)) {
+      return failRedirect(
+        'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam Hospitals (@siloamhospitals.com).',
+      );
     }
 
     try {
-      await this.exchange(accessToken, res, meta);
+      await this.rateLimiter.assertAllowed('exchange', meta?.ip ?? 'unknown');
+      const client = this.users.createServiceReadClient();
+      const appUser = await this.users.resolveAppUserByEmail(client, email);
+      const authId = appUser.auth_id?.trim() || azureAuthIdForEmail(email);
+      await this.establishSession(appUser, authId, res, {
+        email,
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
+      });
     } catch (e) {
       const message =
         e instanceof UnauthorizedException

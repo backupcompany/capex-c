@@ -54,10 +54,12 @@ export async function applyBackendSetCookies(
       }
     }
 
+    const oauth = name === OAUTH_PKCE_COOKIE || name === OAUTH_RETURN_COOKIE;
     cookieStore.set(name, value, {
       httpOnly,
       secure,
-      sameSite: 'strict',
+      // Lax for OAuth PKCE — Strict is dropped on Microsoft → Capex redirect.
+      sameSite: oauth ? 'lax' : 'strict',
       path: '/',
       maxAge: Number.isFinite(maxAge) ? maxAge : undefined,
     });
@@ -109,10 +111,11 @@ export async function applySetCookiesToResponse(
       }
     }
 
+    const oauth = name === OAUTH_PKCE_COOKIE || name === OAUTH_RETURN_COOKIE;
     res.cookies.set(name, value, {
       httpOnly,
       secure,
-      sameSite: 'strict',
+      sameSite: oauth ? 'lax' : 'strict',
       path: '/',
       maxAge: Number.isFinite(maxAge) ? maxAge : undefined,
     });
