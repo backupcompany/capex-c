@@ -36,12 +36,12 @@ docker compose --env-file .env up -d
 
 ## Restore data (`capex.dump`)
 
-Laptop bridges the file (Tencent → scp → Siloam). Dump is gitignored.
+Dummy/seed dump is in git: `postgres/artifacts/capex.dump` (~11MB).
 
 ```bash
-# on VM (script lives next to compose under deploy/)
+# on VM after git pull (path relative to /opt/capex-deploy)
 chmod +x postgres/restore-dump-on-vm.sh
-./postgres/restore-dump-on-vm.sh /tmp/capex.dump
+./postgres/restore-dump-on-vm.sh ./postgres/artifacts/capex.dump
 docker restart capex-postgrest-engine capex-postgrest
 docker compose --env-file .env up -d --force-recreate capex-api
 ```
