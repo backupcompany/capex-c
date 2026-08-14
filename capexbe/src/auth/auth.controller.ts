@@ -280,8 +280,18 @@ export class AuthController {
     @Query('returnTo') returnTo: string | undefined,
     @Res() res: Response,
   ) {
-    const location = this.auth.startAzureOAuth(returnTo, res);
-    return res.redirect(302, location);
+    try {
+      const location = this.auth.startAzureOAuth(returnTo, res);
+      return res.redirect(302, location);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'Azure SSO start failed';
+      const fe = (process.env.FRONTEND_URL || '').trim().replace(/\/$/, '') || '/';
+      const dest = fe.startsWith('http')
+        ? `${fe}/?oauth_error=${encodeURIComponent(msg)}`
+        : `/?oauth_error=${encodeURIComponent(msg)}`;
+      return res.redirect(302, dest);
+    }
   }
 
   @Public()
@@ -293,17 +303,27 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    const cookies = parseCookies(req.headers.cookie);
-    const location = await this.auth.completeAzureOAuth(
-      code,
-      cookies[OAUTH_PKCE_COOKIE],
-      cookies[OAUTH_RETURN_COOKIE],
-      error,
-      errorDescription,
-      res,
-      { ip: req.ip, userAgent: req.headers['user-agent'] },
-    );
-    return res.redirect(302, location);
+    try {
+      const cookies = parseCookies(req.headers.cookie);
+      const location = await this.auth.completeAzureOAuth(
+        code,
+        cookies[OAUTH_PKCE_COOKIE],
+        cookies[OAUTH_RETURN_COOKIE],
+        error,
+        errorDescription,
+        res,
+        { ip: req.ip, userAgent: req.headers['user-agent'] },
+      );
+      return res.redirect(302, location);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message.slice(0, 300) : 'Login Microsoft gagal.';
+      const fe = (process.env.FRONTEND_URL || '').trim().replace(/\/$/, '') || '/';
+      const dest = fe.startsWith('http')
+        ? `${fe}/?oauth_error=${encodeURIComponent(msg)}`
+        : `/?oauth_error=${encodeURIComponent(msg)}`;
+      return res.redirect(302, dest);
+    }
   }
 
   @SkipThrottle()

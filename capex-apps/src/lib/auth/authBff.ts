@@ -32,8 +32,7 @@ function authBackendBase(): string {
 }
 
 /**
- * Keep post-OAuth redirects on the BFF host that just set cookies.
- * Absolute FRONTEND_URL mismatches used to drop the session after Microsoft return.
+ * Prefer same-origin path after Capex OAuth so cookies stick on the BFF host.
  * Microsoft authorize URLs stay absolute.
  */
 function browserRedirectLocation(location: string): string {
@@ -48,6 +47,25 @@ function browserRedirectLocation(location: string): string {
   } catch {
     return '/';
   }
+}
+
+/** NextResponse.redirect() needs absolute URL — relative '/' alone can throw HTTP 500. */
+function redirectResponse(
+  location: string,
+  status: 302 | 303,
+  incomingReq?: Request,
+): NextResponse {
+  const target = browserRedirectLocation(location);
+  if (target.startsWith('/')) {
+    const base = incomingReq?.url || 'http://localhost/';
+    return NextResponse.redirect(new URL(target, base), status);
+  }
+  return NextResponse.redirect(target, status);
+}
+
+function oauthErrorRedirect(message: string, incomingReq?: Request): NextResponse {
+  const q = `/?oauth_error=${encodeURIComponent(message.slice(0, 300))}`;
+  return redirectResponse(q, 302, incomingReq);
 }
 
 export async function proxyAuthToBackend(
@@ -130,47 +148,65 @@ export async function proxyAuthRedirectToBackend(
   path: string,
   incomingReq?: Request,
 ): Promise<NextResponse> {
-  const base = authBackendBase();
-  if (!base) {
-    return NextResponse.json({ message: 'Backend not configured' }, { status: 503 });
-  }
-
-  const cookieStore = await cookies();
-  const cookieHeader = authCookieHeaderFromStore(cookieStore);
-
-  const headers = new Headers();
-  if (cookieHeader) headers.set('Cookie', cookieHeader);
-
-  let res: Response;
   try {
-    res = await fetch(`${base}/auth${path}`, {
-      method: 'GET',
-      headers,
-      redirect: 'manual',
-      cache: 'no-store',
-    });
-  } catch {
-    return NextResponse.json({ message: 'Backend tidak dapat dihubungi' }, { status: 503 });
-  }
+    const base = authBackendBase();
+    if (!base) {
+      return oauthErrorRedirect('Backend auth belum dikonfigurasi.', incomingReq);
+    }
 
-  const setCookies = collectSetCookies(res);
-  const location = res.headers.get('location');
-  if (location && res.status >= 300 && res.status < 400) {
-    const out = NextResponse.redirect(
-      browserRedirectLocation(location),
-      res.status === 303 ? 303 : 302,
-    );
+    const cookieStore = await cookies();
+    const cookieHeader = authCookieHeaderFromStore(cookieStore);
+
+    const headers = new Headers();
+    if (cookieHeader) headers.set('Cookie', cookieHeader);
+
+    let res: Response;
+    try {
+      res = await fetch(`${base}/auth${path}`, {
+        method: 'GET',
+        headers,
+        redirect: 'manual',
+        cache: 'no-store',
+      });
+    } catch {
+      return oauthErrorRedirect(
+        'Backend tidak dapat dihubungi saat login Microsoft. Coba lagi.',
+        incomingReq,
+      );
+    }
+
+    const setCookies = collectSetCookies(res);
+    const location = res.headers.get('location');
+
+    // OAuth success/fail from API is always a redirect — attach cookies on the response only
+    // (avoid cookies().set + redirect races that can 500 in Next).
+    if (location && res.status >= 300 && res.status < 400) {
+      const out = redirectResponse(location, res.status === 303 ? 303 : 302, incomingReq);
+      await applySetCookiesToResponse(out, setCookies);
+      return out;
+    }
+
+    // Non-redirect (unexpected) — still never raw 500 to the browser for Azure callback.
+    if (path.includes('/azure/callback')) {
+      const detail = (await res.text().catch(() => '')).slice(0, 180) || `HTTP ${res.status}`;
+      return oauthErrorRedirect(
+        `Login Microsoft gagal diproses (${detail}). Coba lagi.`,
+        incomingReq,
+      );
+    }
+
+    const body = await res.text();
+    const out = new NextResponse(body, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
+    });
     await applySetCookiesToResponse(out, setCookies);
     await applyBackendSetCookies(cookieStore, setCookies);
     return out;
+  } catch {
+    return oauthErrorRedirect(
+      'Login Microsoft gagal di server. Silakan coba lagi.',
+      incomingReq,
+    );
   }
-
-  const body = await res.text();
-  const out = new NextResponse(body, {
-    status: res.status,
-    headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
-  });
-  await applySetCookiesToResponse(out, setCookies);
-  await applyBackendSetCookies(cookieStore, setCookies);
-  return out;
 }
