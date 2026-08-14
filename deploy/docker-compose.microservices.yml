@@ -6,11 +6,19 @@ x-supabase-env: &supabase-env
   SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?}
   SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:?}
   JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
+  USE_VPS_POSTGRES: ${USE_VPS_POSTGRES:-1}
+  CAPEX_AUTH_MODE: ${CAPEX_AUTH_MODE:-sso}
+  FRONTEND_URL: ${FRONTEND_URL:-https://dev-capexpro.siloamhospitals.com}
+  OAUTH_CALLBACK_PATH: ${OAUTH_CALLBACK_PATH:-/api/auth/azure/callback}
+  CORS_ORIGINS: ${CORS_ORIGINS:-https://dev-capexpro.siloamhospitals.com,http://dev-capexpro.siloamhospitals.com}
+  AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+  AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+  ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-siloamhospitals.com}
 
 x-leaf-env: &leaf-env
   <<: *supabase-env
   NODE_ENV: production
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
 
 x-leaf-health: &leaf-health
   interval: 15s
@@ -33,8 +41,9 @@ services:
 
   capex-api:
     build:
-      context: ../capexbe
-      dockerfile: Dockerfile
+      # Monorepo root — Dockerfile needs packages/capex-auth-core (file: dep)
+      context: ..
+      dockerfile: capexbe/Dockerfile
     container_name: capex-api
     restart: unless-stopped
     ports:
@@ -43,14 +52,19 @@ services:
       <<: *supabase-env
       NODE_ENV: production
       PORT: 3001
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
       <<: *leaf-health
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
 
   capex-notifications:
     build: &leaf-build
@@ -205,6 +219,7 @@ services:
         NEXT_PUBLIC_CAPEXBE_URL: http://capex-api:3001
         NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
         NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK: "false"
+        NEXT_PUBLIC_CAPEX_AUTH_MODE: ${CAPEX_AUTH_MODE:-sso}
     container_name: capex-web
     restart: unless-stopped
     ports:
@@ -213,8 +228,11 @@ services:
       NODE_ENV: production
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
       NEXT_PUBLIC_CAPEXBE_URL: http://capex-api:3001
+      CAPEXBE_URL: http://capex-api:3001
       NEXT_PUBLIC_USE_BACKEND_SESSION: "true"
       NEXT_PUBLIC_ALLOW_SUPABASE_FALLBACK: "false"
+      # Do NOT set CAPEX_SERVICE_AUTH_URL here — SSO/session stay on monolith (capex-api).
+      # Opt-in leaf: CAPEX_AUTH_USE_LEAF=1 + CAPEX_SERVICE_AUTH_URL=http://capex-auth:3018
       CAPEX_SERVICE_NOTIFICATIONS_URL: http://capex-notifications:3002
       CAPEX_SERVICE_AUDIT_URL: http://capex-audit:3003
       CAPEX_SERVICE_BACKUP_URL: http://capex-backup:3004
@@ -231,7 +249,6 @@ services:
       CAPEX_SERVICE_TASKS_URL: http://capex-tasks:3015
       CAPEX_SERVICE_CORE_URL: http://capex-core:3016
       CAPEX_SERVICE_SMART_MIGRATION_URL: http://capex-smart-migration:3017
-      CAPEX_SERVICE_AUTH_URL: http://capex-auth:3018
     depends_on:
       - capex-api
       - capex-notifications

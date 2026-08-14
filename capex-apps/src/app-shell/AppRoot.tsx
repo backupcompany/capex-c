@@ -536,6 +536,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             if (probeUser) {
               applyProbeUser(probeUser, me.user.roles, me.user.idleTimeoutMs);
             }
+            setSessionCookieHint(true);
             // Unblock page queries even if CSRF cookie is missing (HTTP / Secure mismatch).
             // Mutations still bootstrap CSRF via withCsrfHeadersAsync.
             if (!cancelled) {
@@ -553,6 +554,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             const cached = readCachedAuthUser();
             if (cached && (hasSessionCookies || ssoReturn)) {
               applyProbeUser(cached);
+              setSessionCookieHint(true);
               if (!cancelled) {
                 useAuthStore.getState().setSessionReady(true);
                 setDataInitialized(true);

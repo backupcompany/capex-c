@@ -18,10 +18,36 @@ function defaultBackendBase(): string {
     .trim();
 }
 
-/** Phase 10 — optional auth leaf override (zero prod impact when unset). */
+/**
+ * Auth backend for BFF.
+ * SSO/session must hit the process that has AZURE_* + establishSession (monolith by default).
+ * Leaf override only when CAPEX_SERVICE_AUTH_URL is set AND CAPEX_AUTH_USE_LEAF=1.
+ */
 function authBackendBase(): string {
+  const useLeaf =
+    process.env.CAPEX_AUTH_USE_LEAF === '1' || process.env.CAPEX_AUTH_USE_LEAF === 'true';
   const override = process.env.CAPEX_SERVICE_AUTH_URL?.trim().replace(/\/$/, '');
-  return override || defaultBackendBase();
+  if (useLeaf && override) return override;
+  return defaultBackendBase();
+}
+
+/**
+ * Keep post-OAuth redirects on the BFF host that just set cookies.
+ * Absolute FRONTEND_URL mismatches used to drop the session after Microsoft return.
+ * Microsoft authorize URLs stay absolute.
+ */
+function browserRedirectLocation(location: string): string {
+  if (location.startsWith('/')) return location;
+  try {
+    const u = new URL(location);
+    const host = u.hostname.toLowerCase();
+    if (host.includes('microsoftonline.com') || host.includes('login.microsoft.com')) {
+      return location;
+    }
+    return `${u.pathname}${u.search}${u.hash}` || '/';
+  } catch {
+    return '/';
+  }
 }
 
 export async function proxyAuthToBackend(
@@ -80,14 +106,15 @@ export async function proxyAuthToBackend(
     );
   }
 
+  const setCookies = collectSetCookies(res);
   const body = await res.text();
   const out = new NextResponse(body, {
     status: res.status,
     headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
   });
 
-  await applySetCookiesToResponse(out, collectSetCookies(res));
-  await applyBackendSetCookies(cookieStore, collectSetCookies(res));
+  await applySetCookiesToResponse(out, setCookies);
+  await applyBackendSetCookies(cookieStore, setCookies);
 
   if (path === '/logout' && res.ok) {
     out.cookies.delete(ACCESS_COOKIE);
@@ -126,11 +153,15 @@ export async function proxyAuthRedirectToBackend(
     return NextResponse.json({ message: 'Backend tidak dapat dihubungi' }, { status: 503 });
   }
 
+  const setCookies = collectSetCookies(res);
   const location = res.headers.get('location');
   if (location && res.status >= 300 && res.status < 400) {
-    const out = NextResponse.redirect(location, res.status === 303 ? 303 : 302);
-    await applySetCookiesToResponse(out, collectSetCookies(res));
-    await applyBackendSetCookies(cookieStore, collectSetCookies(res));
+    const out = NextResponse.redirect(
+      browserRedirectLocation(location),
+      res.status === 303 ? 303 : 302,
+    );
+    await applySetCookiesToResponse(out, setCookies);
+    await applyBackendSetCookies(cookieStore, setCookies);
     return out;
   }
 
@@ -139,7 +170,7 @@ export async function proxyAuthRedirectToBackend(
     status: res.status,
     headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
   });
-  await applySetCookiesToResponse(out, collectSetCookies(res));
-  await applyBackendSetCookies(cookieStore, collectSetCookies(res));
+  await applySetCookiesToResponse(out, setCookies);
+  await applyBackendSetCookies(cookieStore, setCookies);
   return out;
 }
