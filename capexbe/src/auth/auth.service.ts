@@ -337,9 +337,8 @@ export class AuthService {
 
     const client = this.users.createServiceReadClient();
     const appUser = await this.users.resolveAppUserByEmail(client, matchedEmail);
-    const authId =
-      appUser.auth_id?.trim() ||
-      `11111111-1111-1111-1111-${String(appUser.id).padStart(12, '0').slice(-12)}`;
+    const authId = resolveSessionAuthId(appUser.auth_id, matchedEmail);
+    await this.users.ensureUserAuthIdLinked(appUser.id, authId, appUser.auth_id);
 
     return this.establishSession(appUser, authId, res, {
       email: matchedEmail,
@@ -800,6 +799,7 @@ export class AuthService {
       const client = this.users.createServiceReadClient();
       const appUser = await this.users.resolveAppUserByEmail(client, email);
       const authId = resolveSessionAuthId(appUser.auth_id, email);
+      await this.users.ensureUserAuthIdLinked(appUser.id, authId, appUser.auth_id);
       await this.establishSession(appUser, authId, res, {
         email,
         ip: meta?.ip,

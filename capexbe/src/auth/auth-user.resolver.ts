@@ -1,6 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { roleNameToSlug, type EnterpriseRoleSlug } from './auth.constants';
+import { isUuid } from './azure-oauth.util';
 import {
   createSupabaseClient,
   getSharedServiceSupabaseClient,
@@ -32,6 +33,14 @@ export function pickUserRowByEmail(
 ): AppUserRow | null {
   const normalized = email.trim().toLowerCase();
   return rows?.find((r) => emailsMatch(r.email, normalized)) ?? null;
+}
+
+/** True when users.auth_id must be updated to match the session JWT authId. */
+export function authIdNeedsLink(
+  storedAuthId: string | null | undefined,
+  sessionAuthId: string,
+): boolean {
+  return (storedAuthId ?? '').trim() !== sessionAuthId.trim();
 }
 
 @Injectable()
@@ -204,6 +213,35 @@ export class AuthUserResolver {
       roles,
       assignments,
     };
+  }
+
+  /**
+   * Persist session auth_id onto users.auth_id so /auth/session resolveAppUserByAuthId works.
+   * Covers null auth_id and non-RFC placeholders (e.g. aaaaaaaa-…) rejected by isUuid.
+   */
+  async ensureUserAuthIdLinked(
+    userId: number,
+    sessionAuthId: string,
+    currentAuthId?: string | null,
+  ): Promise<void> {
+    if (!isUuid(sessionAuthId)) {
+      throw new UnauthorizedException('Invalid session auth_id');
+    }
+    if (!authIdNeedsLink(currentAuthId, sessionAuthId)) return;
+
+    const svc = this.createServiceReadClient();
+    const { data, error } = await svc
+      .from('users')
+      .update({ auth_id: sessionAuthId })
+      .eq('id', userId)
+      .select('id, auth_id')
+      .maybeSingle();
+    if (error || !data?.id) {
+      this.logger.error(
+        `ensureUserAuthIdLinked failed userId=${userId} err=${error?.message ?? 'no row'}`,
+      );
+      throw new UnauthorizedException('Failed to link user auth_id');
+    }
   }
 
   private async loadAssignments(
