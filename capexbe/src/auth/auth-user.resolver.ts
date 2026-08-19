@@ -21,6 +21,19 @@ export type ResolvedAppUser = AppUserRow & {
   assignments: { roleName: string; assignedScopes: string[] }[];
 };
 
+/** Case/whitespace-insensitive email match (Azure lowercases; DB may be PascalCase). */
+export function emailsMatch(stored: string | null | undefined, want: string): boolean {
+  return (stored ?? '').trim().toLowerCase() === want.trim().toLowerCase();
+}
+
+export function pickUserRowByEmail(
+  rows: AppUserRow[] | null | undefined,
+  email: string,
+): AppUserRow | null {
+  const normalized = email.trim().toLowerCase();
+  return rows?.find((r) => emailsMatch(r.email, normalized)) ?? null;
+}
+
 @Injectable()
 export class AuthUserResolver {
   private readonly logger = new Logger(AuthUserResolver.name);
@@ -70,11 +83,7 @@ export class AuthUserResolver {
         .select('id, username, email, auth_id')
         .ilike('email', escapeIlikePattern(email.trim()));
       if (!rows?.length) lastReason = lastReason ?? 'lookup-by-email returned 0 rows';
-      const lower = email.trim().toLowerCase();
-      row =
-        (rows as AppUserRow[] | null)?.find(
-          (r) => (r.email ?? '').toLowerCase() === lower,
-        ) ?? null;
+      row = pickUserRowByEmail(rows as AppUserRow[] | null, email);
     }
 
     // First login can come from Supabase Auth user that is already present in public.users
@@ -116,11 +125,7 @@ export class AuthUserResolver {
             .ilike('email', escapeIlikePattern(email.trim()));
           if (rowsSvcErr) lastReason = `service lookup-by-email failed: ${rowsSvcErr.message || 'unknown'}`;
           if (!rowsSvc?.length) lastReason = lastReason ?? 'service lookup-by-email returned 0 rows';
-          const lower = email.trim().toLowerCase();
-          row =
-            (rowsSvc as AppUserRow[] | null)?.find(
-              (r) => (r.email ?? '').toLowerCase() === lower,
-            ) ?? null;
+          row = pickUserRowByEmail(rowsSvc as AppUserRow[] | null, email);
           if (
             row?.id &&
             (!row.auth_id ||
@@ -165,21 +170,36 @@ export class AuthUserResolver {
   }
 
   async resolveAppUserByEmail(client: SupabaseClient, email: string): Promise<ResolvedAppUser> {
+    // Azure/OIDC emails are lowercased; DB rows may be PascalCase — never .eq() on email.
     const normalized = email.trim().toLowerCase();
-    const { data: row, error } = await client
+    const { data: rows, error } = await client
       .from('users')
       .select('id, username, email, auth_id')
-      .eq('email', normalized)
-      .maybeSingle();
+      .ilike('email', escapeIlikePattern(normalized));
+    let row = pickUserRowByEmail(rows as AppUserRow[] | null, normalized);
     if (error || !row?.id) {
       throw new UnauthorizedException('User lookup failed');
     }
+
+    // Heal mixed-case rows so later exact lookups / unique email stay consistent.
+    if ((row.email ?? '').trim() !== normalized) {
+      const svc = this.createServiceReadClient();
+      const { data: healed } = await svc
+        .from('users')
+        .update({ email: normalized })
+        .eq('id', row.id)
+        .select('id, username, email, auth_id')
+        .maybeSingle();
+      if (healed) row = healed as AppUserRow;
+      else row = { ...row, email: normalized };
+    }
+
     const assignments = await this.loadAssignments(this.createServiceReadClient(), row.id);
     const roles = [
       ...new Set(assignments.map((a) => roleNameToSlug(a.roleName))),
     ] as EnterpriseRoleSlug[];
     return {
-      ...(row as AppUserRow),
+      ...row,
       id: Number(row.id),
       roles,
       assignments,

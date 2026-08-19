@@ -20,12 +20,22 @@ export const humanizeOAuthError = (raw: string): string => {
   if (
     msg.includes('tidak terdaftar') ||
     msg.includes('tidak memiliki akses') ||
-    msg.includes('akun microsoft salah')
+    msg.includes('akun microsoft salah') ||
+    msg.includes('user lookup failed') ||
+    msg.includes('not registered')
   ) {
     return 'Akun Microsoft salah atau belum terdaftar di Capex Pro. Coba akun lain atau hubungi admin.';
   }
   if (msg.includes('tidak diizinkan') || msg.includes('siloamhospitals')) {
     return 'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam, atau coba akun lain.';
+  }
+  if (
+    msg.includes('could not create session') ||
+    msg.includes('database not configured') ||
+    msg.includes('jwt secret') ||
+    msg.includes('sesi capex gagal')
+  ) {
+    return 'Login Microsoft berhasil, tapi sesi Capex gagal dibuat. Hubungi admin (session/database).';
   }
   return raw;
 };

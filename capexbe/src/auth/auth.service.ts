@@ -38,13 +38,14 @@ import {
 import { generateCodeChallenge, generateCodeVerifier } from './oauth-pkce.util';
 import {
   azureAuthorizeUrl,
-  azureAuthIdForEmail,
   emailFromAzureIdToken,
   exchangeAzureAuthCode,
   getAzureOAuthConfig,
+  resolveSessionAuthId,
 } from './azure-oauth.util';
 import { isSsoLoginEnabled } from '../shared/auth-mode.util';
 import { getDemoLoginCredentials, isVpsPostgresMode, matchVpsLogin } from '../shared/vps-postgres.util';
+import { isAppUserLookupUnauthorized } from './auth-oauth-errors.util';
 
 function cookieOptions(maxAgeSec: number) {
   return {
@@ -717,12 +718,21 @@ export class AuthService {
       msg.includes('tidak terdaftar') ||
       msg.includes('tidak memiliki akses') ||
       msg.includes('not registered') ||
-      msg.includes('unauthorized')
+      msg.includes('user lookup failed') ||
+      msg.includes('account not authorized')
     ) {
       return 'Akun Microsoft salah atau belum terdaftar di Capex Pro. Coba akun lain atau hubungi admin.';
     }
     if (msg.includes('tidak diizinkan') || msg.includes('not allowed') || msg.includes('domain')) {
       return 'Akun email tidak diizinkan. Gunakan akun Microsoft Siloam Hospitals, atau coba akun lain.';
+    }
+    if (
+      msg.includes('could not create session') ||
+      msg.includes('database not configured') ||
+      msg.includes('jwt secret') ||
+      msg.includes('auth_sessions')
+    ) {
+      return 'Login Microsoft berhasil, tapi sesi Capex gagal dibuat. Hubungi admin (session/database).';
     }
     return raw;
   }
@@ -789,19 +799,20 @@ export class AuthService {
       await this.rateLimiter.assertAllowed('exchange', meta?.ip ?? 'unknown');
       const client = this.users.createServiceReadClient();
       const appUser = await this.users.resolveAppUserByEmail(client, email);
-      const authId = appUser.auth_id?.trim() || azureAuthIdForEmail(email);
+      const authId = resolveSessionAuthId(appUser.auth_id, email);
       await this.establishSession(appUser, authId, res, {
         email,
         ip: meta?.ip,
         userAgent: meta?.userAgent,
       });
     } catch (e) {
+      if (e instanceof UnauthorizedException && isAppUserLookupUnauthorized(e.message)) {
+        return failRedirect(
+          'Akun Microsoft Anda tidak terdaftar di Capex Pro atau tidak memiliki akses. Hubungi admin.',
+        );
+      }
       const message =
-        e instanceof UnauthorizedException
-          ? 'Akun Microsoft Anda tidak terdaftar di Capex Pro atau tidak memiliki akses. Hubungi admin.'
-          : e instanceof Error
-            ? e.message
-            : 'Login Microsoft gagal.';
+        e instanceof Error ? e.message : 'Login Microsoft gagal.';
       return failRedirect(message);
     }
 

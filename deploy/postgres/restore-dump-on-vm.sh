@@ -66,6 +66,12 @@ EXCEPTION WHEN insufficient_privilege THEN
 END $$;
 SQL
 
+echo "==> Auth session table usable via PostgREST (RLS off — Capex BE is sole writer)"
+docker exec -i "$CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=0 <<'SQL'
+ALTER TABLE IF EXISTS public.auth_sessions DISABLE ROW LEVEL SECURITY;
+UPDATE public.users SET email = lower(trim(email)) WHERE email <> lower(trim(email));
+SQL
+
 echo "==> Counts"
 docker exec -i "$CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -Atc "
 SELECT 'projects|' || count(*) FROM projects

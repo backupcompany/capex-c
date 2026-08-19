@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { JwtTokenService } from './jwt-token.service';
@@ -8,6 +13,7 @@ import {
   IDLE_TIMEOUT_STANDARD_MS,
   SENSITIVE_ROLE_SLUGS,
 } from './auth.constants';
+import { isUuid } from './azure-oauth.util';
 import {
   createSupabaseClient,
   getSupabaseServiceKey,
@@ -24,10 +30,13 @@ export type StoredSession = {
 
 @Injectable()
 export class SessionService {
+  private readonly logger = new Logger(SessionService.name);
+
   private adminClient(): SupabaseClient {
     const key = getSupabaseServiceKey();
     if (!key) {
-      throw new UnauthorizedException('Database not configured');
+      // Infra misconfig — must not look like "user not registered".
+      throw new ServiceUnavailableException('Database not configured (SUPABASE_SERVICE_ROLE_KEY)');
     }
     return createSupabaseClient(key);
   }
@@ -42,6 +51,11 @@ export class SessionService {
     ip?: string | null;
     userAgent?: string | null;
   }): Promise<StoredSession> {
+    if (!isUuid(params.authId)) {
+      throw new ServiceUnavailableException(
+        `Could not create session: auth_id is not a UUID (${params.authId?.slice(0, 24) ?? 'empty'})`,
+      );
+    }
     const id = randomUUID();
     const familyId = params.familyId ?? randomUUID();
     const client = this.adminClient();
@@ -57,7 +71,12 @@ export class SessionService {
       last_active_at: new Date().toISOString(),
     });
     if (error) {
-      throw new UnauthorizedException('Could not create session');
+      this.logger.error(
+        `auth_sessions insert failed userId=${params.userId} code=${error.code ?? '?'} msg=${error.message}`,
+      );
+      throw new ServiceUnavailableException(
+        `Could not create session: ${error.message || 'database error'}`,
+      );
     }
     return { id, userId: params.userId, authId: params.authId, familyId };
   }

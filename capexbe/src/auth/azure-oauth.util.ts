@@ -98,7 +98,37 @@ export function emailFromAzureIdToken(idToken: string, cfg: AzureOAuthConfig): s
   return email;
 }
 
-/** Stable auth_id stub when users.auth_id empty (Azure SSO without GoTrue). */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string | null | undefined): boolean {
+  return typeof value === 'string' && UUID_RE.test(value.trim());
+}
+
+/**
+ * Stable UUID for auth_sessions.auth_id when users.auth_id is null.
+ * Must be a real UUID — column type is uuid; `azure-{hash}` insert fails.
+ */
 export function azureAuthIdForEmail(email: string): string {
-  return `azure-${createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 32)}`;
+  const h = createHash('sha256')
+    .update(`capex-azure-sso:${email.trim().toLowerCase()}`)
+    .digest('hex');
+  // UUID v5-shaped (version nibble 5, RFC 4122 variant).
+  return [
+    h.slice(0, 8),
+    h.slice(8, 12),
+    `5${h.slice(13, 16)}`,
+    `${((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0')}${h.slice(18, 20)}`,
+    h.slice(20, 32),
+  ].join('-');
+}
+
+/** Prefer existing UUID auth_id; otherwise deterministic Azure SSO UUID (never non-UUID stubs). */
+export function resolveSessionAuthId(
+  storedAuthId: string | null | undefined,
+  email: string,
+): string {
+  const existing = storedAuthId?.trim() ?? '';
+  if (isUuid(existing)) return existing;
+  return azureAuthIdForEmail(email);
 }

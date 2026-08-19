@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { createHash, randomUUID } from 'crypto';
 import {
@@ -13,7 +13,7 @@ export class JwtTokenService {
     const secret =
       process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
     if (!secret?.trim()) {
-      throw new UnauthorizedException('JWT secret not configured');
+      throw new ServiceUnavailableException('JWT secret not configured');
     }
     return secret.trim();
   }
