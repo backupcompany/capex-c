@@ -28,6 +28,25 @@ export type StoredSession = {
   familyStartedAt?: Date;
 };
 
+/** Safe PostgREST/supabase error summary (no tokens/keys). */
+export function formatPostgrestError(error: unknown): string {
+  if (error == null) return 'null';
+  if (typeof error !== 'object') return String(error);
+  const e = error as Record<string, unknown>;
+  const parts = [
+    e.message != null && e.message !== '' ? `message=${String(e.message)}` : null,
+    e.code != null && e.code !== '' ? `code=${String(e.code)}` : null,
+    e.details != null && e.details !== '' ? `details=${String(e.details)}` : null,
+    e.hint != null && e.hint !== '' ? `hint=${String(e.hint)}` : null,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(' ');
+  try {
+    return `json=${JSON.stringify(error)}`;
+  } catch {
+    return `keys=${Object.keys(e).join(',') || '(empty)'}`;
+  }
+}
+
 @Injectable()
 export class SessionService {
   private readonly logger = new Logger(SessionService.name);
@@ -58,27 +77,73 @@ export class SessionService {
     }
     const id = randomUUID();
     const familyId = params.familyId ?? randomUUID();
+    const expiresAtIso = params.expiresAt.toISOString();
+    const lastActiveAtIso = new Date().toISOString();
+
+    // Safe metadata only — never log refreshRaw / service keys.
+    this.logger.warn(
+      JSON.stringify({
+        tag: 'auth_sessions_insert_probe',
+        userId: params.userId,
+        authId: params.authId,
+        authIdIsUuid: true,
+        sessionId: id,
+        familyId,
+        familyIdIsUuid: isUuid(familyId),
+        expiresAt: expiresAtIso,
+        hashLen: params.refreshHash?.length ?? 0,
+        hasUserAgent: Boolean(params.userAgent && String(params.userAgent).length > 0),
+        hasIp: Boolean(params.ip && String(params.ip).length > 0),
+      }),
+    );
+
     const client = this.adminClient();
-    const { error } = await client.from('auth_sessions').insert({
-      id,
-      user_id: params.userId,
-      auth_id: params.authId,
-      refresh_token_hash: params.refreshHash,
-      family_id: familyId,
-      expires_at: params.expiresAt.toISOString(),
-      ip_address: params.ip ?? null,
-      user_agent: params.userAgent ?? null,
-      last_active_at: new Date().toISOString(),
-    });
-    if (error) {
-      this.logger.error(
-        `auth_sessions insert failed userId=${params.userId} code=${error.code ?? '?'} msg=${error.message}`,
-      );
-      throw new ServiceUnavailableException(
-        `Could not create session: ${error.message || 'database error'}`,
-      );
+    // Prefer return=representation (matches working VM curl probe). Bare insert
+    // (return=minimal) against self-hosted PostgREST/nginx can yield a truthy
+    // empty error object → code=? msg=undefined while login looks failed.
+    const { data, error, status, statusText } = await client
+      .from('auth_sessions')
+      .insert({
+        id,
+        user_id: params.userId,
+        auth_id: params.authId,
+        refresh_token_hash: params.refreshHash,
+        family_id: familyId,
+        expires_at: expiresAtIso,
+        ip_address: params.ip ?? null,
+        user_agent: params.userAgent ?? null,
+        last_active_at: lastActiveAtIso,
+      })
+      .select('id')
+      .single();
+
+    const rowId =
+      data && typeof data === 'object' ? String((data as { id?: string }).id ?? '') : '';
+    if (rowId) {
+      return { id: rowId, userId: params.userId, authId: params.authId, familyId };
     }
-    return { id, userId: params.userId, authId: params.authId, familyId };
+
+    this.logger.error(
+      JSON.stringify({
+        tag: 'auth_sessions_insert_failed',
+        userId: params.userId,
+        authId: params.authId,
+        httpStatus: status ?? null,
+        statusText: statusText ?? null,
+        errorSummary: formatPostgrestError(error),
+        errorJson: (() => {
+          try {
+            return JSON.stringify(error);
+          } catch {
+            return String(error);
+          }
+        })(),
+        errorKeys: error && typeof error === 'object' ? Object.keys(error as object) : [],
+      }),
+    );
+    throw new ServiceUnavailableException(
+      `Could not create session: ${formatPostgrestError(error) || `HTTP ${status ?? '?'}`}`,
+    );
   }
 
   async findValidSession(refreshRaw: string): Promise<StoredSession & { refreshHash: string }> {
