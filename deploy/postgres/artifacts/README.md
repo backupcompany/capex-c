@@ -7,4 +7,6 @@ On VM after `git pull`:
 
 ```bash
 ./postgres/restore-dump-on-vm.sh ./postgres/artifacts/capex.dump
+# script reloads PostgREST schema (NOTIFY + restart) — required for auth_sessions POST
+docker restart capex-api capex-web
 ```
