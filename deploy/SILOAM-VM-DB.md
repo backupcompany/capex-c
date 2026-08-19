@@ -28,7 +28,8 @@ cd /opt/capex-pro/app/capex-c   # or your repo path
 cp deploy/.env.vps.example deploy/.env.compose   # fill secrets
 docker compose -f deploy/docker-compose.siloam.yml --env-file deploy/.env.compose up -d --build
 ./deploy/postgres/restore-dump-on-vm.sh ./deploy/postgres/artifacts/capex.dump
-docker restart capex-postgrest-engine capex-postgrest
+# restore script already: NOTIFY pgrst + restart PostgREST
+docker restart capex-api capex-web
 ```
 
 API listens on **3001 inside** the container (`127.0.0.1:8082` on host).  
@@ -49,15 +50,31 @@ docker compose --env-file .env up -d
 
 ## Restore data (`capex.dump`)
 
-Dummy/seed dump is in git: `postgres/artifacts/capex.dump` (~11MB).
+Dummy/seed dump is in git: `postgres/artifacts/capex.dump` (~3.8MB slim SSO baseline).
 
 ```bash
-# on VM after git pull (path relative to /opt/capex-deploy)
-chmod +x postgres/restore-dump-on-vm.sh
-./postgres/restore-dump-on-vm.sh ./postgres/artifacts/capex.dump
-docker restart capex-postgrest-engine capex-postgrest
-docker compose --env-file .env up -d --force-recreate capex-api
+# on VM after git pull
+chmod +x deploy/postgres/restore-dump-on-vm.sh
+./deploy/postgres/restore-dump-on-vm.sh ./deploy/postgres/artifacts/capex.dump
+docker restart capex-api capex-web
 ```
+
+`restore-dump-on-vm.sh` **must** reload PostgREST after restore:
+
+```text
+pg_restore
+  → NOTIFY pgrst, 'reload schema'
+  → docker restart capex-postgrest-engine capex-postgrest
+```
+
+Without that, symptom is:
+
+```text
+GET  /rest/v1/users         → 200
+POST /rest/v1/auth_sessions → 404   # stale schema cache
+```
+
+SSO then fails at session create even though Azure + user lookup succeed.
 
 ## Verify
 
@@ -72,6 +89,12 @@ docker exec capex-postgres psql -U capex_app -d capex -c 'SELECT count(*) FROM u
 
 Do **not** change RBAC / JWT / middleware for this migration. Only connectivity + dump restore.
 
-## SSO
+## SSO (app fixes already in repo)
+
+1. Case-insensitive `users.email` lookup (+ lowercase heal)
+2. `auth_sessions.auth_id` must be a real UUID (`resolveSessionAuthId`)
+3. Session insert uses `.insert().select('id').single()` (PostgREST `return=representation`)
+
+Plus restore hook above for PostgREST schema reload.
 
 See `deploy/AUTH-SSO-SETUP.md`. `CAPEX_AUTH_MODE=sso` + Azure env on the VM.

@@ -80,5 +80,23 @@ UNION ALL SELECT 'users|' || count(*) FROM users
 UNION ALL SELECT 'roles|' || count(*) FROM roles;
 "
 
-echo "==> Done. Restart PostgREST if schema was empty before:"
-echo "    docker restart capex-postgrest-engine capex-postgrest"
+# After restore, PostgREST may still serve a stale schema cache:
+#   GET /users → 200, POST /auth_sessions → 404
+# until reload. Do NOT skip this — SSO session create depends on it.
+POSTGREST_ENGINE="${POSTGREST_ENGINE:-capex-postgrest-engine}"
+POSTGREST_PROXY="${POSTGREST_PROXY:-capex-postgrest}"
+
+echo "==> Reload PostgREST schema cache (NOTIFY + restart)"
+docker exec -i "$CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
+  "NOTIFY pgrst, 'reload schema';" || true
+
+if docker inspect "$POSTGREST_ENGINE" >/dev/null 2>&1; then
+  docker restart "$POSTGREST_ENGINE" "$POSTGREST_PROXY" || docker restart "$POSTGREST_ENGINE"
+  # Brief wait so engine reloads relations before API traffic.
+  sleep "${POSTGREST_RELOAD_WAIT_SEC:-5}"
+else
+  echo "WARN: container $POSTGREST_ENGINE not found — run manually:"
+  echo "  docker restart capex-postgrest-engine capex-postgrest"
+fi
+
+echo "==> Done. Optional: docker restart capex-api capex-web"
