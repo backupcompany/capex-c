@@ -16,7 +16,7 @@ Skema versi: **`Major.Minor.Patch.Build`** (contoh `1.1.1.4`).
 
 ## 1.1.1.4 — 23 Agustus 2026
 
-**Status:** siap push ke `main`  
+**Status:** pushed ke `main` (`eda471e`)  
 **Bump:** build dari `1.1.1.3` — auth UX production, search/pipeline Project List, anti-loop session, Sonar a11y lanjutan.
 
 ### Ringkasan
