@@ -128,6 +128,8 @@ services:
     env_file: [.env.compose]
     environment:
       NODE_ENV: production
+      # Override shared .env.compose PORT=3001 (API) — Next must stay on 3000
+      PORT: 3000
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
       # Runtime BFF→API (overrides bake if set)
       CAPEXBE_URL: ${CAPEXBE_URL:-http://capex-api:3001}
