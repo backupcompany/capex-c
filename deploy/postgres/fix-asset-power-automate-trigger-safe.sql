@@ -53,6 +53,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trigger_send_asset ON public.assets;
 DROP TRIGGER IF EXISTS trigger_send_asset_to_power_automate ON public.assets;
 
 CREATE TRIGGER trigger_send_asset_to_power_automate
