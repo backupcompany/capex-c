@@ -323,7 +323,8 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     page: currentPage,
     pageSize: itemsPerPage,
     search: debouncedSearch,
-    enabled: bootstrapReady && !!huId?.trim() && canView,
+    // Parallel with page-bundle shell — waiting for bootstrapReady doubled cold-load latency on VM.
+    enabled: !!huId?.trim() && canView && !!periodName.trim(),
     session: projectSession,
     editRevision: projectEditRevision,
   });
@@ -701,13 +702,6 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       next = remap.period;
       serverPeriodRef.current = cloneDeep(next);
       setEditedData(cloneDeep(next));
-      setSelectedProjectForAssets((prev) => {
-        if (!prev || !huId) return prev;
-        const hu = next.archetypes.flatMap((a) => a.units).find((u) => u.id === huId);
-        const fromTree = hu?.projects.find((p) => p.id === prev.id);
-        if (fromTree && (fromTree.assets?.length ?? 0) > 0) return fromTree;
-        return prev;
-      });
 
       // Optimistic table patch BEFORE resetSession — avoids 3–5s blank gap while projects-page refetches.
       const searchKey = debouncedSearch.trim();
@@ -765,16 +759,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       updateIsDirty(false);
       projectSession.resetSession();
       projectsPage.invalidatePage();
-      // Refresh open asset modal from DB so new assets appear immediately after Save.
-      const openProjectId = selectedProjectForAssets?.id;
-      if (openProjectId) {
-        invalidateRequestCache(`app:table:budget-hu:project-assets:${currentUser.id}:${openProjectId}`);
-        void fetchBudgetHuProjectAssets(periodName, currentUser.id, openProjectId).then((assets) => {
-          const sorted = sortAssetsByCode(assets);
-          setSelectedProjectForAssets((prev) =>
-            prev && prev.id === openProjectId ? { ...prev, assets: sorted } : prev,
-          );
-        });
+      // Close assets modal after successful save (create/edit persisted).
+      if (selectedProjectForAssets) {
+        setSelectedProjectForAssets(null);
+        setIsCreatingNewProject(false);
       }
       const savedCount = changedProjectIdList.length;
       const deletedCount = deletedProjectIdList.length;
