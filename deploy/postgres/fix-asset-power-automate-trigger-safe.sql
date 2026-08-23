@@ -1,9 +1,12 @@
--- Make assets INSERT safe without pg_net (schema "net").
--- Fixes: saveAsset: schema "net" does not exist
+-- Asset INSERT → Power Automate (production webhook).
+-- Safe when pg_net / schema net is missing (VM clones): skip, never block insert.
 --
--- On Siloam VM (no pg_net):
---   docker exec -i <pg> psql -U <user> -d capex -v ON_ERROR_STOP=1 \
+-- Apply on VPS:
+--   scp deploy/postgres/fix-asset-power-automate-trigger-safe.sql capex-vps:/tmp/
+--   ssh capex-vps 'docker exec -i postgres-core psql -U platform_admin -d capex -v ON_ERROR_STOP=1' \
 --     < deploy/postgres/fix-asset-power-automate-trigger-safe.sql
+
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
 SET check_function_bodies = off;
 
@@ -25,8 +28,9 @@ BEGIN
     SELECT * INTO v_unit FROM public.hospital_units_config WHERE id = v_project.hospital_unit_id;
     SELECT * INTO v_archetype FROM public.archetypes_config WHERE id = v_unit.archetype_id;
 
+    -- Production Power Automate webhook
     PERFORM net.http_post(
-        url := 'https://5f437fd2e23cea2a89a48b67b2753c.81.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/29/workflows/d2ef69dfc3bb4ba191ab9f24fcd7af70/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=pJyKQS0aVZObL8gUUg3gMW9F87b7106atXThE6BGnEU',
+        url := 'https://d36d9890044be130bf543e9c53c092.82.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/10/workflows/8e1e33d2b95a4f53b92fc8dbcf5a803d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2w3JQvU2OhvN2yloGIutCBWOFT9xmkgybwI3LSjYKRQ',
         headers := jsonb_build_object('Content-Type', 'application/json'),
         body := jsonb_build_object(
             'asset_code', NEW.asset_code,
@@ -48,3 +52,10 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS trigger_send_asset_to_power_automate ON public.assets;
+
+CREATE TRIGGER trigger_send_asset_to_power_automate
+AFTER INSERT ON public.assets
+FOR EACH ROW
+EXECUTE FUNCTION public.send_asset_to_power_automate();
