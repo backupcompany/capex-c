@@ -210,10 +210,10 @@ export const UserEditorModal: React.FC<{
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-data-scope-all-network-hu">Data Scope (All / Network / HU)</label>
+                                    <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Data Scope (All / Network / HU)</p>
                                     <div className="mt-1 max-h-40 overflow-y-auto border border-siloam-border rounded-xl p-3 bg-siloam-surface space-y-3">
                                         <div className="flex items-center">
-                                            <input id="fld-data-scope-all-network-hu"
+                                            <input
                                                 type="checkbox"
                                                 id={`scope-${index}-All`}
                                                 checked={assignment.assignedScopes.includes('All')}
