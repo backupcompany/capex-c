@@ -7,6 +7,8 @@
 #   capex-web  internal 3000  host 127.0.0.1:8080
 #   capex-api  internal 3001  host 127.0.0.1:8082
 #   Shared .env.compose may have PORT=3001; compose environment: overrides per service.
+# Siloam stack: USE_VPS_POSTGRES=0 + CURSOR_TUNNEL_MODE=false (compose overrides).
+# Laptop local still uses capexbe/.env USE_VPS_POSTGRES=1 + tunnel scripts.
 # Runtime: capex-web → capex-api:3001 → capex-postgrest → capex-postgres
 # Debug: postgres :5433, postgrest :54321
 
@@ -92,7 +94,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      USE_VPS_POSTGRES: ${USE_VPS_POSTGRES:-1}
+      # Siloam in-stack PostgREST — NOT laptop VPS-tunnel mode (override env_file)
+      USE_VPS_POSTGRES: "0"
+      CURSOR_TUNNEL_MODE: "false"
       SUPABASE_URL: ${SUPABASE_URL:-http://capex-postgrest}
       REDIS_URL: ${REDIS_URL:-redis://capex-redis:6379}
     depends_on:
@@ -133,6 +137,7 @@ services:
       NODE_ENV: production
       # Override shared .env.compose PORT=3001 (API) — Next must stay on 3000
       PORT: 3000
+      CURSOR_TUNNEL_MODE: "false"
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
       # Runtime BFF→API (overrides bake if set)
       CAPEXBE_URL: ${CAPEXBE_URL:-http://capex-api:3001}
