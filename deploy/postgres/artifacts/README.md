@@ -15,7 +15,7 @@
 | **Data** | Supabase Capex `abbgvfuanefrnxtttllo` public (no `tor_*`) |
 | **PA overlay** | `fix-asset-power-automate-trigger-safe.sql` (prod webhook) |
 
-**SHA256 (`capex.dump`):** `bcd16b08dc9ea770b7632d698af07a491d8e877716b0af7fbfd23675e9dc9418`  
+**SHA256 (`capex.dump`):** `b854b17468409bafd0f0154ba5212982c5aa416fc32c688ed5821b061e4bc5b6`  
 **Stamp:** projects=4016 · assets=6917 · users=209 · asset_task_statuses=128307  
 **Extras kept from VPS schema:** e.g. `reserve_next_asset_seq` + PA trigger prod URL
 
