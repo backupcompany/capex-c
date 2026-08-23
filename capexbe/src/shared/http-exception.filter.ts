@@ -64,6 +64,10 @@ export class ProductionSafeExceptionFilter implements ExceptionFilter {
 
   private scrub(status: number, message: string): string {
     if (!isInternalErrorMessage(message)) return message;
+    // FK/master-data failures are actionable for ops without leaking SQL internals.
+    if (/foreign key|budget_category|priority_id|hospital_unit/i.test(message)) {
+      return 'Save failed: missing or invalid master data (budget category, priority, or hospital unit).';
+    }
     return status >= 500 ? 'Internal server error' : 'Request failed';
   }
 }

@@ -828,8 +828,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
         );
       }
     } catch (err) {
-      setError('Failed to save changes.');
-      showToast('Failed to save changes.', 'error');
+      // Do not setLoadError here — that early-returns the whole page and kills HU/search filters.
+      const detail =
+        err instanceof Error && err.message.trim() ? err.message.trim() : 'Failed to save changes.';
+      showToast(detail, 'error');
     } finally {
       setIsSaving(false);
     }

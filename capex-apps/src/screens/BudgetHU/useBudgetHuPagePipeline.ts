@@ -300,6 +300,7 @@ export function useBudgetHuPagePipeline({
     }
     if (contextChanged) {
       hydrationContextRef.current = contextKey;
+      setLoadError(null);
     }
 
     const shouldSeedLocal =

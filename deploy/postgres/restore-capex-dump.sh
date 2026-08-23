@@ -24,7 +24,9 @@ docker exec "$CONTAINER" pg_restore -U "$DB_USER" -d "$DB_NAME" --clean --if-exi
 docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "
 SELECT 'projects' AS t, count(*) FROM projects
 UNION ALL SELECT 'assets', count(*) FROM assets
-UNION ALL SELECT 'users', count(*) FROM users;
+UNION ALL SELECT 'users', count(*) FROM users
+UNION ALL SELECT 'budget_category_configs', count(*) FROM budget_category_configs
+UNION ALL SELECT 'project_priority_configs', count(*) FROM project_priority_configs;
 "
 echo "==> reload PostgREST schema (NOTIFY)"
 docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "NOTIFY pgrst, 'reload schema';" 2>/dev/null || true
