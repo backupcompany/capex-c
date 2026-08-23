@@ -3,9 +3,12 @@
 #   cp deploy/.env.vps.example deploy/.env.compose   # fill secrets
 #   docker compose -f deploy/docker-compose.siloam.yml --env-file deploy/.env.compose up -d --build
 #
-# Runtime path:
-#   capex-web → capex-api:3001 → capex-postgrest → capex-postgres
-# Host debug: web :8080, api :8082, postgres :5433, postgrest :54321
+# Ports (do NOT hand-edit on PROD — fix in git then pull):
+#   capex-web  internal 3000  host 127.0.0.1:8080
+#   capex-api  internal 3001  host 127.0.0.1:8082
+#   Shared .env.compose may have PORT=3001; compose environment: overrides per service.
+# Runtime: capex-web → capex-api:3001 → capex-postgrest → capex-postgres
+# Debug: postgres :5433, postgrest :54321
 
 name: capex-siloam
 
