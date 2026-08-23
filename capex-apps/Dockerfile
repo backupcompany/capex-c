@@ -24,10 +24,11 @@ COPY scripts ./scripts
 RUN npm ci --ignore-scripts
 
 # Explicit paths only (sonar docker:S6470 — no COPY . .)
+# next-env.d.ts is gitignored (Next generates it) — do not COPY from context.
 COPY app ./app
 COPY src ./src
 COPY public ./public
-COPY middleware.ts next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts ./
+COPY middleware.ts next.config.ts tsconfig.json postcss.config.mjs ./
 
 RUN npm run build:secure
 
