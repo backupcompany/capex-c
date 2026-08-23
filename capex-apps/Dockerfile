@@ -1,3 +1,4 @@
+# Sole web image for Siloam/prod monolith (capex-web). Pair with capexbe/Dockerfile only.
 # Build from capex-apps/:
 #   docker build -f Dockerfile -t capex-web \
 #     --build-arg NEXT_PUBLIC_CAPEXBE_URL=http://capex-api:3001 \
@@ -20,9 +21,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json ./
 COPY scripts ./scripts
-RUN npm ci
+RUN npm ci --ignore-scripts
 
-COPY . .
+# Explicit paths only (sonar docker:S6470 — no COPY . .)
+COPY app ./app
+COPY src ./src
+COPY public ./public
+COPY middleware.ts next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts ./
+
 RUN npm run build:secure
 
 FROM node:22-alpine AS runner
@@ -37,7 +43,7 @@ COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
-COPY --from=build /app/next.config.* ./
+COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/middleware.ts ./middleware.ts
 
 RUN chown -R node:node /app

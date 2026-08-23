@@ -1,5 +1,4 @@
 import type { DailyMOMSummaryRow } from '@/types';
-import type { UserScopesForCapex } from '@/lib/capexProjectListScope';
 import { getAccessTokenForBackend } from '@/lib/authSession';
 import { useBackendSession } from '@/lib/auth/authConstants';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
@@ -11,7 +10,6 @@ export async function fetchMomDailySummaryFromBackend(
   userId: number,
   periodName: string,
   summaryDate: string,
-  userScopes: UserScopesForCapex,
 ): Promise<DailyMOMSummaryRow[] | null> {
   if (!isCapexBeConfigured()) return null;
 
@@ -34,9 +32,6 @@ export async function fetchMomDailySummaryFromBackend(
           userId,
           periodName,
           summaryDate,
-          scopeAll: userScopes.all,
-          scopeHuNames: Array.from(userScopes.hus),
-          scopeArchetypeNames: Array.from(userScopes.archetypes),
         }),
         ...(bff ? { retryOn401: true } : {}),
       });

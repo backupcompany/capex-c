@@ -50,7 +50,7 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, on
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {filteredCatalogue.map(item => (
-                        <button
+                        <button type="button"
                             key={item.id}
                             onClick={() => setSelectedItem(item)}
                             className={`w-full text-left p-3 border-b border-siloam-border last:border-b-0 transition-colors ${selectedItem?.id === item.id ? 'bg-siloam-blue/10' : 'hover:bg-siloam-bg'}`}
@@ -77,13 +77,13 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, on
                                 />
                             </div>
                         </div>
-                        <button onClick={handleAddClick} className="bg-siloam-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-siloam-blue/90">
+                        <button type="button" onClick={handleAddClick} className="bg-siloam-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-siloam-blue/90">
                             Add to Room
                         </button>
                     </div>
                 )}
                  <div className="p-4 border-t border-siloam-border flex justify-end">
-                    <button onClick={onClose} className="text-sm font-semibold px-4 py-2 rounded-lg border border-siloam-border hover:bg-siloam-border">Close</button>
+                    <button type="button" onClick={onClose} className="text-sm font-semibold px-4 py-2 rounded-lg border border-siloam-border hover:bg-siloam-border">Close</button>
                 </div>
             </div>
         </div>

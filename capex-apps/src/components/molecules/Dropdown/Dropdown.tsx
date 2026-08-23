@@ -42,7 +42,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ label, options, selectedValu
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {label && <label className="text-xs font-bold text-siloam-text-secondary uppercase mb-1 block">{label}</label>}
+      {label && <p className="text-xs font-bold text-siloam-text-secondary uppercase mb-1 block">{label}</p>}
       
       <button
         type="button"

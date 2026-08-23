@@ -2,6 +2,7 @@ import { refreshBackendSession } from './authApi';
 import { authDebug } from './authDebug';
 import { broadcastSessionRefreshed } from './tabSessionBroadcast';
 import { LS_SESSION_REFRESHED_AT } from './tabSessionKeys';
+import { secureId } from '../secureId';
 
 const LS_REFRESH_LOCK = 'capex.auth.refreshLock';
 const LOCK_STALE_MS = 30_000;
@@ -46,7 +47,7 @@ function clearLock(owner: string): void {
 }
 
 function randomOwner(): string {
-  return `${now()}-${Math.random().toString(36).slice(2)}`;
+  return secureId(`${now()}-`);
 }
 
 async function waitForPeerRefresh(maxMs: number): Promise<boolean> {

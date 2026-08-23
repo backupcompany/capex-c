@@ -537,7 +537,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
   }, [useWindow, windowQuery.hasNextWindow, windowQuery.isFetchingNextWindow, windowQuery.fetchNextWindow]);
 
   if (!canView) {
-    return <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>;
+    return <div className="text-center p-8 text-danger">Anda tidak memiliki izin untuk melihat halaman ini.</div>;
   }
 
   const showFilteredEmptyState =
@@ -559,13 +559,13 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
         </div>
         {isDirty && canEdit && (
           <div className="flex items-center space-x-2">
-            <button
+            <button type="button"
               onClick={handleCancel}
               className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg"
             >
               Cancel
             </button>
-            <button
+            <button type="button"
               onClick={handleSave}
               className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90"
             >
@@ -601,7 +601,7 @@ export const GRUpdatePage: React.FC<GRUpdatePageProps> = memo(function GRUpdateP
       <div className="bg-siloam-surface rounded-xl shadow-soft p-4">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-siloam-text-primary">GR Status:</label>
+            <p className="text-sm font-medium text-siloam-text-primary">GR Status:</p>
             <div className="flex items-center gap-4 flex-wrap">
               {(
                 [

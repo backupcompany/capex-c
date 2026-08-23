@@ -35,9 +35,11 @@ import { areUserScopesReadyForList } from '@/lib/appUserBootstrap';
 import type { PagePreloads } from '@/hooks/usePagePreloads';
 import type { ShowToastOptions } from '@/contexts/ToastContext';
 import { PageContentSkeleton } from '@/components/app-shell/PageContentSkeleton';
+import { canNavigateToPage, type UserDataScopeShape } from '@/lib/pagePermissions';
 
 type PermissionsLike = {
   canAccessPage: (page: Page) => boolean;
+  userScopes: UserDataScopeShape;
 };
 
 export type AppRouteRendererProps = {
@@ -117,14 +119,18 @@ function AppRouteRendererComponent({
     );
   }
 
-  if (!permissions.canAccessPage(routePage)) {
+  if (
+    !canNavigateToPage(routePage, permissions.canAccessPage(routePage), permissions.userScopes)
+  ) {
     return (
       <div className="flex-1 p-4 md:p-8 text-center h-screen flex items-center justify-center">
         <div className="bg-siloam-surface rounded-xl p-8 shadow-soft max-w-md">
           <div className="text-6xl mb-4">🔒</div>
           <h2 className="text-2xl font-bold text-siloam-text-primary mb-2">Access Denied</h2>
           <p className="text-siloam-text-secondary mb-4">
-            You don&apos;t have permission to access this page.
+            {!permissions.canAccessPage(routePage)
+              ? "You don't have permission to access this page."
+              : 'Akun ini belum punya data scope (All / Network / HU). Minta Super Admin set scope di User Management.'}
           </p>
           <p className="text-sm text-siloam-text-secondary">
             Please contact your administrator if you believe this is an error.
@@ -183,6 +189,8 @@ function AppRouteRendererComponent({
         <LazyCapexProjectListPage
           key={`cpl-${currentUser.id}`}
           currentUser={currentUser}
+          // Required: page RBAC must use shell matrix (not preload/master roles).
+          allRoles={allRoles}
           periodName={selectedPeriodName}
           budgetPeriods={allPeriods}
           preloadedProjectList={pagePreloads.cpl}

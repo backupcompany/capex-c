@@ -68,7 +68,7 @@ export const POManagementPanel: React.FC<POManagementPanelProps> = ({
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Purchase Orders</h2>
                 {canCreate && (
-                    <button onClick={onOpenCreateModal} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft">
+                    <button type="button" onClick={onOpenCreateModal} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft">
                         + Create New PO
                     </button>
                 )}
@@ -98,10 +98,10 @@ export const POManagementPanel: React.FC<POManagementPanelProps> = ({
                                 <td className="px-4 py-3 text-center space-x-2 whitespace-nowrap">
                                     <button type="button" onClick={() => handleViewPdf(po)} className="text-siloam-blue hover:underline">View PDF</button>
                                     {(po.status === 'Active' || po.status === 'Partially Received') && (
-                                        <button onClick={() => onOpenGoodsReceivedModal(po)} className="text-siloam-green hover:underline">Mark Received</button>
+                                        <button type="button" onClick={() => onOpenGoodsReceivedModal(po)} className="text-siloam-green hover:underline">Mark Received</button>
                                     )}
                                     {po.status === 'Active' && (
-                                        <button onClick={() => handleCancel(po)} className="text-danger hover:underline">Cancel</button>
+                                        <button type="button" onClick={() => handleCancel(po)} className="text-danger hover:underline">Cancel</button>
                                     )}
                                 </td>
                             </tr>

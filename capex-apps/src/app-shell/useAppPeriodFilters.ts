@@ -283,17 +283,9 @@ export function useAppPeriodFilters({
         sensitivity: 'base',
       }),
     );
-    if (selectedHuId && !list.some((u) => String(u.id) === String(selectedHuId))) {
-      for (const arch of currentBudgetPeriod.archetypes) {
-        const hu = arch.units.find((u) => String(u.id) === String(selectedHuId));
-        if (hu) {
-          list.unshift(hu);
-          break;
-        }
-      }
-    }
+    // Do not inject selectedHuId when outside assignment scope (role change / pin leftover → Budget HU 400).
     return list;
-  }, [selectedArchetypeId, currentBudgetPeriod, permissions, selectedHuId]);
+  }, [selectedArchetypeId, currentBudgetPeriod, permissions]);
 
   useEffect(() => {
     if (!currentBudgetPeriod) return;
@@ -323,11 +315,15 @@ export function useAppPeriodFilters({
         ) {
           setSelectedArchetypeId(visibleArchetypes[0].id);
         }
+      } else if (selectedArchetypeId && routePage !== Page.ExecutiveSummary) {
+        setSelectedArchetypeId(null);
       }
       if (visibleHUs.length > 0) {
         if (!selectedHuId || !visibleHUs.some((u) => String(u.id) === String(selectedHuId))) {
           setSelectedHuId(visibleHUs[0].id);
         }
+      } else if (selectedHuId) {
+        setSelectedHuId(null);
       }
       return;
     }
@@ -338,7 +334,22 @@ export function useAppPeriodFilters({
 
     if (pin?.huId || pin?.huCode) {
       const found = findHuInBudgetPeriod(currentBudgetPeriod, pin.huId, pin.huCode);
+      let pinInScope = false;
       if (found) {
+        const arch = currentBudgetPeriod.archetypes.find(
+          (a) => String(a.id) === String(found.archetypeId),
+        );
+        const unit = arch?.units?.find((u) => String(u.id) === String(found.huId));
+        pinInScope =
+          permissions.userScopes.all ||
+          (!!arch &&
+            (permissions.userScopes.archetypes.has(arch.name) ||
+              permissions.userScopes.archetypeIds.has(arch.id))) ||
+          (!!unit &&
+            (permissions.userScopes.hus.has(unit.name) ||
+              permissions.userScopes.huIds.has(unit.id)));
+      }
+      if (found && pinInScope) {
         if (String(selectedArchetypeId) !== String(found.archetypeId)) {
           setSelectedArchetypeId(found.archetypeId);
         }
@@ -354,13 +365,9 @@ export function useAppPeriodFilters({
         return;
       }
 
-      if (pin.archetypeId && String(selectedArchetypeId) !== String(pin.archetypeId)) {
-        setSelectedArchetypeId(pin.archetypeId);
-      }
-      if (pin.huId && String(selectedHuId) !== String(pin.huId)) {
-        setSelectedHuId(pin.huId);
-      }
-      return;
+      // Stale pin from a previous role/scope — clear and fall through to visible defaults.
+      pinnedFilterRef.current = null;
+      clearBudgetHuFilterSelection();
     }
 
     if (isLoadingBudgetPeriod) return;
@@ -378,11 +385,15 @@ export function useAppPeriodFilters({
       ) {
         setSelectedArchetypeId(visibleArchetypes[0].id);
       }
+    } else if (selectedArchetypeId && routePage !== Page.ExecutiveSummary) {
+      setSelectedArchetypeId(null);
     }
     if (visibleHUs.length > 0) {
       if (!selectedHuId || !visibleHUs.some((u) => String(u.id) === String(selectedHuId))) {
         setSelectedHuId(visibleHUs[0].id);
       }
+    } else if (selectedHuId) {
+      setSelectedHuId(null);
     }
   }, [
     currentBudgetPeriod,

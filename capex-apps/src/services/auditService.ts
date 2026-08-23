@@ -3,6 +3,7 @@ import {
   fetchAuditLogsForEntityFromBackend,
   saveAuditLogsBatchViaBackend,
 } from './auditApi';
+import { secureId } from '../lib/secureId';
 
 /**
  * Compares the old and new project state and saves audit logs for any detected changes.
@@ -55,7 +56,7 @@ export const logProjectChanges = async (
   }
 
   const logs: AuditLog[] = changes.map((change) => ({
-    id: `audit-${change.entityId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    id: secureId(`audit-${change.entityId}-`),
     ...change,
   })) as AuditLog[];
 

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthContextService } from '../auth/auth-context.service';
 import { AuthZService } from '../auth/auth-z.service';
@@ -80,6 +81,10 @@ export class TaskActionsService {
   private async authedClient(accessToken: string, userId: number): Promise<SupabaseClient> {
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     return client;
+  }
+
+  private isTaskPrivilegeUser(user: { assignments?: { roleName?: string }[] }): boolean {
+    return isWorkflowBypassRole(user) || this.isSuperAdminUser(user);
   }
 
   private isSuperAdminUser(user: { assignments?: { roleName?: string }[] }): boolean {
@@ -301,7 +306,7 @@ export class TaskActionsService {
       throw new BadRequestException('System-completed tasks cannot be reverted from this action.');
     }
     const completedBy = Number(log.completedByUserId);
-    if (!this.isSuperAdminUser(user) && completedBy !== Number(user.id)) {
+    if (!this.isTaskPrivilegeUser(user) && completedBy !== Number(user.id)) {
       throw new BadRequestException('Only the user who completed the task can revert it.');
     }
 
@@ -390,7 +395,7 @@ export class TaskActionsService {
     if (!status.reportedNotYetByUserId) {
       throw new BadRequestException('Task has no active report.');
     }
-    if (Number(status.reportedNotYetByUserId) !== Number(user.id) && !this.isSuperAdminUser(user)) {
+    if (Number(status.reportedNotYetByUserId) !== Number(user.id) && !this.isTaskPrivilegeUser(user)) {
       throw new BadRequestException('Only the user who reported the task can withdraw it.');
     }
 
@@ -427,7 +432,7 @@ export class TaskActionsService {
       throw new BadRequestException('System completion remarks cannot be edited.');
     }
     const completedBy = Number(log.completedByUserId);
-    if (!this.isSuperAdminUser(user) && completedBy !== Number(user.id)) {
+    if (!this.isTaskPrivilegeUser(user) && completedBy !== Number(user.id)) {
       throw new BadRequestException('Only the user who completed the task can edit the remark.');
     }
 
@@ -553,7 +558,7 @@ export class TaskActionsService {
       return { success: true, study: toCamelCase(data), fsStatus: conclusion };
     }
 
-    const id = `FS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = `FS-${randomUUID()}`;
     const insertRow = {
       id,
       project_id: projectId,

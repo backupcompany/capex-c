@@ -48,13 +48,13 @@ export const MassAddAssetsModal: React.FC<MassAddAssetsModalProps> = ({ isOpen, 
         if (!row.assetName.trim()) rowErrors.assetName = 'Required';
         
         const budget = parseCurrency(row.budgetPlan);
-        if (isNaN(budget) || !row.budgetPlan) rowErrors.budgetPlan = 'Invalid number';
+        if (Number.isNaN(budget) || !row.budgetPlan) rowErrors.budgetPlan = 'Invalid number';
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(row.endDateTarget)) {
             rowErrors.endDateTarget = 'Use YYYY-MM-DD format';
         } else {
             const date = new Date(row.endDateTarget);
-            if (isNaN(date.getTime())) {
+            if (Number.isNaN(date.getTime())) {
                 rowErrors.endDateTarget = 'Invalid date';
             }
         }
@@ -181,19 +181,19 @@ export const MassAddAssetsModal: React.FC<MassAddAssetsModalProps> = ({ isOpen, 
                                             </select>
                                         </td>
                                         <td className="text-center">
-                                            <button onClick={() => deleteRow(row.id)} className="text-red-500 text-xl font-bold p-1 rounded-full hover:bg-red-100">&times;</button>
+                                            <button type="button" onClick={() => deleteRow(row.id)} className="text-red-500 text-xl font-bold p-1 rounded-full hover:bg-red-100">&times;</button>
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
-                     <button onClick={addRow} className="mt-4 text-sm text-siloam-blue hover:underline">+ Add Row</button>
+                     <button type="button" onClick={addRow} className="mt-4 text-sm text-siloam-blue hover:underline">+ Add Row</button>
                 </div>
                 
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
-                    <button onClick={handleSave} disabled={isSaveDisabled} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
+                    <button type="button" onClick={handleSave} disabled={isSaveDisabled} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
                         Save {rows.length} Assets
                     </button>
                 </div>

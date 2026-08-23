@@ -1,6 +1,7 @@
 import type { Task, UserRole, WorkflowSet, WorkflowStep } from '@/types';
 import { SYSTEM_TRIGGER_EVENTS, type SystemTriggerEvent } from '@/types';
 import { getTaskTriggerEvents, prepareTaskTriggerEventsForSave } from '@/lib/systemTriggerEvents';
+import { secureId } from '@/lib/secureId';
 
 export type TaskMasterSpreadsheetRow = {
   id: string;
@@ -71,7 +72,7 @@ export function createEmptyWorkflowStepRow(
 
 /** Satu workflow baru (grup unik) + satu baris step kosong. */
 export function createNewWorkflowGroup(stepCount = 1): WorkflowSetSpreadsheetRow[] {
-  const groupId = `wf-new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const groupId = secureId('wf-new-');
   return Array.from({ length: stepCount }, (_, i) => ({
     ...createEmptyWorkflowStepRow(i, groupId),
     stepOrder: i + 1,
@@ -306,7 +307,7 @@ export function buildWorkflowSetsFromSpreadsheetRows(
         ? groupId
         : first.workflowId.trim() ||
           (existingWorkflows.some((w) => w.id === groupId) ? groupId : '') ||
-          `wf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          secureId('wf-');
 
     const nameKey = first.workflowName.trim().toLowerCase();
     const prevGroup = usedNames.get(nameKey);

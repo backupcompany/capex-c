@@ -93,7 +93,7 @@ export const AdhocTaskTimelineItem: React.FC<AdhocTaskTimelineItemProps> = ({ ta
                                 className="w-full p-2 border border-siloam-border rounded-lg bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                                 rows={3}
                             />
-                            <button
+                            <button type="button"
                                 onClick={handleSubmit}
                                 disabled={isSubmitting || !remark}
                                 className="mt-2 w-full bg-siloam-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-siloam-blue/90 disabled:bg-gray-400"

@@ -17,8 +17,8 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({ title, option
     // This is a simplified version. A more robust one might handle outside clicks to close.
     return (
          <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">{title}</label>
-            <select
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-title">{title}</label>
+            <select id="fld-title"
                 multiple
                 value={selected}
                 onChange={(e) => {
@@ -116,7 +116,7 @@ export const TaskFilterPanel: React.FC<TaskFilterPanelProps> = ({
                 </div>
                 <div className="flex items-center gap-4">
                      {children}
-                    <button
+                    <button type="button"
                         onClick={toggleFilterVisible}
                         className={`px-4 py-2 flex items-center gap-2 rounded-lg border transition-colors ${isFilterVisible ? 'bg-siloam-blue text-white border-siloam-blue' : 'bg-siloam-surface border-siloam-border hover:bg-siloam-bg'}`}
                     >
@@ -130,10 +130,10 @@ export const TaskFilterPanel: React.FC<TaskFilterPanelProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {taskViewModeOptions && taskViewMode && setTaskViewMode && (
                             <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary">
+                                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-tampilan-task">
                                     Tampilan Task
                                 </label>
-                                <select
+                                <select id="fld-tampilan-task"
                                     value={taskViewMode}
                                     onChange={(e) => setTaskViewMode(e.target.value)}
                                     className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -163,7 +163,7 @@ export const TaskFilterPanel: React.FC<TaskFilterPanelProps> = ({
                         )}
                         <div className="space-y-4">
                              {extraFilters}
-                            <button onClick={resetFilters} className="w-full text-sm text-siloam-blue hover:underline">Reset Filters</button>
+                            <button type="button" onClick={resetFilters} className="w-full text-sm text-siloam-blue hover:underline">Reset Filters</button>
                         </div>
                     </div>
                 </div>

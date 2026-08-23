@@ -8,7 +8,7 @@ interface SlicerPanelProps {
 }
 
 const SlicerButton: React.FC<{ label: string; isSelected: boolean; onClick: () => void }> = ({ label, isSelected, onClick }) => (
-    <button
+    <button type="button"
       onClick={onClick}
       className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
         isSelected

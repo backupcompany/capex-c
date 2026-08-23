@@ -115,10 +115,10 @@ export const MigrateAssetTypeModal: React.FC<MigrateAssetTypeModalProps> = ({
                                 )}
                             </p>
                             <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary">
+                                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-pindahkan-ke-asset-type">
                                     Pindahkan ke Asset Type:
                                 </label>
-                                <select
+                                <select id="fld-pindahkan-ke-asset-type"
                                     value={migrationTargetId}
                                     onChange={(e) => setMigrationTargetId(e.target.value)}
                                     className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"

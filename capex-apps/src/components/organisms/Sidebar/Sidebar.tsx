@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="shrink-0">
           <div className="flex justify-between items-center">
             <AppBrand isCollapsed={showCollapsed} />
-            <button
+            <button type="button"
               onClick={onClose}
               className="p-2 md:hidden"
               aria-label="Close navigation menu"
@@ -257,7 +257,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {showProfileNav && (
-            <button
+            <button type="button"
               onClick={() => onNavigate(Page.Profile)}
               title={showCollapsed ? 'My Profile' : undefined}
               className={`flex items-center text-sm font-medium rounded-lg transition-colors ${
@@ -274,7 +274,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {onLogout && (
-            <button
+            <button type="button"
               onClick={onLogout}
               title={showCollapsed ? 'Logout' : undefined}
               className={`flex items-center text-sm font-medium rounded-lg text-white/90 hover:bg-white/15 hover:text-white transition-colors ${

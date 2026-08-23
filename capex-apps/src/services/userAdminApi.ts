@@ -56,11 +56,31 @@ export async function postBulkDeleteUsers(
   );
 }
 
-/** Sync public.users → Supabase Auth via capexbe (password default 123456). */
+/** Sync public.users → Supabase Auth via capexbe (random temp password for new Auth users). */
 export async function postSyncUsersToAuth(appUserId: number): Promise<SyncUsersToAuthResponse> {
   return postToCapexBe<SyncUsersToAuthResponse>(
     '/user-admin/sync-to-auth',
     { userId: appUserId },
+    null,
+  );
+}
+
+export type ProvisionAuthResponse = {
+  userId: number;
+  email: string;
+  authId: string;
+  status: 'created' | 'linked' | 'already_linked';
+  temporaryPassword: string | null;
+};
+
+/** Super Admin: create/link auth.users for one public.users row. */
+export async function postProvisionAuthForUser(
+  appUserId: number,
+  targetUserId: number,
+): Promise<ProvisionAuthResponse> {
+  return postToCapexBe<ProvisionAuthResponse>(
+    '/user-admin/provision-auth',
+    { userId: appUserId, targetUserId },
     null,
   );
 }

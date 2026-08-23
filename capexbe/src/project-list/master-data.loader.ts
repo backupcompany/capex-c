@@ -193,7 +193,9 @@ export async function getAllUsers(client: SupabaseClient): Promise<any[]> {
               })
               .filter((x: unknown): x is string => x != null && String(x) !== '') || [];
 
+          const roleId = Number(ua.role_id);
           userAssignments.push({
+            ...(Number.isFinite(roleId) && roleId > 0 ? { roleId } : {}),
             roleName,
             assignedScopes: Array.from(new Set(assignmentScopes)),
           });
@@ -247,7 +249,9 @@ export async function getUserById(client: SupabaseClient, userId: number): Promi
         })
         .filter((x: unknown): x is string => x != null && String(x) !== '') ?? [];
 
+    const roleId = Number((ua as { role_id?: number }).role_id);
     userAssignments.push({
+      ...(Number.isFinite(roleId) && roleId > 0 ? { roleId } : {}),
       roleName,
       assignedScopes: Array.from(new Set(assignmentScopes)),
     });

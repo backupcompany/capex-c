@@ -122,7 +122,15 @@ export class AuthController {
 
   }
 
-
+  /** Local demo only — one-click session, no password (see isLocalDevEnterAllowed). */
+  @Public()
+  @Post('dev-enter')
+  async localDevEnter(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.auth.localDevEnter(res, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+  }
 
   @Public()
   @Post('forgot-password')
@@ -258,6 +266,9 @@ export class AuthController {
 
   @Post('change-password')
   async changePassword(@Req() req: Request, @Body() body: unknown) {
+    if (isPasswordLoginDisabled()) {
+      throw new UnauthorizedException('Password login is disabled. Use SSO / Microsoft account settings.');
+    }
     const cookies = parseCookies(req.headers.cookie);
     this.csrf.assertValid(req.method, cookies, req.headers);
     const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();

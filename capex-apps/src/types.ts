@@ -282,6 +282,8 @@ export interface BudgetPeriod {
 
 export interface UserAssignment {
     roleName: string;
+    /** Master role id — preferred match key for permission matrix. */
+    roleId?: number;
     assignedScopes: string[];
 }
 

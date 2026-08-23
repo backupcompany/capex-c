@@ -50,10 +50,16 @@ export function isPasswordLoginDisabled(): boolean {
   return !isPasswordLoginEnabledInMode();
 }
 
-/** Comma-separated email domains allowed for SSO exchange (empty = no restriction). */
+/** Comma-separated email domains for SSO + user provisioning.
+ * Unset in SSO mode → default `siloamhospitals.com` (minimizes bad creates / false SSO).
+ * Set `ALLOWED_EMAIL_DOMAINS=*` to allow any domain (dev only).
+ */
 export function getAllowedEmailDomains(): Set<string> | null {
   const raw = process.env.ALLOWED_EMAIL_DOMAINS?.trim();
-  if (!raw) return null;
+  if (!raw) {
+    return isPasswordLoginDisabled() ? new Set(['siloamhospitals.com']) : null;
+  }
+  if (raw === '*' || raw.toLowerCase() === 'any') return null;
   const domains = raw
     .split(',')
     .map((d) => d.trim().toLowerCase())
@@ -66,4 +72,15 @@ export function emailDomainAllowed(email: string | undefined): boolean {
   if (!allowed) return true;
   const domain = email?.split('@')[1]?.trim().toLowerCase();
   return Boolean(domain && allowed.has(domain));
+}
+
+/** User create/update — reject non-allowed domains before they hit SSO. */
+export function assertEmailDomainAllowedForUser(email: string): void {
+  const normalized = email.trim().toLowerCase();
+  if (emailDomainAllowed(normalized)) return;
+  const allowed = getAllowedEmailDomains();
+  const list = allowed ? [...allowed].sort().join(', ') : 'siloamhospitals.com';
+  throw new Error(
+    `Email harus memakai domain yang diizinkan (${list}).`,
+  );
 }

@@ -47,6 +47,75 @@ function assetFieldsChanged(prev: Asset, next: Asset): boolean {
   );
 }
 
+/** Diff assets; empty original + empty edit = no change (page rows ship assets: []). */
+function collectAssetTouchIds(original: Project, edited: Project): Set<string> {
+  const touched = new Set<string>();
+  const originalAssets = original.assets ?? [];
+  const editedAssets = edited.assets ?? [];
+  // Page snapshot has no assets; don't treat later modal hydrate alone — callers stage full project.
+  if (originalAssets.length === 0 && editedAssets.length === 0) return touched;
+
+  const originalAssetMap = new Map(originalAssets.map((a) => [a.id, a] as const));
+  const editedAssetMap = new Map(editedAssets.map((a) => [a.id, a] as const));
+
+  for (const [assetId, nextAsset] of editedAssetMap.entries()) {
+    const prevAsset = originalAssetMap.get(assetId);
+    if (!prevAsset || assetFieldsChanged(prevAsset, nextAsset)) {
+      touched.add(assetId);
+    }
+  }
+  for (const removedAssetId of originalAssetMap.keys()) {
+    if (!editedAssetMap.has(removedAssetId)) touched.add(removedAssetId);
+  }
+  return touched;
+}
+
+/**
+ * SpreadsheetTable sends the whole page on one cell edit.
+ * Only keep rows that actually differ from the server/original snapshot.
+ */
+export function stageChangedProjectsFromPage(
+  pageData: Project[],
+  originals: Map<string, Project>,
+  edits: Map<string, Project>,
+): number {
+  let staged = 0;
+  for (const project of pageData) {
+    const original = originals.get(project.id);
+    if (!original) {
+      // Create / unknown baseline — keep prior staged assets if table row is assets:[].
+      const prev = edits.get(project.id);
+      edits.set(project.id, {
+        ...project,
+        assets:
+          (project.assets?.length ?? 0) > 0
+            ? project.assets
+            : (prev?.assets ?? []),
+      });
+      staged += 1;
+      continue;
+    }
+
+    const next: Project = {
+      ...project,
+      assets:
+        (project.assets?.length ?? 0) > 0
+          ? project.assets!
+          : (edits.get(project.id)?.assets ?? original.assets ?? []),
+    };
+
+    const assetTouches = collectAssetTouchIds(original, next);
+    if (!projectFieldsChanged(original, next) && assetTouches.size === 0) {
+      edits.delete(project.id);
+      continue;
+    }
+
+    edits.set(project.id, next);
+    staged += 1;
+  }
+  return staged;
+}
+
 function normalizePipelineData(project: Project) {
   return [...(project.pipelineData ?? [])]
     .map((row) => ({
@@ -60,7 +129,7 @@ function normalizePipelineData(project: Project) {
     );
 }
 
-function projectFieldsChanged(prev: Project, next: Project): boolean {
+export function projectFieldsChanged(prev: Project, next: Project): boolean {
   return (
     prev.projectName !== next.projectName ||
     (prev.axCode || '') !== (next.axCode || '') ||
@@ -105,8 +174,8 @@ export function collectBudgetHuSaveChanges(
     }
 
     const projectChanged = projectFieldsChanged(originalProject, editedProject);
-    const originalAssetMap = new Map(originalProject.assets.map((a) => [a.id, a] as const));
-    const editedAssetMap = new Map(editedProject.assets.map((a) => [a.id, a] as const));
+    const originalAssetMap = new Map((originalProject.assets ?? []).map((a) => [a.id, a] as const));
+    const editedAssetMap = new Map((editedProject.assets ?? []).map((a) => [a.id, a] as const));
     let assetChangedInProject = false;
 
     for (const [assetId, nextAsset] of editedAssetMap.entries()) {
@@ -130,7 +199,7 @@ export function collectBudgetHuSaveChanges(
         JSON.stringify(normalizePipelineData(editedProject));
     if (pipelineDataChanged) {
       assetChangedInProject = true;
-      for (const asset of editedProject.assets) {
+      for (const asset of editedProject.assets ?? []) {
         touchedAssetIds.add(asset.id);
       }
     }
@@ -175,31 +244,15 @@ export function collectBudgetHuSessionSaveChanges(
     const originalProject = originals.get(projectId);
     if (!originalProject) {
       changedProjectIds.add(projectId);
-      editedProject.assets?.forEach((a) => touchedAssetIds.add(a.id));
+      (editedProject.assets ?? []).forEach((a) => touchedAssetIds.add(a.id));
       continue;
     }
 
     const projectChanged = projectFieldsChanged(originalProject, editedProject);
-    const originalAssetMap = new Map(originalProject.assets.map((a) => [a.id, a] as const));
-    const editedAssetMap = new Map(editedProject.assets.map((a) => [a.id, a] as const));
-    let assetChangedInProject = false;
+    const assetTouches = collectAssetTouchIds(originalProject, editedProject);
+    for (const id of assetTouches) touchedAssetIds.add(id);
 
-    for (const [assetId, nextAsset] of editedAssetMap.entries()) {
-      const prevAsset = originalAssetMap.get(assetId);
-      if (!prevAsset || assetFieldsChanged(prevAsset, nextAsset)) {
-        assetChangedInProject = true;
-        touchedAssetIds.add(assetId);
-      }
-    }
-
-    for (const removedAssetId of originalAssetMap.keys()) {
-      if (!editedAssetMap.has(removedAssetId)) {
-        assetChangedInProject = true;
-        touchedAssetIds.add(removedAssetId);
-      }
-    }
-
-    if (projectChanged || assetChangedInProject) {
+    if (projectChanged || assetTouches.size > 0) {
       changedProjectIds.add(projectId);
     }
   }
@@ -229,6 +282,27 @@ export function mergeSessionEditsIntoHu(
     ...hu,
     projects: dedupeProjectsById([...routine, ...pipeline, ...strategic]),
   };
+}
+
+/** Mutate period HU: upsert projects and/or remove by id. */
+export function upsertProjectsOnHu(
+  period: BudgetPeriod,
+  huId: string,
+  archetypeId: string | null,
+  projects: Project[],
+  removeIds?: Iterable<string>,
+): void {
+  const container = findHuContainer(period, huId, archetypeId);
+  if (!container) return;
+  const remove = removeIds ? new Set(removeIds) : null;
+  if (remove?.size) {
+    container.hu.projects = container.hu.projects.filter((p) => !remove.has(p.id));
+  }
+  for (const project of projects) {
+    const idx = container.hu.projects.findIndex((p) => p.id === project.id);
+    if (idx >= 0) container.hu.projects[idx] = project;
+    else container.hu.projects.push(project);
+  }
 }
 
 /** Payload kecil: hanya HU aktif + project yang berubah (untuk BE / Supabase incremental). */

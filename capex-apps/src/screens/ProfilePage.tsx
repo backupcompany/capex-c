@@ -5,6 +5,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { updatePassword } from '../lib/authSupabase';
 import { normalizeAuthPassword } from '@/lib/auth/normalizeAuthInput';
 import { formatUserPublicId } from '@/lib/publicUserId';
+import { isPasswordLoginEnabled } from '@/lib/auth/authConstants';
 import { useToast } from '../contexts/ToastContext';
 
 interface ProfilePageProps {
@@ -26,6 +27,7 @@ export const ProfilePage = memo(function ProfilePage({
 }: ProfilePageProps) {
     const { showToast } = useToast();
     const { getPermissionFor } = usePermissions(currentUser, allRoles);
+    const passwordLoginEnabled = isPasswordLoginEnabled();
 
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
@@ -193,6 +195,7 @@ export const ProfilePage = memo(function ProfilePage({
                     )}
                 </div>
 
+                {passwordLoginEnabled ? (
                 <div className="bg-siloam-surface p-6 rounded-xl shadow-soft border border-siloam-border">
                     <h3 className="text-lg font-bold text-siloam-text-primary mb-4 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-siloam-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
@@ -226,8 +229,8 @@ export const ProfilePage = memo(function ProfilePage({
                                 placeholder="Minimal 6 karakter"
                             />
                             <div>
-                                <label className="block text-sm font-medium text-siloam-text-primary mb-1">Konfirmasi password baru</label>
-                                <input
+                                <label className="block text-sm font-medium text-siloam-text-primary mb-1" htmlFor="fld-konfirmasi-password-baru">Konfirmasi password baru</label>
+                                <input id="fld-konfirmasi-password-baru"
                                     type="password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -263,6 +266,14 @@ export const ProfilePage = memo(function ProfilePage({
                         </form>
                     )}
                 </div>
+                ) : (
+                <div className="bg-siloam-surface p-6 rounded-xl shadow-soft border border-siloam-border">
+                    <h3 className="text-lg font-bold text-siloam-text-primary mb-2">Login</h3>
+                    <p className="text-sm text-siloam-text-secondary">
+                        Capex Pro memakai Microsoft SSO. Ubah password lewat akun Microsoft / Entra ID Siloam, bukan di aplikasi ini.
+                    </p>
+                </div>
+                )}
             </div>
         </div>
     );
@@ -289,7 +300,7 @@ function PasswordField({
 }) {
     return (
         <div>
-            <label className="block text-sm font-medium text-siloam-text-primary mb-1">{label}</label>
+            <p className="block text-sm font-medium text-siloam-text-primary mb-1">{label}</p>
             <div className="relative">
                 <input
                     type={show ? 'text' : 'password'}

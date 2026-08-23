@@ -296,21 +296,21 @@ export const SankeyDiagram = memo(function SankeyDiagram({ title, data, width = 
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-siloam-text-primary">{title}</h3>
                 <div className="flex bg-siloam-bg p-1 rounded-lg border border-siloam-border">
-                    <button
+                    <button type="button"
                         onClick={() => setViewMode('chart')}
                         className={`p-1.5 rounded-md transition-all ${viewMode === 'chart' ? 'bg-white shadow-sm text-siloam-blue' : 'text-siloam-text-secondary hover:text-siloam-text-primary'}`}
                         title="Chart View"
                     >
                         <ChartIcon />
                     </button>
-                    <button
+                    <button type="button"
                         onClick={() => setViewMode('table')}
                         className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-siloam-blue' : 'text-siloam-text-secondary hover:text-siloam-text-primary'}`}
                         title="Table View"
                     >
                         <TableIcon />
                     </button>
-                    <button
+                    <button type="button"
                         onClick={() => setViewMode('card')}
                         className={`p-1.5 rounded-md transition-all ${viewMode === 'card' ? 'bg-white shadow-sm text-siloam-blue' : 'text-siloam-text-secondary hover:text-siloam-text-primary'}`}
                         title="Card View"

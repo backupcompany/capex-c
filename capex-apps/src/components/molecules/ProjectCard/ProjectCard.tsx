@@ -45,7 +45,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, categoryName,
             </div>
 
             <div className="pt-3 border-t border-siloam-border flex justify-end">
-                <button
+                <button type="button"
                     onClick={onEditClick}
                     className="bg-siloam-blue text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-siloam-blue/90 transition shadow-soft"
                 >

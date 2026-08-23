@@ -13,6 +13,7 @@ let csrfBootstrapInFlight: Promise<boolean> | null = null;
 /**
  * Session may exist without a readable CSRF cookie (stale tab, HMR, pre-CSRF session).
  * GET /api/auth/session re-issues capex_csrf when authenticated — call before mutating /api/be.
+ * Plain fetch (not authenticatedFetch) — avoids nested /session CSRF bootstrap.
  */
 export async function ensureCsrfToken(): Promise<boolean> {
   if (readCookie(CSRF_COOKIE)) return true;
@@ -29,6 +30,7 @@ export async function ensureCsrfToken(): Promise<boolean> {
         if (!res.ok) return false;
         return Boolean(readCookie(CSRF_COOKIE));
       } catch {
+        // Safari may log abort/HMR as "access control checks"; treat as transient.
         return false;
       } finally {
         csrfBootstrapInFlight = null;

@@ -90,7 +90,7 @@ export function buildBddConstructionColumns({
         const canEdit = isSuperAdmin || hasBDDRole || !isUnassigned;
 
         return (
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onMouseDown={(e) => e.stopPropagation()}>
             <select
               value={asset.bddPriority || ''}
               onChange={(e) => onPriorityChange(asset.id, (e.target.value as BDDPriority) || null)}

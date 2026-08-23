@@ -491,6 +491,20 @@ export async function loadProjectListQueryPage(
   const resolved = { ...resolvedBase, searchProjectIds, searchAssetIds };
 
   if (resolved.forceEmpty) {
+    let searchOutsideScope = false;
+    if (query.search.trim()) {
+      const [openProjects, openAssets] = await Promise.all([
+        resolveSearchProjectIdsForList(
+          client,
+          query.periodName,
+          query.search,
+          { archetypes: master.archetypes, hus: master.hus },
+          null,
+        ),
+        resolveSearchAssetIdsForList(client, query.periodName, query.search, null),
+      ]);
+      searchOutsideScope = openProjects.length > 0 || openAssets.length > 0;
+    }
     return {
       rawEnrichedAssets: [],
       totalCount: 0,
@@ -504,6 +518,8 @@ export async function loadProjectListQueryPage(
         cacheLayer: 'none',
         usedProgressFilter: false,
         defaultQuery,
+        scopeAll: serverScope.scopeAll,
+        searchOutsideScope,
       },
     };
   }
@@ -519,6 +535,20 @@ export async function loadProjectListQueryPage(
       searchAssetIds,
     );
     if (searchMatchingAssetIds.length === 0) {
+      let searchOutsideScope = false;
+      if (!serverScope.scopeAll && query.search.trim()) {
+        const [openProjects, openAssets] = await Promise.all([
+          resolveSearchProjectIdsForList(
+            client,
+            query.periodName,
+            query.search,
+            { archetypes: master.archetypes, hus: master.hus },
+            null,
+          ),
+          resolveSearchAssetIdsForList(client, query.periodName, query.search, null),
+        ]);
+        searchOutsideScope = openProjects.length > 0 || openAssets.length > 0;
+      }
       return {
         rawEnrichedAssets: [],
         totalCount: 0,
@@ -532,6 +562,7 @@ export async function loadProjectListQueryPage(
           cacheLayer: 'none',
           usedProgressFilter: useProgress,
           defaultQuery,
+          searchOutsideScope,
         },
       };
     }
@@ -637,6 +668,7 @@ export async function loadProjectListQueryPage(
         cacheLayer: 'none',
         usedProgressFilter: false,
         defaultQuery,
+        scopeAll: serverScope.scopeAll,
       },
     };
   }
@@ -664,7 +696,7 @@ export async function loadProjectListQueryPage(
   const pageProjects = extractProjectsFromJoinedRows(joinedRows);
   const enrichDroppedCount = Math.max(0, joinedRows.length - rawEnrichedAssets.length);
 
-  if (defaultQuery && dbMatchedCount !== dbTruthCount) {
+  if (defaultQuery && serverScope.scopeAll && dbMatchedCount !== dbTruthCount) {
     console.error(
       `[project-list-query] COUNT MISMATCH period=${query.periodName} dbTruth=${dbTruthCount} dbMatched=${dbMatchedCount} policy=${PROJECT_LIST_DATA_POLICY}`,
     );
@@ -676,12 +708,12 @@ export async function loadProjectListQueryPage(
   }
   if (process.env.PROJECT_LIST_PIPELINE_LOG !== '0') {
     console.info(
-      `[project-list-query] pipeline period=${query.periodName} page=${query.page}/${query.pageSize} dbTruth=${dbTruthCount} dbMatched=${dbMatchedCount} returned=${rawEnrichedAssets.length} enrichDropped=${enrichDroppedCount} default=${defaultQuery}`,
+      `[project-list-query] pipeline period=${query.periodName} page=${query.page}/${query.pageSize} dbTruth=${dbTruthCount} dbMatched=${dbMatchedCount} returned=${rawEnrichedAssets.length} enrichDropped=${enrichDroppedCount} default=${defaultQuery} scopeAll=${serverScope.scopeAll}`,
     );
   }
 
-  const totalCount =
-    defaultQuery && dbMatchedCount !== dbTruthCount ? dbTruthCount : dbMatchedCount;
+  // RBAC-scoped lists legitimately have dbMatched < dbTruth — never inflate total to truth.
+  const totalCount = dbMatchedCount;
 
   return {
     rawEnrichedAssets,
@@ -697,6 +729,7 @@ export async function loadProjectListQueryPage(
       cacheLayer: 'none',
       usedProgressFilter: false,
       defaultQuery,
+      scopeAll: serverScope.scopeAll,
     },
   };
 }

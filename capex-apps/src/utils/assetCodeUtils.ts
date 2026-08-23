@@ -1,4 +1,5 @@
 import type { Asset } from '../types';
+import { secureId } from '../lib/secureId';
 
 const ASSET_SEQ_PAD = 3;
 const ROUTINE_PROJECT_SEGMENT = 'RA';
@@ -35,7 +36,7 @@ export function parseAssetSequenceNumber(assetCode: string, prefix: string): num
   if (!code.startsWith(normalizedPrefix)) return null;
   const suffix = code.slice(normalizedPrefix.length);
   if (!/^\d+$/.test(suffix)) return null;
-  const n = parseInt(suffix, 10);
+  const n = Number.parseInt(suffix, 10);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -92,7 +93,7 @@ export function nextAssetCode(
 }
 
 export function newAssetId(projectCode: string): string {
-  return `ASSET-${projectCode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return secureId(`ASSET-${projectCode}-`);
 }
 
 export type AssetDefaults = {

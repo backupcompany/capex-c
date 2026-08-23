@@ -75,12 +75,12 @@ export const FSApprovalStatusModal: React.FC<FSApprovalStatusModalProps> = ({
         {!showConfirmation ? (
           <div className="p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Status Saat Ini</label>
-              <input type="text" value={currentStatus} disabled className={`${inputClass} opacity-70`} />
+              <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-status-saat-ini">Status Saat Ini</label>
+              <input id="fld-status-saat-ini" type="text" value={currentStatus} disabled className={`${inputClass} opacity-70`} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Status Baru</label>
-              <select
+              <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-status-baru">Status Baru</label>
+              <select id="fld-status-baru"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as FSConclusion)}
                 className={inputClass}
@@ -93,8 +93,8 @@ export const FSApprovalStatusModal: React.FC<FSApprovalStatusModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Follow Up Action</label>
-              <textarea
+              <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-follow-up-action">Follow Up Action</label>
+              <textarea id="fld-follow-up-action"
                 value={followUpAction}
                 onChange={(e) => setFollowUpAction(e.target.value)}
                 rows={3}

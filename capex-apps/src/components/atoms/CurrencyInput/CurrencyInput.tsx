@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { formatCurrency, parseCurrency } from '../../../lib/formatter';
 import { clampNumericValue } from '../../../lib/numericInput';
+import { caretAfterDigitCount, digitCountBefore } from './currencyInputCaret';
 
 export interface CurrencyInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> {
@@ -21,8 +22,10 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   onBlur,
   ...rest
 }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(() => formatCurrency(value));
   const [isFocused, setIsFocused] = useState(false);
+  const pendingCaret = useRef<number | null>(null);
 
   const minNum = min !== undefined ? Number(min) : undefined;
   const maxNum = max !== undefined ? Number(max) : undefined;
@@ -33,13 +36,32 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     }
   }, [value, isFocused]);
 
+  useEffect(() => {
+    if (pendingCaret.current == null || !inputRef.current) return;
+    const pos = pendingCaret.current;
+    pendingCaret.current = null;
+    inputRef.current.setSelectionRange(pos, pos);
+  }, [text]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const next = e.target.value.replace(/[^\dRp.\s-]/gi, '');
-      setText(next);
-      const parsed = clampNumericValue(parseCurrency(next), minNum, maxNum);
+      const raw = e.target.value;
+      const caret = e.target.selectionStart ?? raw.length;
+      const digitsBefore = digitCountBefore(raw, caret);
+      const digitsOnly = raw.replace(/\D/g, '');
+
+      if (!digitsOnly) {
+        pendingCaret.current = caretAfterDigitCount('Rp ', 0);
+        setText('Rp ');
+        onValueChange(0);
+        return;
+      }
+
+      const parsed = clampNumericValue(parseCurrency(raw), minNum, maxNum);
+      const formatted = formatCurrency(parsed);
+      pendingCaret.current = caretAfterDigitCount(formatted, digitsBefore);
+      setText(formatted);
       onValueChange(parsed);
-      // Keep raw text while focused — immediate formatCurrency() resets partial input (e.g. "5000000").
     },
     [maxNum, minNum, onValueChange],
   );
@@ -50,6 +72,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   return (
     <input
       {...rest}
+      ref={inputRef}
       type="text"
       inputMode="numeric"
       value={text}
@@ -57,7 +80,12 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       onChange={handleChange}
       onFocus={(e) => {
         setIsFocused(true);
-        e.target.select();
+        // Keep value intact so user can edit one digit (Ctrl/Cmd+A still selects all).
+        const el = e.currentTarget;
+        requestAnimationFrame(() => {
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        });
         onFocus?.(e);
       }}
       onBlur={(e) => {
@@ -67,7 +95,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
         setText(formatCurrency(parsed));
         onBlur?.(e);
       }}
-      className={`${alignClass} ${className}`.trim()}
+      className={`${alignClass} tabular-nums ${className}`.trim()}
     />
   );
 };

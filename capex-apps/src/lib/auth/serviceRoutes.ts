@@ -96,8 +96,9 @@ export const EXTRACTABLE_SERVICE_ROUTES: ServiceRoute[] = [
   },
 ];
 
+/** Server prefers CAPEXBE_URL (docker internal); browser falls back to NEXT_PUBLIC (/api/be). */
 export function defaultBackendBase(): string {
-  return (process.env.NEXT_PUBLIC_CAPEXBE_URL || process.env.CAPEXBE_URL || '')
+  return (process.env.CAPEXBE_URL || process.env.NEXT_PUBLIC_CAPEXBE_URL || '')
     .replace(/\/$/, '')
     .trim();
 }

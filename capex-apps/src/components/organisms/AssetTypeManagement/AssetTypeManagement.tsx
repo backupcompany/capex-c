@@ -21,8 +21,8 @@ interface AssetTypeGroupEditorFieldsProps {
 
 const AssetTypeGroupEditorFields: React.FC<AssetTypeGroupEditorFieldsProps> = ({ draft, onChange }) => (
     <div>
-        <label className="block text-sm font-medium text-siloam-text-secondary">Group Name</label>
-        <input
+        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-group-name">Group Name</label>
+        <input id="fld-group-name"
             type="text"
             value={draft.name || ''}
             onChange={(e) => onChange({ name: e.target.value })}
@@ -46,8 +46,8 @@ const AssetTypeEditorFields: React.FC<AssetTypeEditorFieldsProps> = ({
 }) => (
     <div className="space-y-4">
         <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Asset Type Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-asset-type-name">Asset Type Name</label>
+            <input id="fld-asset-type-name"
                 type="text"
                 value={draft.name || ''}
                 onChange={(e) => onChange({ name: e.target.value })}
@@ -55,8 +55,8 @@ const AssetTypeEditorFields: React.FC<AssetTypeEditorFieldsProps> = ({
             />
         </div>
         <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Asset Type Group</label>
-            <select
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-asset-type-group">Asset Type Group</label>
+            <select id="fld-asset-type-group"
                 value={draft.groupId || ''}
                 onChange={(e) => onChange({ groupId: e.target.value || undefined })}
                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -70,8 +70,8 @@ const AssetTypeEditorFields: React.FC<AssetTypeEditorFieldsProps> = ({
             </select>
         </div>
         <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Associated Workflow</label>
-            <select
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-associated-workflow">Associated Workflow</label>
+            <select id="fld-associated-workflow"
                 value={draft.workflowSetId || ''}
                 onChange={(e) => onChange({ workflowSetId: e.target.value })}
                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"

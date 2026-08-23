@@ -104,7 +104,7 @@ function parseNumber(value: string, fallback = 0): number {
 function parseOptionalNumber(value: string): number | '' {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return '';
-  const n = parseNumber(trimmed, NaN);
+  const n = parseNumber(trimmed, Number.NaN);
   return Number.isFinite(n) ? n : '';
 }
 

@@ -18,7 +18,7 @@ export function parseProjectNn(projectCode: string, huCode: string, yy: string):
   const parts = String(projectCode ?? '').trim().split('.');
   if (parts.length < 3 || parts[0] !== huCode || parts[1] !== yy) return null;
   if (parts[2].toUpperCase() === ROUTINE_PROJECT_SEGMENT) return null;
-  const n = parseInt(parts[2], 10);
+  const n = Number.parseInt(parts[2], 10);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -28,7 +28,7 @@ export function parseAssetSequence(assetCode: string, prefix: string): number | 
   if (!code.startsWith(normalizedPrefix)) return null;
   const suffix = code.slice(normalizedPrefix.length);
   if (!/^\d+$/.test(suffix)) return null;
-  const n = parseInt(suffix, 10);
+  const n = Number.parseInt(suffix, 10);
   return Number.isFinite(n) ? n : null;
 }
 

@@ -11,25 +11,52 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ALLOWLIST = join(ROOT, 'src/lib/auth/bePathAllowlist.ts');
 const ROUTES = join(ROOT, 'src/lib/auth/serviceRoutes.ts');
 
-function extractPrefixes(src, pattern) {
-  const block = src.match(pattern);
-  if (!block) return [];
-  return [...block[0].matchAll(/'([^']+)'/g)].map((m) => m[1].replace(/\/+$/, ''));
+/** Avoid `/\/+$/` (Sonar S8786). */
+function stripTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path.charCodeAt(end - 1) === 47 /* / */) end -= 1;
+  return end === path.length ? path : path.slice(0, end);
+}
+
+function extractPrefixes(src, marker) {
+  const start = src.indexOf(marker);
+  if (start < 0) return [];
+  const bracket = src.indexOf('[', start);
+  if (bracket < 0) return [];
+  let depth = 0;
+  let end = -1;
+  for (let i = bracket; i < src.length; i += 1) {
+    if (src[i] === '[') depth += 1;
+    else if (src[i] === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end < 0) return [];
+  return [...src.slice(bracket + 1, end).matchAll(/'([^']+)'/g)].map((m) => stripTrailingSlashes(m[1]));
 }
 
 const allowSrc = readFileSync(ALLOWLIST, 'utf8');
 const routesSrc = readFileSync(ROUTES, 'utf8');
 
-const allowed = extractPrefixes(allowSrc, /ALLOWED_PATH_PREFIXES = \[([\s\S]*?)\] as const/);
+const allowed = extractPrefixes(allowSrc, 'ALLOWED_PATH_PREFIXES');
 const routeNames = [...routesSrc.matchAll(/name: '([^']+)'/g)].map((m) => m[1]);
-const routePrefixes = [...routesSrc.matchAll(/prefixes: \[([\s\S]*?)\]/g)].flatMap((m) =>
-  [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1].replace(/\/+$/, '')),
-);
+const routePrefixes = [];
+let searchFrom = 0;
+while (true) {
+  const idx = routesSrc.indexOf('prefixes:', searchFrom);
+  if (idx < 0) break;
+  routePrefixes.push(...extractPrefixes(routesSrc.slice(idx), 'prefixes:'));
+  searchFrom = idx + 9;
+}
 
 const failures = [];
 
 for (const prefix of routePrefixes) {
-  const ok = allowed.some((a) => a === prefix || a.replace(/\/$/, '') === prefix);
+  const ok = allowed.some((a) => a === prefix || stripTrailingSlashes(a) === prefix);
   if (!ok) failures.push(`Service route prefix "${prefix}" not in bePathAllowlist.ts`);
 }
 

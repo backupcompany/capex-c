@@ -148,6 +148,8 @@ async function fetchPeriodTotal(
 
   accessToken?: string | null,
 
+  signal?: AbortSignal,
+
 ): Promise<{ total: number; bundle: ProjectListQueryResult | null }> {
 
   const head = await fetchCapexProjectListQuery(
@@ -167,6 +169,8 @@ async function fetchPeriodTotal(
     },
 
     accessToken,
+
+    signal,
 
   );
 
@@ -190,9 +194,12 @@ async function refillPeriodStream(
 
   accessToken?: string | null,
 
+  signal?: AbortSignal,
+
 ): Promise<void> {
 
   if (stream.exhausted) return;
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const chunk = await fetchCapexProjectListQuery(
 
@@ -211,6 +218,8 @@ async function refillPeriodStream(
     },
 
     accessToken,
+
+    signal,
 
   );
 
@@ -249,11 +258,13 @@ async function ensureStreamHead(
 
   accessToken?: string | null,
 
+  signal?: AbortSignal,
+
 ): Promise<void> {
 
   while (stream.buffer.length === 0 && !stream.exhausted) {
 
-    await refillPeriodStream(stream, baseParams, accessToken);
+    await refillPeriodStream(stream, baseParams, accessToken, signal);
 
   }
 
@@ -279,15 +290,18 @@ async function fetchMultiPeriodMergedPage(
 
   accessToken?: string | null,
 
+  signal?: AbortSignal,
+
 ): Promise<ProjectListQueryResult> {
 
   const periods = periodNames.slice().sort((a, b) => a.localeCompare(b, 'id'));
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const periodTotals = await Promise.all(
 
     periods.map(async (periodName) => {
 
-      const row = await fetchPeriodTotal(periodName, baseParams, accessToken);
+      const row = await fetchPeriodTotal(periodName, baseParams, accessToken, signal);
 
       return { periodName, ...row };
 
@@ -447,6 +461,8 @@ export async function fetchMergedProjectListPage(
 
   accessToken?: string | null,
 
+  signal?: AbortSignal,
+
 ): Promise<ProjectListQueryResult> {
 
   const periods = periodNames.map((p) => p.trim()).filter(Boolean);
@@ -479,6 +495,8 @@ export async function fetchMergedProjectListPage(
 
       accessToken,
 
+      signal,
+
     );
 
     return tagProjectsWithPeriod(result, periods[0]);
@@ -487,7 +505,7 @@ export async function fetchMergedProjectListPage(
 
 
 
-  return fetchMultiPeriodMergedPage(periods, baseParams, page, pageSize, accessToken);
+  return fetchMultiPeriodMergedPage(periods, baseParams, page, pageSize, accessToken, signal);
 
 }
 

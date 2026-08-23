@@ -176,15 +176,15 @@ export const ProjectSummaryModal: React.FC<ProjectSummaryModalProps> = ({
 
         const times: number[] = [];
         for (const log of taskLogs) {
-            const t = log.completedAt ? new Date(log.completedAt).getTime() : NaN;
+            const t = log.completedAt ? new Date(log.completedAt).getTime() : Number.NaN;
             if (!Number.isNaN(t)) times.push(t);
         }
         for (const s of assetStatuses) {
-            const t = s.completedAt ? new Date(s.completedAt).getTime() : NaN;
+            const t = s.completedAt ? new Date(s.completedAt).getTime() : Number.NaN;
             if (!Number.isNaN(t)) times.push(t);
         }
         for (const m of moms) {
-            const t = m.createdAt ? new Date(m.createdAt).getTime() : NaN;
+            const t = m.createdAt ? new Date(m.createdAt).getTime() : Number.NaN;
             if (!Number.isNaN(t)) times.push(t);
         }
         const lastUpdateIso =
@@ -416,7 +416,7 @@ export const ProjectSummaryModal: React.FC<ProjectSummaryModalProps> = ({
                                         <p className="text-lg font-black text-gray-800">{asset.huName}</p>
                                     </div>
                                 </div>
-                                <button className="w-full mt-4 bg-danger hover:bg-red-700 text-white font-bold py-3 rounded-lg text-sm transition-all shadow-md active:scale-95 uppercase tracking-wide">
+                                <button type="button" className="w-full mt-4 bg-danger hover:bg-red-700 text-white font-bold py-3 rounded-lg text-sm transition-all shadow-md active:scale-95 uppercase tracking-wide">
                                     ⚠️ Contact Stakeholder
                                 </button>
                             </div>
@@ -792,7 +792,7 @@ export const ProjectSummaryModal: React.FC<ProjectSummaryModalProps> = ({
 
                 {/* Footer Action */}
                 <div className="bg-white p-4 border-t border-gray-200 flex justify-end gap-3">
-                    <button 
+                    <button type="button" 
                         onClick={onClose}
                         className="px-6 py-2 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition"
                     >
@@ -829,7 +829,7 @@ export const AIAnalysisModal: React.FC<AIAnalysisModalProps> = ({ isOpen, onClos
                             <p className="text-blue-100 text-sm">{assetName}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-white/80 hover:text-white transition">
+                    <button type="button" onClick={onClose} className="text-white/80 hover:text-white transition">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -850,7 +850,7 @@ export const AIAnalysisModal: React.FC<AIAnalysisModalProps> = ({ isOpen, onClos
 
                 {/* Footer */}
                 <div className="p-4 bg-white border-t border-gray-200 flex justify-end">
-                    <button 
+                    <button type="button" 
                         onClick={onClose}
                         className="px-6 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition"
                     >

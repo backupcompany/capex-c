@@ -172,7 +172,7 @@ function PoSmartMigrationModalInner({
             val !== undefined &&
             val !== '' &&
             typeof val === 'string' &&
-            isNaN(Number(val))
+            Number.isNaN(Number(val))
           ) {
             isValid = false;
           }

@@ -108,8 +108,10 @@ export function AppAuthenticatedLayout({
       <SessionExpiryWarning onSessionExpired={() => void onForceLogout({ skipBackend: true })} />
       <div className="flex h-screen bg-siloam-bg text-siloam-text-primary font-inter">
         {isSidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          <button
+            type="button"
+            className="fixed inset-0 z-40 border-0 bg-black bg-opacity-50 p-0 md:hidden"
+            aria-label="Tutup menu navigasi"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}

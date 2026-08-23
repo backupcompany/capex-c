@@ -8,6 +8,7 @@ import {
   updateFsStudyViaBackend,
   type FsStudyPermissionContext,
 } from './fsApi';
+import { secureId } from '../lib/secureId';
 
 export type FsServiceContext = {
   userId?: number;
@@ -39,7 +40,7 @@ export const createFSProposal = async (
   fsData: Omit<FeasibilityStudy, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
   ctx?: FsServiceContext,
 ): Promise<FeasibilityStudy> => {
-  const id = fsData.id || `FS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = fsData.id || secureId('FS-');
   const payload = {
     ...fsData,
     id,
@@ -76,7 +77,7 @@ export const saveFSRealization = async (
   realization: FSRealization,
   ctx?: FsServiceContext,
 ): Promise<FSRealization> => {
-  const id = realization.id || `FSR-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = realization.id || secureId('FSR-');
   const payload = { ...realization, id };
 
   const userId = ctx?.userId;

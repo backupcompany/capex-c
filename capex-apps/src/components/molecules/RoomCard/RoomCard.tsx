@@ -12,7 +12,7 @@ interface RoomCardProps {
 
 export const RoomCard: React.FC<RoomCardProps> = ({ room, itemCount, totalValue, isSelected, onClick }) => {
     return (
-        <button
+        <button type="button"
             onClick={onClick}
             className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
                 isSelected

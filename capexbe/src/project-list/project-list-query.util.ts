@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createHash } from 'crypto';
 import type { ProjectListQueryFilters } from './project-list.dto';
 import { BUDGET_THRESHOLD } from './project-list.dto';
+import { getUserById } from './master-data.loader';
 import {
   escapeIlikePattern,
   postgrestOrIlikeFilterValue,
@@ -12,7 +14,24 @@ import {
 } from '../shared/postgrest-filter.util';
 
 /** Bump when list read policy changes — invalidates Redis + FE disk caches. */
-export const PROJECT_LIST_DATA_POLICY = 'v8-slim-wire-payload';
+export const PROJECT_LIST_DATA_POLICY = 'v9-scope-fp';
+
+/** Fingerprint of role+scopes so query caches miss after Configuration role edits. */
+export function assignmentScopeCacheFingerprint(
+  user: { assignments?: Array<{ roleName?: string; assignedScopes?: string[] }> } | null | undefined,
+): string {
+  const assignments = user?.assignments;
+  if (!assignments?.length) return 'none';
+  const parts: string[] = [];
+  for (const a of assignments) {
+    parts.push(String(a.roleName ?? '').trim().toLowerCase());
+    for (const scope of [...(a.assignedScopes ?? [])].map(String).sort()) {
+      parts.push(scope);
+    }
+    parts.push('|');
+  }
+  return createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 12);
+}
 
 const SEARCH_PROJECT_ID_CAP = 3000;
 
@@ -738,21 +757,18 @@ export async function resolveWorkflowSetIdsForAssetGroup(
 }
 
 /**
- * FE may only widen scope (`scopeAll: true`). RBAC narrowing is server-only — never trust
- * `scopeHuNames` / `scopeArchetypeNames` from the client (stale assignments caused ~1264 vs ~3123 rows).
+ * Client must never widen RBAC scope. Authoritative scope comes only from
+ * `resolveAuthoritativeProjectListScope` (DB assignments / user_has_all_scope).
+ * Kept as a named no-op so call sites cannot reintroduce FE `scopeAll: true` widening.
  */
 export function mergeServerScopeFromQuery(
-  serverScope: { scopeAll: boolean; scopeHuNames: string[]; scopeArchetypeNames: string[] },
-  query: Pick<ProjectListQueryFilters, 'scopeAll' | 'scopeHuNames' | 'scopeArchetypeNames'>,
+  _serverScope: { scopeAll: boolean; scopeHuNames: string[]; scopeArchetypeNames: string[] },
+  _query: Pick<ProjectListQueryFilters, 'scopeAll' | 'scopeHuNames' | 'scopeArchetypeNames'>,
 ): void {
-  if (query.scopeAll === true) {
-    serverScope.scopeAll = true;
-    serverScope.scopeHuNames = [];
-    serverScope.scopeArchetypeNames = [];
-  }
+  /* intentionally ignore client scopeAll / scopeHuNames / scopeArchetypeNames */
 }
 
-/** Authoritative scope — DB RPC + assignments (never FE scope arrays). */
+/** Authoritative scope — DB RPC + live assignments (never FE scope arrays / stale master.users). */
 export async function resolveAuthoritativeProjectListScope(
   client: SupabaseClient,
   userId: number,
@@ -777,7 +793,10 @@ export async function resolveAuthoritativeProjectListScope(
   const huIdToName = new Map(master.hus.map((h) => [String(h.id), String(h.name)] as [string, string]));
   const archetypeNames = new Set(master.archetypes.map((a) => String(a.name)));
   const huNames = new Set(master.hus.map((h) => String(h.name)));
-  const currentUser = master.users.find((u) => Number(u.id) === Number(userId));
+  // Master directory is cached 5m — role/scope edits must not leave Capex list forceEmpty.
+  const currentUser =
+    (await getUserById(client, userId)) ??
+    master.users.find((u) => Number(u.id) === Number(userId));
   return resolveUserScopesFromAssignments(
     currentUser,
     archetypeIdToName,
@@ -799,7 +818,7 @@ export function resolveUserScopesFromAssignments(
   }
   for (const a of user.assignments) {
     const roleKey = String(a.roleName ?? '').trim().toLowerCase();
-    if (roleKey === 'super admin') {
+    if (roleKey === 'super admin' || roleKey === 'superadmin' || roleKey === 'superadministrator') {
       return { scopeAll: true, scopeHuNames: [], scopeArchetypeNames: [] };
     }
     if (a.assignedScopes?.includes('All')) {

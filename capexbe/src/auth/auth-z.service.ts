@@ -58,29 +58,17 @@ export class AuthZService {
     throw new ForbiddenException('Insufficient role for this operation');
   }
 
-  /** Configuration CRUD: super admin / PMO, or matrix permission on config hierarchies. */
+  /** Configuration: default write (View & Update); pass `view` for pack/read. */
   async assertConfigurationAccess(
     accessToken: string,
     requestedUserId: number,
+    level: HierarchyPermissionLevel = 'update',
   ): Promise<ResolvedAuthContext> {
-    const ctx = await this.resolve(accessToken, requestedUserId);
-    if (ctx.roles.some((r) => isSuperAdminRole(r))) return ctx;
-    if (ctx.roles.includes('super_admin') || ctx.roles.includes('pmo')) return ctx;
-
-    const serviceKey = getSupabaseServiceKey();
-    const db = serviceKey ? createSupabaseClient(serviceKey) : ctx.client;
-    const hierarchies = ['Configuration', 'Role Management', 'User Management'];
-    for (const hierarchy of hierarchies) {
-      const { data, error } = await db.rpc('user_has_permission_for_hierarchy', {
-        p_user_id: ctx.userId,
-        p_hierarchy: hierarchy,
-        p_required_permission: 'View & Update',
-      });
-      if (!error && data === true) return ctx;
-    }
-
-    throw new ForbiddenException(
-      'Insufficient permission for configuration management (requires Super Admin, PMO, or Configuration/Role Management access)',
+    return this.assertAnyHierarchyPermission(
+      accessToken,
+      requestedUserId,
+      ['Configuration', 'Role Management', 'User Management'],
+      level,
     );
   }
 
@@ -118,7 +106,6 @@ export class AuthZService {
   ): Promise<ResolvedAuthContext> {
     const ctx = await this.resolve(accessToken, requestedUserId);
     if (ctx.roles.some((r) => isSuperAdminRole(r))) return ctx;
-    if (ctx.roles.includes('super_admin') || ctx.roles.includes('pmo')) return ctx;
 
     const serviceKey = getSupabaseServiceKey();
     const db = serviceKey ? createSupabaseClient(serviceKey) : ctx.client;

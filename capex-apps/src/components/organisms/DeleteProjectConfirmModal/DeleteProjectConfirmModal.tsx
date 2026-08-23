@@ -153,14 +153,14 @@ export const DeleteProjectConfirmModal: React.FC<DeleteProjectConfirmModalProps>
                 </div>
 
                 <div className="px-6 py-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button
+                    <button type="button"
                         onClick={onClose}
                         className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg transition"
                     >
                         {canDelete ? 'Cancel' : 'Close'}
                     </button>
                     {canDelete && (
-                        <button
+                        <button type="button"
                             onClick={onConfirm}
                             className="px-4 py-2 rounded-xl bg-danger text-white hover:bg-danger/90 transition"
                         >

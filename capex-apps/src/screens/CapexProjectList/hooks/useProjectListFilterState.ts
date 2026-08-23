@@ -9,8 +9,8 @@ import {
 import { useDebouncedValue } from './useDebouncedValue';
 import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../../../lib/table/pageSizeOptions';
 
-/** Match BDD Construction — server query follows debounced input, not Enter/Cari. */
-export const CPL_SEARCH_DEBOUNCE_MS = 150;
+/** Debounce while typing (300–500ms band); Enter/Cari flushes immediately via `submitSearch`. */
+export const CPL_SEARCH_DEBOUNCE_MS = 400;
 
 const savedSearchOnMount = () => {
   const saved =
@@ -52,6 +52,8 @@ export type ProjectListFilterState = {
   debouncedSearch: string;
   /** @deprecated alias — use debouncedSearch */
   appliedSearchTerm: string;
+  /** Enter / Cari — apply search now (skip debounce wait). */
+  submitSearch: (term: string) => void;
   clearSearch: () => void;
   isSearchActive: boolean;
   isSearchStaging: boolean;
@@ -70,8 +72,16 @@ export function useProjectListFilterState(
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(() => initialSelectedPeriods);
   const initialSearch = savedSearchOnMount();
   const [searchTerm, setSearchTerm] = useState(() => initialSearch);
+  const [flushSearch, setFlushSearch] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), CPL_SEARCH_DEBOUNCE_MS);
-  const appliedSearchTerm = debouncedSearch;
+  useEffect(() => {
+    if (flushSearch !== null && searchTerm.trim() !== flushSearch) setFlushSearch(null);
+  }, [searchTerm, flushSearch]);
+  const appliedSearchTerm = flushSearch ?? debouncedSearch;
+  const submitSearch = useCallback((term: string) => {
+    setSearchTerm(term);
+    setFlushSearch(term.trim());
+  }, []);
   const [selectedHUs, setSelectedHUs] = useState<string[]>(() => saved.current?.selectedHUs ?? []);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>(
     () => saved.current?.selectedPriorities ?? [],
@@ -103,12 +113,13 @@ export function useProjectListFilterState(
 
   const clearSearch = useCallback(() => {
     setSearchTerm('');
+    setFlushSearch('');
   }, []);
 
-  const isSearchActive = debouncedSearch.length > 0;
-  const isSearchStaging = searchTerm.trim() !== debouncedSearch;
+  const isSearchActive = appliedSearchTerm.length > 0;
+  const isSearchStaging = searchTerm.trim() !== appliedSearchTerm;
 
-  /** Panel side-effects — keyed on debounced search (BDD Construction pattern). */
+  /** Panel side-effects — keyed on applied search (debounce or Cari flush). */
   const panelFiltersKey = useMemo(
     () =>
       [
@@ -119,7 +130,7 @@ export function useProjectListFilterState(
         selectedBudgetCategoryIds.join('\u0001'),
         completionRange.min,
         completionRange.max,
-        debouncedSearch.toLowerCase(),
+        appliedSearchTerm.toLowerCase(),
       ].join('\u0002'),
     [
       selectedHUs.join('\u0001'),
@@ -129,7 +140,7 @@ export function useProjectListFilterState(
       selectedBudgetCategoryIds.join('\u0001'),
       completionRange.min,
       completionRange.max,
-      debouncedSearch,
+      appliedSearchTerm,
     ],
   );
   const prevPanelFiltersKeyRef = useRef(panelFiltersKey);
@@ -137,7 +148,7 @@ export function useProjectListFilterState(
   const filterSelectionSnapshot = useMemo(
     () => ({
       selectedPeriods,
-      searchTerm: debouncedSearch,
+      searchTerm: appliedSearchTerm,
       selectedHUs,
       selectedPriorities,
       selectedFinishedTasks,
@@ -152,7 +163,7 @@ export function useProjectListFilterState(
     }),
     [
       selectedPeriods,
-      debouncedSearch,
+      appliedSearchTerm,
       selectedHUs,
       selectedPriorities,
       selectedFinishedTasks,
@@ -198,8 +209,9 @@ export function useProjectListFilterState(
     setItemsPerPage,
     sortBy,
     setSortBy,
-    debouncedSearch,
+    debouncedSearch: appliedSearchTerm,
     appliedSearchTerm,
+    submitSearch,
     clearSearch,
     isSearchActive,
     isSearchStaging,

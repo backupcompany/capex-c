@@ -30,6 +30,7 @@ import {
   ProjectType,
   Page,
 } from '../types';
+import { secureId } from '../lib/secureId';
 import { SpreadsheetColumn } from '../components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { usePermissions } from '../hooks/usePermissions';
 import { RoutineAssetCard } from '../components/organisms/RoutineAssetCard/RoutineAssetCard';
@@ -39,12 +40,12 @@ import { formatCurrency } from '../lib/formatter';
 import { SelectCategoryModal } from '../components/organisms/SelectCategoryModal/SelectCategoryModal';
 import { PipelineSummaryCard } from '../components/organisms/PipelineSummaryCard/PipelineSummaryCard';
 import * as auditService from '../services/auditService';
-import { saveBudgetHuViaBackend, allocateProjectCodeViaBackend, allocateAssetCodeViaBackend } from '../services/capexCrudApi';
+import { saveBudgetHuViaBackend, allocateProjectCodeViaBackend } from '../services/capexCrudApi';
 import { useBackendSession } from '../lib/auth/authConstants';
 import { invalidateBudgetHuBackendCache, fetchBudgetHuProjectAssets, fetchBudgetHuProjectsPage, type BudgetHuPageBundle } from '../services/budgetHuPageApi';
 import { invalidateRequestCache } from '../lib/requestCache';
 import { yyFromPeriodName } from '../utils/projectCodeUtils';
-import { newAssetId } from '../utils/assetCodeUtils';
+import { newAssetId, nextAssetCode } from '../utils/assetCodeUtils';
 import { queryKeys } from '../lib/query-keys';
 import { resolveDefaultRegularPriorityId, userCanEditProjectPriority } from '../lib/projectPriorityPolicy';
 import { buildBudgetHuProjectColumns } from './BudgetHU/buildBudgetHuProjectColumns';
@@ -71,6 +72,7 @@ import {
   dedupeProjectsById,
   dedupeHuProjectsInPeriod,
   sortAssetsByCode,
+  sortProjectsByCode,
   patchProjectAssetsInPeriod,
 } from './BudgetHU/budgetHuHelpers';
 import {
@@ -78,6 +80,8 @@ import {
   collectBudgetHuSessionSaveChanges,
   applySavedCodeRemaps,
   mergeSessionEditsIntoHu,
+  upsertProjectsOnHu,
+  stageChangedProjectsFromPage,
 } from './BudgetHU/budgetHuSaveHelpers';
 import { PageTourOverlay } from '../features/onboarding/PageTourOverlay';
 import { useBudgetHuTour } from '../features/onboarding/useBudgetHuTour';
@@ -86,13 +90,13 @@ import {
   invalidateBudgetHuDiskCache,
   writeBudgetPeriodCache,
 } from '../lib/budgetHuDiskCache';
-import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../lib/table/pageSizeOptions';
+import { clampTablePageSize } from '../lib/table/pageSizeOptions';
+import { useViewportTablePageSize } from '../lib/table/useViewportTablePageSize';
 import { PageContentSkeleton } from '../components/app-shell/PageContentSkeleton';
 
 const STALE_MS = 5 * 60 * 1000;
 const GC_MS = 1000 * 60 * 30;
 const SEARCH_DEBOUNCE_MS = 200;
-const INITIAL_PAGE_SIZE = DEFAULT_TABLE_PAGE_SIZE;
 
 const AssetEditorModal = lazy(() =>
   import('../components/organisms/AssetEditorModal/AssetEditorModal').then((m) => ({
@@ -182,6 +186,9 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   isDirtyRef.current = isDirty;
   const updateIsDirty = useCallback(
     (dirty: boolean) => {
+      // Sync ref immediately — applyPageBundle reads isDirtyRef same-tick; waiting for
+      // setState would let a clean overwrite wipe a just-created pipeline project → ensure loop.
+      isDirtyRef.current = dirty;
       setIsDirtyInternal(dirty);
       setIsPageDirty(dirty);
     },
@@ -236,7 +243,13 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(INITIAL_PAGE_SIZE);
+  /** null = Auto (viewport rows) — same default as FS Update. */
+  const [pageSizeOverride, setPageSizeOverride] = useState<number | null>(null);
+  const tableScrollHostRef = useRef<HTMLDivElement>(null);
+  const { pageSize: viewportPageSize } = useViewportTablePageSize(tableScrollHostRef);
+  const itemsPerPage = pageSizeOverride ?? viewportPageSize;
+  /** Fixed viewport height — don't clamp to a premature ResizeObserver read (left the table ~2 rows tall). */
+  const tableMaxHeight = 'min(70vh, 36rem)';
 
   const routineAssetMaxBudget =
     configSource?.routineAssetMaxBudget ?? remoteBundle?.routineAssetMaxBudget ?? 0;
@@ -266,6 +279,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     updateIsDirty(false);
     setCurrentPage(1);
     setSearchTerm('');
+    setPageSizeOverride(null);
     setIsPipelineSectionExpanded(false);
   }, [huId, archetypeId, periodName, updateIsDirty]);
 
@@ -544,16 +558,36 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     setEditedData(recalculateBudgets(newEditedData));
   }, [editedData, huId, findHu, projectSession.editsRef, projectSession.deletedRef, setEditedData]);
 
-  const handlePaginatedTableDataChange = useCallback(
-    (pageData: Project[]) => {
-      for (const project of pageData) {
-        projectSession.editsRef.current.set(project.id, project);
-      }
-      syncSessionEditsToEditedData();
+  /** Mark session edit so Save Changes can persist (create/edit must land in editsRef). */
+  const stageProjectEdit = useCallback(
+    (project: Project) => {
+      projectSession.editsRef.current.set(project.id, project);
       setProjectEditRevision((n) => n + 1);
       updateIsDirty(true);
     },
-    [projectSession.editsRef, syncSessionEditsToEditedData, updateIsDirty],
+    [projectSession.editsRef, updateIsDirty],
+  );
+
+  const handlePaginatedTableDataChange = useCallback(
+    (pageData: Project[]) => {
+      stageChangedProjectsFromPage(
+        pageData,
+        projectSession.originalsRef.current,
+        projectSession.editsRef.current,
+      );
+      syncSessionEditsToEditedData();
+      setProjectEditRevision((n) => n + 1);
+      const hasPending =
+        projectSession.editsRef.current.size > 0 || projectSession.deletedRef.current.size > 0;
+      updateIsDirty(hasPending);
+    },
+    [
+      projectSession.editsRef,
+      projectSession.originalsRef,
+      projectSession.deletedRef,
+      syncSessionEditsToEditedData,
+      updateIsDirty,
+    ],
   );
 
   const handlePlannerDataUpdate = useCallback(
@@ -597,7 +631,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
         return;
       }
 
-      if (changedProjectIds.size === 0) {
+      if (changedProjectIds.size === 0 && deletedProjectIds.size === 0) {
         updateIsDirty(false);
         showToast('Tidak ada perubahan untuk disimpan.');
         return;
@@ -667,9 +701,81 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       next = remap.period;
       serverPeriodRef.current = cloneDeep(next);
       setEditedData(cloneDeep(next));
+      setSelectedProjectForAssets((prev) => {
+        if (!prev || !huId) return prev;
+        const hu = next.archetypes.flatMap((a) => a.units).find((u) => u.id === huId);
+        const fromTree = hu?.projects.find((p) => p.id === prev.id);
+        if (fromTree && (fromTree.assets?.length ?? 0) > 0) return fromTree;
+        return prev;
+      });
+
+      // Optimistic table patch BEFORE resetSession — avoids 3–5s blank gap while projects-page refetches.
+      const searchKey = debouncedSearch.trim();
+      const pageKey = queryKeys.budgetHu.projectsPage(
+        periodName,
+        currentUser.id,
+        huId,
+        currentPage,
+        itemsPerPage,
+        searchKey,
+      );
+      const savedSnapshots = changedProjectIdList
+        .map((id) => {
+          const edited = projectSession.editsRef.current.get(id);
+          if (!edited) return null;
+          return {
+            wasCreate: !projectSession.originalsRef.current.has(id),
+            assetCount: edited.assets?.length ?? 0,
+            row: { ...edited, assets: [] as Asset[] },
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x != null);
+
+      queryClient.setQueryData(pageKey, (old: typeof projectsPage.query.data) => {
+        if (!old) return old;
+        const byId = new Map(old.projects.map((p) => [p.id, p] as const));
+        let totalDelta = 0;
+        for (const snap of savedSnapshots) {
+          if (!byId.has(snap.row.id) && snap.wasCreate) totalDelta += 1;
+          byId.set(snap.row.id, snap.row);
+        }
+        for (const id of deletedProjectIdList) {
+          if (byId.delete(id)) totalDelta -= 1;
+        }
+        return {
+          ...old,
+          projects: sortProjectsByCode([...byId.values()]),
+          total: Math.max(0, (Number(old.total) || 0) + totalDelta),
+        };
+      });
+      queryClient.setQueryData(
+        queryKeys.budgetHu.assetCounts(periodName, currentUser.id, huId),
+        (old: Record<string, number> | undefined) => {
+          const nextCounts = { ...(old ?? {}) };
+          for (const snap of savedSnapshots) {
+            nextCounts[snap.row.id] = snap.assetCount;
+          }
+          for (const id of deletedProjectIdList) {
+            delete nextCounts[id];
+          }
+          return nextCounts;
+        },
+      );
+
       updateIsDirty(false);
       projectSession.resetSession();
       projectsPage.invalidatePage();
+      // Refresh open asset modal from DB so new assets appear immediately after Save.
+      const openProjectId = selectedProjectForAssets?.id;
+      if (openProjectId) {
+        invalidateRequestCache(`app:table:budget-hu:project-assets:${currentUser.id}:${openProjectId}`);
+        void fetchBudgetHuProjectAssets(periodName, currentUser.id, openProjectId).then((assets) => {
+          const sorted = sortAssetsByCode(assets);
+          setSelectedProjectForAssets((prev) =>
+            prev && prev.id === openProjectId ? { ...prev, assets: sorted } : prev,
+          );
+        });
+      }
       const savedCount = changedProjectIdList.length;
       const deletedCount = deletedProjectIdList.length;
       if (backendSaved) {
@@ -743,6 +849,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     filteredCount,
     projectSession,
     projectsPage,
+    selectedProjectForAssets?.id,
+    currentPage,
+    itemsPerPage,
+    debouncedSearch,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -793,18 +903,40 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       const editedProject = projectSession.editsRef.current.get(projectId);
       if (!editedProject) continue;
 
-      const fieldsToCompare: (keyof Project)[] = ['budgetPlan', 'budgetCarryForward', 'approvedBudget'];
-      fieldsToCompare.forEach((field) => {
-        const originalValue = (originalProject?.[field] as number) || 0;
-        const editedValue = (editedProject[field] as number) || 0;
-        if (originalValue !== editedValue) {
+      const fieldLabels: Partial<Record<keyof Project, string>> = {
+        budgetPlan: 'Budget Plan',
+        budgetCarryForward: 'Budget Carry Forward',
+        approvedBudget: 'FS Budget',
+        projectName: 'Project Name',
+        axCode: 'AX Code',
+      };
+      const fieldsToCompare = Object.keys(fieldLabels) as (keyof Project)[];
+      const projectLabel = editedProject.projectName?.trim() || editedProject.projectCode || projectId;
+
+      for (const field of fieldsToCompare) {
+        const label = fieldLabels[field] ?? String(field);
+        const originalValue = originalProject?.[field];
+        const editedValue = editedProject[field];
+        if (field === 'budgetPlan' || field === 'budgetCarryForward' || field === 'approvedBudget') {
+          const beforeNum = Number(originalValue ?? 0) || 0;
+          const afterNum = Number(editedValue ?? 0) || 0;
+          if (beforeNum === afterNum) continue;
           changes.push({
-            item: `Prj '${editedProject.projectName.substring(0, 15)}...' - ${String(field).replace('budget', '')}`,
-            before: formatCurrency(originalValue),
-            after: formatCurrency(editedValue),
+            item: `${projectLabel} — ${label}`,
+            before: originalProject ? formatCurrency(beforeNum) : '(baru)',
+            after: formatCurrency(afterNum),
           });
+          continue;
         }
-      });
+        const beforeStr = String(originalValue ?? '');
+        const afterStr = String(editedValue ?? '');
+        if (beforeStr === afterStr) continue;
+        changes.push({
+          item: `${projectLabel} — ${label}`,
+          before: beforeStr || '—',
+          after: afterStr || '—',
+        });
+      }
     }
 
     if (changes.length === 0) return null;
@@ -828,11 +960,9 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   const handleCategorySelectedForNewProject = useCallback(
     async (categoryId: string) => {
       setIsSelectingCategory(false);
-      if (!selectedHU || !editedData) return;
+      if (!selectedHU || !editedData || !huId) return;
 
       const huCode = selectedHU.code;
-
-      // Server reserves a unique nn atomically — do not use local max+1 (races across browsers).
       let allocated: string | null = null;
       try {
         allocated = await allocateProjectCodeViaBackend({
@@ -860,7 +990,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
           : ProjectType.Strategic;
 
       const newProject: Project = {
-        id: `PROJ-${huCode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        id: secureId(`PROJ-${huCode}-`),
         assetCode: '',
         axCode: '',
         projectName: 'New Project',
@@ -883,18 +1013,30 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
         type: projectType,
         budgetCategoryId: categoryId,
         assets: [],
+        hospitalUnitId: huId,
+        periodName: editedData.periodName,
       };
 
       const newEditedData = cloneDeep(editedData);
-      const hu = findHu(newEditedData)?.hu;
-      if (hu) {
-        hu.projects.push(newProject);
-      }
+      upsertProjectsOnHu(newEditedData, huId, archetypeId, [newProject]);
       setEditedData(recalculateBudgets(newEditedData));
-      updateIsDirty(true);
+      // Must be in editsRef or Save Changes won't see the create.
+      stageProjectEdit(newProject);
+      setIsCreatingNewProject(true);
       setSelectedProjectForAssets(newProject);
     },
-    [selectedHU, editedData, allPriorities, findHu, updateIsDirty, currentUser.id, showToast],
+    [
+      selectedHU,
+      editedData,
+      allPriorities,
+      findHu,
+      currentUser.id,
+      showToast,
+      huId,
+      archetypeId,
+      stageProjectEdit,
+      setEditedData,
+    ],
   );
 
   const handleCloseProjectAssetsModal = useCallback(() => {
@@ -908,7 +1050,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       toUpdate: Project[];
       toDeleteIds: string[];
     }) => {
-      if (!editedData || !selectedHU) return;
+      if (!editedData || !selectedHU || !huId) return;
 
       const newEditedData = cloneDeep(editedData);
       const huContainer = findHu(newEditedData);
@@ -916,24 +1058,28 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       const hu = huContainer?.hu;
       if (!hu) return;
 
+      for (const id of changes.toDeleteIds) {
+        projectSession.deletedRef.current.add(id);
+        projectSession.editsRef.current.delete(id);
+      }
       hu.projects = hu.projects.filter((p: Project) => !changes.toDeleteIds.includes(p.id));
 
       changes.toUpdate.forEach((updatedProject) => {
         const index = hu.projects.findIndex((p: Project) => p.id === updatedProject.id);
         if (index !== -1) {
           const originalProject = hu.projects[index];
-          auditService.logProjectChanges(originalProject, updatedProject, currentUser);
+          void auditService.logProjectChanges(originalProject, updatedProject, currentUser);
           hu.projects[index] = updatedProject;
+          stageProjectEdit(updatedProject);
         }
       });
 
       const huCode = hu.code;
-      let massSeq = 0;
-
       const projectType =
         arch?.id === PIPELINE_ARCHETYPE_ID ? ProjectType.ProjectPipeline : ProjectType.Strategic;
 
       const newProjects: Project[] = [];
+      let massSeq = 0;
       for (const data of changes.toCreate) {
         let allocated: string | null = null;
         try {
@@ -949,11 +1095,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
           showToast('Gagal mengalokasikan project code dari server untuk mass create.', 'error');
           return;
         }
-
         massSeq++;
-        newProjects.push({
+        const created: Project = {
           ...data,
-          id: `PROJ-${huCode}-${Date.now()}-${massSeq}-${Math.random().toString(36).slice(2, 6)}`,
+          id: secureId(`PROJ-${huCode}-${massSeq}-`),
           projectCode: allocated,
           assets: [],
           budgetAllocated: 0,
@@ -971,19 +1116,33 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
           status: ProjectStatus.OnTrack,
           plan: 'A',
           revenueProjection: 0,
-        });
+          hospitalUnitId: huId,
+          periodName: newEditedData.periodName,
+        };
+        newProjects.push(created);
+        stageProjectEdit(created);
       }
 
       hu.projects.push(...newProjects);
-
       setEditedData(recalculateBudgets(newEditedData));
       updateIsDirty(true);
       showToast(
-        `${changes.toCreate.length} added, ${changes.toUpdate.length} updated, ${changes.toDeleteIds.length} deleted.`,
+        `${changes.toCreate.length} added, ${changes.toUpdate.length} updated, ${changes.toDeleteIds.length} deleted. Klik Save Changes untuk menyimpan.`,
         'success',
       );
     },
-    [editedData, selectedHU, findHu, currentUser, allPriorities, updateIsDirty, showToast],
+    [
+      editedData,
+      selectedHU,
+      findHu,
+      currentUser,
+      allPriorities,
+      updateIsDirty,
+      showToast,
+      huId,
+      projectSession,
+      stageProjectEdit,
+    ],
   );
 
   const handleRoutineAssetsChange = useCallback(
@@ -1013,7 +1172,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       if (hu) {
         const projectIndex = hu.projects.findIndex((p: Project) => p.id === updatedProject.id);
         if (projectIndex !== -1) {
-          auditService.logProjectChanges(hu.projects[projectIndex], updatedProject, currentUser);
+          void auditService.logProjectChanges(hu.projects[projectIndex], updatedProject, currentUser);
           hu.projects[projectIndex] = updatedProject;
         }
       }
@@ -1026,84 +1185,79 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
 
   const handleSaveProject = useCallback(
     async (updatedProject: Project) => {
-      if (!editedData || !selectedHU) return;
+      if (!editedData || !selectedHU || !huId) return;
+
+      const withMeta: Project = {
+        ...updatedProject,
+        hospitalUnitId: huId,
+        periodName: editedData.periodName,
+        assets: sortAssetsByCode(updatedProject.assets ?? []),
+      };
 
       const newEditedData = cloneDeep(editedData);
-      const hu = findHu(newEditedData)?.hu;
-
-      if (hu) {
-        const projectIndex = hu.projects.findIndex((p: Project) => p.id === updatedProject.id);
-        if (projectIndex !== -1) {
-          await auditService.logProjectChanges(hu.projects[projectIndex], updatedProject, currentUser);
-          hu.projects[projectIndex] = updatedProject;
-        } else {
-          hu.projects.push(updatedProject);
-        }
+      upsertProjectsOnHu(newEditedData, huId, archetypeId, [withMeta]);
+      const previous = findHu(editedData)?.hu?.projects.find((p) => p.id === withMeta.id);
+      if (previous) {
+        void auditService.logProjectChanges(previous, withMeta, currentUser);
       }
-      const recalculated = recalculateBudgets(newEditedData);
-      setEditedData(recalculated);
-
-      if (selectedProjectForAssets?.id === updatedProject.id) {
-        const reselected = hu?.projects.find((p: Project) => p.id === updatedProject.id);
-        setSelectedProjectForAssets(reselected || null);
-      }
-      updateIsDirty(true);
-    },
-    [editedData, selectedHU, findHu, currentUser, selectedProjectForAssets, updateIsDirty],
-  );
-
-  const handleSaveAsset = useCallback(
-    async (updatedAsset: Asset) => {
-      if (!editedData || !selectedHU || !selectedProjectForAssets) return;
-
-      const newEditedData = cloneDeep(editedData);
-      const hu = findHu(newEditedData)?.hu;
-      const project = hu?.projects.find((p: Project) => p.id === selectedProjectForAssets.id);
-      if (project) {
-        const assetIndex = project.assets.findIndex((a: Asset) => a.id === updatedAsset.id);
-        if (assetIndex !== -1) {
-          project.assets[assetIndex] = updatedAsset;
-        } else {
-          let allocated: string | null = null;
-          try {
-            allocated = await allocateAssetCodeViaBackend({
-              userId: currentUser.id,
-              projectCode: project.projectCode,
-            });
-          } catch (err) {
-            console.error('allocateAssetCodeViaBackend failed:', err);
-          }
-          if (!allocated) {
-            showToast('Gagal mengalokasikan asset code dari server. Coba lagi.', 'error');
-            return;
-          }
-          const toAdd: Asset = {
-            ...updatedAsset,
-            id: updatedAsset.id?.trim() ? updatedAsset.id : newAssetId(project.projectCode),
-            assetCode: allocated,
-          };
-          project.assets.push(toAdd);
-        }
-        project.assets = sortAssetsByCode(project.assets);
-      }
-      const recalculated = recalculateBudgets(newEditedData);
-      setEditedData(recalculated);
-      const reselectedProject = getSelectedHU(recalculated, huId, archetypeId)?.projects.find(
-        (p) => p.id === selectedProjectForAssets.id,
-      );
-      setSelectedProjectForAssets(reselectedProject || null);
-      updateIsDirty(true);
+      setEditedData(recalculateBudgets(newEditedData));
+      stageProjectEdit(withMeta);
+      setSelectedProjectForAssets(withMeta);
     },
     [
       editedData,
       selectedHU,
-      selectedProjectForAssets,
       findHu,
+      currentUser,
       huId,
       archetypeId,
-      updateIsDirty,
-      currentUser.id,
-      showToast,
+      stageProjectEdit,
+      setEditedData,
+    ],
+  );
+
+  const handleSaveAsset = useCallback(
+    async (updatedAsset: Asset) => {
+      if (!editedData || !selectedProjectForAssets || !huId) return;
+
+      const projectCode = selectedProjectForAssets.projectCode;
+      const prevAssets = selectedProjectForAssets.assets ?? [];
+      const existingIdx = prevAssets.findIndex((a) => a.id === updatedAsset.id);
+
+      const toAdd: Asset = {
+        ...updatedAsset,
+        id: updatedAsset.id?.trim() ? updatedAsset.id : newAssetId(projectCode),
+        assetCode:
+          existingIdx >= 0
+            ? updatedAsset.assetCode || prevAssets[existingIdx].assetCode
+            : updatedAsset.assetCode?.trim() || nextAssetCode(projectCode, prevAssets),
+      };
+
+      const nextAssets = sortAssetsByCode(
+        existingIdx >= 0
+          ? prevAssets.map((a, i) => (i === existingIdx ? toAdd : a))
+          : [...prevAssets, toAdd],
+      );
+      const nextProject: Project = {
+        ...selectedProjectForAssets,
+        assets: nextAssets,
+        hospitalUnitId: huId,
+        periodName: editedData.periodName,
+      };
+
+      const working = cloneDeep(editedData);
+      upsertProjectsOnHu(working, huId, archetypeId, [nextProject]);
+      setEditedData(recalculateBudgets(working));
+      stageProjectEdit(nextProject);
+      setSelectedProjectForAssets(nextProject);
+    },
+    [
+      editedData,
+      selectedProjectForAssets,
+      huId,
+      archetypeId,
+      stageProjectEdit,
+      setEditedData,
     ],
   );
 
@@ -1116,7 +1270,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       if (!hu) return;
 
       if (isCreatingNewProject && selectedProjectForAssets) {
-        hu.projects = hu.projects.filter((p: Project) => p.id !== selectedProjectForAssets.id);
+        const draftId = selectedProjectForAssets.id;
+        hu.projects = hu.projects.filter((p: Project) => p.id !== draftId);
+        projectSession.editsRef.current.delete(draftId);
+        projectSession.deletedRef.current.add(draftId);
       }
 
       const alreadyInHu = hu.projects.some((p: Project) => p.id === existing.id);
@@ -1124,11 +1281,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
         hu.projects.push(existing);
       }
 
-      const recalculated = recalculateBudgets(newEditedData);
-      setEditedData(recalculated);
+      setEditedData(recalculateBudgets(newEditedData));
       setSelectedProjectForAssets(existing);
       setIsCreatingNewProject(false);
-      updateIsDirty(true);
+      stageProjectEdit(existing);
       showToast(`Using existing project ${existing.projectCode}`, 'success');
     },
     [
@@ -1137,36 +1293,46 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       findHu,
       isCreatingNewProject,
       selectedProjectForAssets,
-      updateIsDirty,
       showToast,
+      projectSession,
+      stageProjectEdit,
+      setEditedData,
     ],
   );
 
   const handleUseExistingAsset = useCallback(
     (existing: Asset) => {
-      if (!editedData || !selectedHU || !selectedProjectForAssets) return;
+      if (!editedData || !selectedProjectForAssets || !huId) return;
 
-      const newEditedData = cloneDeep(editedData);
-      const hu = findHu(newEditedData)?.hu;
-      const project = hu?.projects.find((p: Project) => p.id === selectedProjectForAssets.id);
-      if (!project) return;
-
-      if (project.assets.some((a: Asset) => a.id === existing.id)) {
+      const base = selectedProjectForAssets;
+      if (base.assets.some((a: Asset) => a.id === existing.id)) {
         showToast(`Asset ${existing.assetCode} is already in this project.`, 'error');
         return;
       }
 
-      project.assets.push(existing);
-      const recalculated = recalculateBudgets(newEditedData);
-      setEditedData(recalculated);
-      const reselectedProject = getSelectedHU(recalculated, huId, archetypeId)?.projects.find(
-        (p) => p.id === selectedProjectForAssets.id,
-      );
-      setSelectedProjectForAssets(reselectedProject || null);
-      updateIsDirty(true);
+      const withMeta: Project = {
+        ...base,
+        assets: sortAssetsByCode([...base.assets, existing]),
+        hospitalUnitId: huId,
+        periodName: editedData.periodName,
+      };
+
+      const working = cloneDeep(editedData);
+      upsertProjectsOnHu(working, huId, archetypeId, [withMeta]);
+      setEditedData(recalculateBudgets(working));
+      stageProjectEdit(withMeta);
+      setSelectedProjectForAssets(withMeta);
       showToast(`Using existing asset ${existing.assetCode}`, 'success');
     },
-    [editedData, selectedHU, selectedProjectForAssets, findHu, huId, archetypeId, updateIsDirty, showToast],
+    [
+      editedData,
+      selectedProjectForAssets,
+      huId,
+      archetypeId,
+      showToast,
+      stageProjectEdit,
+      setEditedData,
+    ],
   );
 
   const handleUseExistingRoutineAsset = useCallback(
@@ -1257,7 +1423,6 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     selectedProjectForAssets,
     selectedProjectForFS,
     projectSession,
-    findHu,
     syncSessionEditsToEditedData,
   ]);
 
@@ -1336,8 +1501,17 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   );
   const hydrateProjectAssetsIfNeeded = useCallback(
     async (project: Project): Promise<Project> => {
-      if ((project.assets?.length ?? 0) > 0 || project.isPipelineProject) return project;
+      if (project.isPipelineProject) return project;
       if (!periodName.trim() || !currentUser.id || !huId) return project;
+
+      // While drafting, keep staged assets (may include unsaved creates).
+      const staged = projectSession.editsRef.current.get(project.id);
+      if (isDirty && staged && (staged.assets?.length ?? 0) > 0) {
+        return staged;
+      }
+
+      // Always refetch — page rows ship assets:[] and a partial local list must not skip DB.
+      invalidateRequestCache(`app:table:budget-hu:project-assets:${currentUser.id}:${project.id}`);
       const assets = await fetchBudgetHuProjectAssets(periodName, currentUser.id, project.id);
       const sorted = sortAssetsByCode(assets);
       if (editedData) {
@@ -1347,7 +1521,16 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       }
       return { ...project, assets: sorted };
     },
-    [periodName, currentUser.id, huId, archetypeId, editedData, setEditedData],
+    [
+      periodName,
+      currentUser.id,
+      huId,
+      archetypeId,
+      editedData,
+      setEditedData,
+      projectSession.editsRef,
+      isDirty,
+    ],
   );
 
   const onOpenProjectAssets = useCallback(
@@ -1441,8 +1624,8 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
   const handleSearchChange = useCallback((value: string) => setSearchTerm(value), []);
   const handleClearSearch = useCallback(() => setSearchTerm(''), []);
   const handlePageChange = useCallback((page: number) => setCurrentPage(page), []);
-  const handleItemsPerPageChange = useCallback((size: number) => {
-    setItemsPerPage(clampTablePageSize(size));
+  const handlePageSizeOverrideChange = useCallback((size: number | null) => {
+    setPageSizeOverride(size == null ? null : clampTablePageSize(size));
     setCurrentPage(1);
   }, []);
 
@@ -1545,7 +1728,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
     return <div className="text-center p-8 text-danger">{error}</div>;
   }
   if (!canView) {
-    return <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>;
+    return <div className="text-center p-8 text-danger">Anda tidak memiliki izin untuk melihat halaman ini.</div>;
   }
 
   const periodLabel = displayPeriod?.periodName || periodName || '';
@@ -1709,7 +1892,11 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
             itemsPerPage={itemsPerPage}
             totalPages={totalPages}
             onPageChange={handlePageChange}
-            onItemsPerPageChange={handleItemsPerPageChange}
+            pageSizeOverride={pageSizeOverride}
+            viewportPageSize={viewportPageSize}
+            onPageSizeOverrideChange={handlePageSizeOverrideChange}
+            tableScrollHostRef={tableScrollHostRef}
+            tableMaxHeight={tableMaxHeight}
             projectColumns={projectColumns}
             onDataChange={handlePaginatedTableDataChange}
             canCreateProject={canCreateProject}
@@ -1770,6 +1957,10 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
           huId={huId}
           onUseExistingProject={handleUseExistingProject}
           onUseExistingAsset={handleUseExistingAsset}
+          isDirty={isDirty}
+          isSaving={isSaving}
+          onCancelChanges={handleCancel}
+          onSaveChanges={handleSave}
         />
       </Suspense>
 

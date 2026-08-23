@@ -8,15 +8,10 @@ import {
   collectSetCookies,
 } from './authCookies.server';
 import { REQUEST_ID_HEADER, resolveRequestId } from '../http/requestId';
+import { defaultBackendBase } from './serviceRoutes';
 
 export const ACCESS_COOKIE = 'capex_access';
 export const REFRESH_COOKIE = 'capex_refresh';
-
-function defaultBackendBase(): string {
-  return (process.env.NEXT_PUBLIC_CAPEXBE_URL || process.env.CAPEXBE_URL || '')
-    .replace(/\/$/, '')
-    .trim();
-}
 
 /**
  * Auth backend for BFF.
@@ -57,7 +52,15 @@ function redirectResponse(
 ): NextResponse {
   const target = browserRedirectLocation(location);
   if (target.startsWith('/')) {
-    const base = incomingReq?.url || 'http://localhost/';
+    const configured = (
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.SITE_URL ||
+      process.env.FRONTEND_URL ||
+      ''
+    )
+      .replace(/\/$/, '')
+      .trim();
+    const base = configured || incomingReq?.url || 'http://localhost/';
     return NextResponse.redirect(new URL(target, base), status);
   }
   return NextResponse.redirect(target, status);

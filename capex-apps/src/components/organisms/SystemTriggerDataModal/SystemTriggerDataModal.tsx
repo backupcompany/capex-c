@@ -125,9 +125,9 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
       case 'BUDGET_APPROVED':
         return (
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">
+            <p className="block text-sm font-medium text-siloam-text-secondary">
               Project Approved Budget
-            </label>
+            </p>
             <CurrencyInput
               value={(data.approvedBudget as number) || 0}
               onValueChange={(val) => patchEventData(triggerEvent, { approvedBudget: val })}
@@ -142,8 +142,8 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">PO Number</label>
-              <input
+              <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-po-number">PO Number</label>
+              <input id="fld-po-number"
                 type="text"
                 value={(data.poNumber as string) || ''}
                 onChange={(e) => patchEventData(triggerEvent, { poNumber: e.target.value })}
@@ -152,9 +152,9 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">
+              <p className="block text-sm font-medium text-siloam-text-secondary">
                 PO Value (Consumed Budget)
-              </label>
+              </p>
               <CurrencyInput
                 value={(data.consumedBudget as number) || 0}
                 onValueChange={(val) => patchEventData(triggerEvent, { consumedBudget: val })}
@@ -165,8 +165,8 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">Tgl PO</label>
-              <input
+              <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-tgl-po">Tgl PO</label>
+              <input id="fld-tgl-po"
                 type="date"
                 value={(data.poDate as string) || ''}
                 onChange={(e) => patchEventData(triggerEvent, { poDate: e.target.value })}
@@ -199,9 +199,9 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
       case 'ASSET_BUDGET_PLAN_FILLED':
         return (
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">
+            <p className="block text-sm font-medium text-siloam-text-secondary">
               Asset Budget Plan
-            </label>
+            </p>
             <CurrencyInput
               value={(data.budgetPlan as number) || 0}
               onValueChange={(val) => patchEventData(triggerEvent, { budgetPlan: val })}
@@ -213,10 +213,10 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
         return (
           <>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">
+              <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-fs-conclusion">
                 FS Conclusion
               </label>
-              <select
+              <select id="fld-fs-conclusion"
                 value={(data.conclusion as string) || ''}
                 onChange={(e) => patchEventData(triggerEvent, { conclusion: e.target.value })}
                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-white"
@@ -230,9 +230,9 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">
+              <p className="block text-sm font-medium text-siloam-text-secondary">
                 FS Amount (opsional)
-              </label>
+              </p>
               <CurrencyInput
                 value={(data.amount as number) || 0}
                 onValueChange={(val) => patchEventData(triggerEvent, { amount: val })}
@@ -240,10 +240,10 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">
+              <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-follow-up-action-opsional">
                 Follow-up Action (opsional)
               </label>
-              <textarea
+              <textarea id="fld-follow-up-action-opsional"
                 value={(data.followUpAction as string) || ''}
                 onChange={(e) => patchEventData(triggerEvent, { followUpAction: e.target.value })}
                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2"
@@ -301,10 +301,10 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
             );
           })}
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-completion-remark">
               Completion Remark
             </label>
-            <textarea
+            <textarea id="fld-completion-remark"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
               className="mt-1 block w-full border border-siloam-border rounded-xl p-2"
@@ -315,13 +315,13 @@ export const SystemTriggerDataModal: React.FC<SystemTriggerDataModalProps> = ({
           {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-6 flex justify-end space-x-2">
-          <button
+          <button type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg"
           >
             Cancel
           </button>
-          <button
+          <button type="button"
             onClick={handleSave}
             disabled={isSaveDisabled}
             className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400"

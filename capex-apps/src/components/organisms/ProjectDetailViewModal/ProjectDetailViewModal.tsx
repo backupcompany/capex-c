@@ -36,7 +36,7 @@ export const ProjectDetailViewModal: React.FC<ProjectDetailViewModalProps> = ({
 
     const DetailRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
         <div>
-            <label className="block text-xs font-medium text-siloam-text-secondary mb-1">{label}</label>
+            <p className="block text-xs font-medium text-siloam-text-secondary mb-1">{label}</p>
             <p className="text-sm font-semibold text-siloam-text-primary">{value ?? '—'}</p>
         </div>
     );
@@ -49,7 +49,7 @@ export const ProjectDetailViewModal: React.FC<ProjectDetailViewModalProps> = ({
                         <h3 className="text-xl font-bold text-siloam-text-primary">Project Details</h3>
                         <p className="text-sm text-siloam-text-secondary">{project.projectCode} · {project.projectName}</p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
+                    <button type="button" onClick={onClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -69,7 +69,7 @@ export const ProjectDetailViewModal: React.FC<ProjectDetailViewModalProps> = ({
                             <DetailRow label="Asset Name" value={project.assetName} />
                             {project.taskToDo && (
                                 <div className="md:col-span-2">
-                                    <label className="block text-xs font-medium text-siloam-text-secondary mb-1">Task to Do</label>
+                                    <p className="block text-xs font-medium text-siloam-text-secondary mb-1">Task to Do</p>
                                     <p className="text-sm text-siloam-text-primary">{project.taskToDo}</p>
                                 </div>
                             )}
@@ -145,7 +145,7 @@ export const ProjectDetailViewModal: React.FC<ProjectDetailViewModalProps> = ({
                 </div>
 
                 <div className="flex-shrink-0 px-6 py-4 border-t border-siloam-border flex justify-end">
-                    <button
+                    <button type="button"
                         onClick={onClose}
                         className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90"
                     >

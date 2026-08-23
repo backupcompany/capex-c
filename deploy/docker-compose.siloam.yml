@@ -78,8 +78,8 @@ services:
 
   capex-api:
     build:
-      context: ..
-      dockerfile: capexbe/Dockerfile
+      context: ../capexbe
+      dockerfile: Dockerfile
     image: ${CAPEX_API_IMAGE:-capex-api:local}
     container_name: capex-api
     restart: unless-stopped

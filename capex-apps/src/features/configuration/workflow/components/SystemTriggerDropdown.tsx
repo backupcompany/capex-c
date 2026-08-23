@@ -46,7 +46,7 @@ export function SystemTriggerDropdown({
   };
 
   return (
-    <div ref={rootRef} className="relative w-full min-w-[10rem]" onClick={(e) => e.stopPropagation()}>
+    <div ref={rootRef} className="relative w-full min-w-[10rem]" onMouseDown={(e) => e.stopPropagation()}>
       <button
         type="button"
         disabled={disabled}

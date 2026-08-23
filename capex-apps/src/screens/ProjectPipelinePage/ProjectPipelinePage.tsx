@@ -387,7 +387,7 @@ export const ProjectPipelinePage: React.FC<ProjectPipelinePageProps> = ({ budget
                 {selectedRoomId && currentProject && rooms.find(r => r.id === selectedRoomId) ? (
                     <div className="h-full flex flex-col">
                         <div className="p-4 border-b border-siloam-border flex items-center flex-shrink-0">
-                            <button onClick={() => setSelectedRoomId(null)} className="flex items-center gap-2 text-siloam-blue font-semibold">
+                            <button type="button" onClick={() => setSelectedRoomId(null)} className="flex items-center gap-2 text-siloam-blue font-semibold">
                                 <BackIcon /> Rooms
                             </button>
                         </div>
@@ -484,7 +484,7 @@ export const ProjectPipelinePage: React.FC<ProjectPipelinePageProps> = ({ budget
 
             <div className="border-b border-siloam-border">
                 <nav className="-mb-px flex space-x-6">
-                    <button
+                    <button type="button"
                         onClick={() => setActiveTab('planner')}
                         className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
                             activeTab === 'planner'
@@ -495,7 +495,7 @@ export const ProjectPipelinePage: React.FC<ProjectPipelinePageProps> = ({ budget
                         Planner
                     </button>
                     {permissions.isAllowed('Purchase Order', 'view') && (
-                        <button
+                        <button type="button"
                             onClick={() => setActiveTab('po')}
                             className={`whitespace-nowrap pb-3 px-1 border-b-2 font-medium text-sm ${
                                 activeTab === 'po'

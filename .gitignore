@@ -2,26 +2,17 @@
 .cursor/
 
 # Local-only docs & diagrams — keep on disk, not in GitHub
-/README.md
+# (RELEASES.md + README.md are tracked — release notes + version guide)
 /DEPLOY.md
 /SECURITY.md
 /docs/
 /capex-apps/TUTORIAL_PENGGUNA.md
 
-# Local dev tooling — keep on disk, not in GitHub (use make verify-* / CI on remote)
+# Local-only bootstrap (make env) — optional on disk
 /run
 /run.cmd
 /run.ps1
-/scripts/dev.mjs
 /scripts/setup-env.sh
-/scripts/print-public-url.sh
-/scripts/cursor-tunnel-help.sh
-/scripts/run-tunnel-demo.sh
-/scripts/start-cloudflared-tunnel.sh
-/scripts/start-public-tunnel.sh
-/scripts/generate-cloud-architecture-excalidraw.mjs
-/scripts/generate-traffic-flow-excalidraw.mjs
-/scripts/microservices/run-all-leaf.mjs
 **/.cursorrules
 
 # OS
@@ -62,7 +53,6 @@
 # Ops data — never commit credentials or user imports
 **/scripts/*.data.json
 **/scripts/*-users.json
-
 # IDE
 **/.idea/
 **/.vscode/*

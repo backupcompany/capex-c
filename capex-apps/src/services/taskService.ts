@@ -85,12 +85,12 @@ export const triggerSystemTask = async (
 ) => {
     const triggered = await triggerSystemTaskViaBackend({
         userId: user.id,
-        assetId,
+            assetId,
         triggerEvent,
         completedAt: options?.completedAt,
     });
     if (triggered) {
-        await recalculateAssetTaskStatuses(assetId);
+    await recalculateAssetTaskStatuses(assetId);
     }
 };
 
@@ -146,9 +146,9 @@ export const markTaskAsDone = async (
         return await completeWorkflowTaskViaBe({
             userId: user.id,
             accessToken,
-            assetId,
-            taskId,
-            remark,
+        assetId,
+        taskId,
+        remark,
             roleId: assignedRole.id,
             completedAt: options?.completedAt,
         });
@@ -197,30 +197,30 @@ const isSuperAdmin = (user: User): boolean =>
 
 export const revertTaskToOpen = async (assetId: string, taskId: string, user: User): Promise<{ success: boolean; message: string }> => {
     if (!isCapexBeConfigured()) return { success: false, message: 'Backend is not configured.' };
-    try {
-        const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+        try {
+            const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
         return await revertTaskViaBe({ userId: user.id, accessToken, assetId: String(assetId), taskId: String(taskId) });
-    } catch (beErr) {
+        } catch (beErr) {
         return { success: false, message: beErr instanceof Error ? beErr.message : 'Backend revert failed.' };
     }
 };
 
 export const reportTaskNotYetDone = async (assetId: string, taskId: string, user: User): Promise<{ success: boolean; message: string }> => {
     if (!isCapexBeConfigured()) return { success: false, message: 'Backend is not configured.' };
-    try {
-        const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+        try {
+            const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
         return await reportNotYetDoneViaBe({ userId: user.id, accessToken, assetId: String(assetId), taskId: String(taskId) });
-    } catch (beErr) {
+        } catch (beErr) {
         return { success: false, message: beErr instanceof Error ? beErr.message : 'Backend report failed.' };
     }
 };
 
 export const withdrawReportNotYetDone = async (assetId: string, taskId: string, user: User): Promise<{ success: boolean; message: string }> => {
     if (!isCapexBeConfigured()) return { success: false, message: 'Backend is not configured.' };
-    try {
-        const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+        try {
+            const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
         return await withdrawReportViaBe({ userId: user.id, accessToken, assetId: String(assetId), taskId: String(taskId) });
-    } catch (beErr) {
+        } catch (beErr) {
         return { success: false, message: beErr instanceof Error ? beErr.message : 'Backend withdraw failed.' };
     }
 };
@@ -234,10 +234,10 @@ export const updateTaskRemark = async (
     const trimmed = remark.trim();
     if (!trimmed) return { success: false, message: 'Remark wajib diisi.' };
     if (!isCapexBeConfigured()) return { success: false, message: 'Backend is not configured.' };
-    try {
-        const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+        try {
+            const accessToken = await resolveMyTasksAccessToken(getAccessTokenForBackend);
         return await updateTaskRemarkViaBe({ userId: user.id, accessToken, assetId: String(assetId), taskId: String(taskId), remark: trimmed });
-    } catch (beErr) {
+        } catch (beErr) {
         return { success: false, message: beErr instanceof Error ? beErr.message : 'Backend remark update failed.' };
     }
 };
@@ -432,7 +432,7 @@ function filterAssetMomContextMapByScope(
 
 /** Batas awal/akhir hari lokal untuk tanggal `YYYY-MM-DD`. */
 export function localDayBoundsIso(yyyyMmDd: string): { startIso: string; endIso: string } {
-    const parts = yyyyMmDd.split('-').map((p) => parseInt(p, 10));
+    const parts = yyyyMmDd.split('-').map((p) => Number.parseInt(p, 10));
     const y = parts[0];
     const m = parts[1];
     const d = parts[2];
@@ -453,7 +453,7 @@ export function localDayBoundsIso(yyyyMmDd: string): { startIso: string; endIso:
 export async function getDailyMOMSummaryRows(
     periodName: string,
     summaryDateYyyyMmDd: string,
-    userScopes: UserScopesForCapex,
+    _userScopes: UserScopesForCapex,
     userId?: number,
 ): Promise<DailyMOMSummaryRow[]> {
     if (userId) {
@@ -462,7 +462,6 @@ export async function getDailyMOMSummaryRows(
             userId,
             periodName,
             summaryDateYyyyMmDd,
-            userScopes,
         );
         if (beRows) return beRows;
     }
@@ -471,8 +470,8 @@ export async function getDailyMOMSummaryRows(
 }
 
 export const addAdhocTask = async (
-    assetId: string,
-    description: string,
+    assetId: string, 
+    description: string, 
     assignedToUserId: number,
     dueDate: string,
     creator: User
@@ -557,7 +556,7 @@ export const getTimelineForAsset = async (assetId: string, workflowSetId?: strin
             uid,
         );
         return result?.items ?? [];
-    } catch (e) {
+            } catch (e) {
         _warn('BE asset-timeline failed', e);
         return [];
     }

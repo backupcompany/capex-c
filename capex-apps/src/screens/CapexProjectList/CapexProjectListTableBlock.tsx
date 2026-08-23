@@ -39,6 +39,8 @@ export type CapexProjectListTableBlockProps = {
   isSearchPending: boolean;
   isBackgroundRefetch: boolean;
   hasActiveFilters: boolean;
+  /** Shown when search returns 0 rows (scope / no match). */
+  searchEmptyHint?: string | null;
   footerTotalCount: number;
   currentPage: number;
   itemsPerPage: number;
@@ -60,6 +62,7 @@ function CapexProjectListTableBlockInner({
   isSearchPending,
   isBackgroundRefetch,
   hasActiveFilters,
+  searchEmptyHint = null,
   footerTotalCount,
   currentPage,
   itemsPerPage,
@@ -80,6 +83,14 @@ function CapexProjectListTableBlockInner({
 
   return (
     <div data-tour="cpl-asset-table" className="flex-1 overflow-hidden flex flex-col relative">
+      {searchEmptyHint ? (
+        <div
+          role="status"
+          className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-950"
+        >
+          {searchEmptyHint}
+        </div>
+      ) : null}
       {isBackgroundRefetch ? (
         <>
           <div
@@ -140,6 +151,7 @@ function CapexProjectListTableBlockInner({
           onRowClick={onRowClick}
           onRowHover={onRowHover}
           hasActiveFilters={hasActiveFilters}
+          emptyHint={searchEmptyHint}
         />
       </div>
 
@@ -170,8 +182,8 @@ function CapexProjectListTableBlockInner({
 
         <div className="flex items-center gap-4 flex-wrap justify-end">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-siloam-text-secondary">Per page:</label>
-            <select
+            <label className="text-sm text-siloam-text-secondary" htmlFor="fld-per-page">Per page:</label>
+            <select id="fld-per-page"
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
               disabled={showTableBusy}

@@ -26,7 +26,7 @@ async function postCrudToBackend<T>(
       const status =
         err && typeof err === 'object' && 'status' in err
           ? Number((err as { status?: number }).status)
-          : NaN;
+          : Number.NaN;
       // Only fall through to path aliases on 404; surface real auth/validation errors.
       if (status !== 404) {
         throw err;

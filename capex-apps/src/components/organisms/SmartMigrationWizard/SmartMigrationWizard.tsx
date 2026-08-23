@@ -227,7 +227,7 @@ function SmartMigrationWizardInner({ currentUser, onComplete }: SmartMigrationWi
         const val = item[field.key];
         let isValid = true;
         if (field.required && (val === undefined || val === '')) isValid = false;
-        if (field.type === 'number' && val !== undefined && val !== '' && isNaN(Number(val))) {
+        if (field.type === 'number' && val !== undefined && val !== '' && Number.isNaN(Number(val))) {
           isValid = false;
         }
 
@@ -323,10 +323,10 @@ function SmartMigrationWizardInner({ currentUser, onComplete }: SmartMigrationWi
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+          <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-migration-target">
             Migration Target
           </label>
-          <select
+          <select id="fld-migration-target"
             value={target}
             onChange={handleTargetChange}
             className="w-full p-3 border border-siloam-border rounded-xl bg-white focus:ring-2 focus:ring-siloam-blue outline-none"
@@ -347,10 +347,10 @@ function SmartMigrationWizardInner({ currentUser, onComplete }: SmartMigrationWi
         </div>
         {needsPeriod && (
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+            <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-target-period">
               Target Period
             </label>
-            <select
+            <select id="fld-target-period"
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               disabled={periodsLoading && periods.length === 0}
@@ -372,10 +372,11 @@ function SmartMigrationWizardInner({ currentUser, onComplete }: SmartMigrationWi
 
       {needsWorkflowSets && (
         <div>
-          <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+          <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-asset-type-workflow">
             Asset Type (Workflow) <span className="text-red-500">*</span>
           </label>
           <select
+            id="fld-asset-type-workflow"
             value={selectedAssetType}
             onChange={(e) => setSelectedAssetType(e.target.value)}
             disabled={workflowsLoading && workflows.length === 0}

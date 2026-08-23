@@ -74,7 +74,7 @@ export const ManagePeriodsModal: React.FC<ManagePeriodsModalProps> = ({
                 <h3 className="text-xl font-bold text-siloam-text-primary">Budget Periods</h3>
                 <p className="text-sm text-siloam-text-secondary">for {multiYearPlan.name}</p>
             </div>
-            <button onClick={handleClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
+            <button type="button" onClick={handleClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
@@ -85,8 +85,8 @@ export const ManagePeriodsModal: React.FC<ManagePeriodsModalProps> = ({
                     <h4 className="font-bold mb-4 text-siloam-text-primary">New Budget Period</h4>
                     <form onSubmit={handleCreate} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary">Period Name</label>
-                            <input 
+                            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-period-name">Period Name</label>
+                            <input id="fld-period-name" 
                                 type="text" 
                                 value={newPeriodName} 
                                 onChange={e => setNewPeriodName(e.target.value)} 
@@ -96,8 +96,8 @@ export const ManagePeriodsModal: React.FC<ManagePeriodsModalProps> = ({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary">Start Date</label>
-                                <input 
+                                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-start-date">Start Date</label>
+                                <input id="fld-start-date" 
                                     type="date" 
                                     value={startDate} 
                                     onChange={e => setStartDate(e.target.value)} 
@@ -107,8 +107,8 @@ export const ManagePeriodsModal: React.FC<ManagePeriodsModalProps> = ({
                                 />
                             </div>
                              <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary">End Date</label>
-                                <input 
+                                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-end-date">End Date</label>
+                                <input id="fld-end-date" 
                                     type="date" 
                                     value={endDate} 
                                     onChange={e => setEndDate(e.target.value)} 
@@ -129,7 +129,7 @@ export const ManagePeriodsModal: React.FC<ManagePeriodsModalProps> = ({
                 </div>
             ) : (
                 <div className="flex justify-end">
-                    <button onClick={() => setIsAdding(true)} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm flex items-center gap-2">
+                    <button type="button" onClick={() => setIsAdding(true)} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         Add Period
                     </button>

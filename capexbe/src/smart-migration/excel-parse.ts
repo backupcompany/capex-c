@@ -84,16 +84,16 @@ export const parseMigrationNumberValue = (value: unknown): number => {
   if (!s) return 0;
 
   if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
-    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    return Number.parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
   }
   if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
-    return parseFloat(s.replace(/,/g, '')) || 0;
+    return Number.parseFloat(s.replace(/,/g, '')) || 0;
   }
 
   const cleaned = s.replace(/[^0-9,-]+/g, '').replace(/,(?=.*,)/g, '');
   const normalized =
     cleaned.includes(',') && !cleaned.includes('.') ? cleaned.replace(',', '.') : cleaned;
-  return parseFloat(normalized) || 0;
+  return Number.parseFloat(normalized) || 0;
 };
 
 /** Completion Date Time → ISO string; default now jika kosong. */

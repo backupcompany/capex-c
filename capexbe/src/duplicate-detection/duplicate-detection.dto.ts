@@ -36,8 +36,8 @@ export function parseDuplicateSearchBody(body: unknown): {
     throw new Error('periodName is required');
   }
   const query = String(b.query ?? '').trim();
-  const cursor = Math.max(0, parseInt(String(b.cursor ?? '0'), 10) || 0);
-  const limit = Math.min(25, Math.max(1, parseInt(String(b.limit ?? 10), 10) || 10));
+  const cursor = Math.max(0, Number.parseInt(String(b.cursor ?? '0'), 10) || 0);
+  const limit = Math.min(25, Math.max(1, Number.parseInt(String(b.limit ?? 10), 10) || 10));
   return {
     userId,
     periodName,

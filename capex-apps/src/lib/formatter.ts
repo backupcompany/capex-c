@@ -1,18 +1,17 @@
 /**
  * Formats a number into a currency string (IDR).
- * @param value - The number to format.
- * @returns A formatted currency string, e.g., "Rp 1.000.000".
+ * Always `Rp ` + thousand separators (id-ID), e.g. "Rp 1.000.000".
  */
 export const formatCurrency = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) {
+  if (value === null || value === undefined || typeof value !== 'number' || Number.isNaN(value)) {
     return 'Rp 0';
   }
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
+  const truncated = Math.trunc(value);
+  const body = new Intl.NumberFormat('id-ID', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Math.abs(truncated));
+  return truncated < 0 ? `-Rp ${body}` : `Rp ${body}`;
 };
 
 /**
@@ -30,7 +29,7 @@ export const parseCurrency = (value: string): number => {
     if (typeof value !== 'string') return 0;
     // Remove "Rp", whitespace, and thousand separators "."
     const numericString = value.replace(/Rp\s*|\./g, '');
-    return parseInt(numericString, 10) || 0;
+    return Number.parseInt(numericString, 10) || 0;
 };
 
 /** Scaled amount with Indonesian grouping (e.g. 2248860.4 → "2.248.860,4"). */
@@ -54,7 +53,7 @@ const ABBREVIATED_CURRENCY_TIERS = [
  * Uses Indonesian scale: Rb (ribu), Jt (juta), M (miliar), T (triliun).
  */
 export const formatAbbreviatedCurrency = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) {
+  if (value === null || value === undefined || typeof value !== 'number' || Number.isNaN(value)) {
     return 'Rp 0';
   }
 

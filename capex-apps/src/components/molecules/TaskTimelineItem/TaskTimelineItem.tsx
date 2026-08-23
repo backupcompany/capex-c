@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, AssetTaskStatus, TaskLog, TaskLogRemarkEdit, UserRole, TaskCurrentStatus, User, WorkflowStep, Project, EnrichedAsset, SystemTriggerEvent } from '../../../types';
 import * as taskService from '../../../services/taskService';
-import { getEffectiveSlaDays } from '../../../lib/workflowRolePolicy';
+import { getEffectiveSlaDays, isWorkflowBypassRole } from '../../../lib/workflowRolePolicy';
 import { getTaskTriggerEvents } from '../../../lib/systemTriggerEvents';
 import { NumericInput } from '../../atoms/NumericInput/NumericInput';
 import { useToast } from '../../../contexts/ToastContext';
@@ -112,8 +112,8 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClose, onSu
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || !reason.trim() || days <= 0} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSubmit} disabled={isSubmitting || !reason.trim() || days <= 0} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">
                         {isSubmitting ? 'Submitting...' : 'Reschedule'}
                     </button>
                 </div>
@@ -165,22 +165,15 @@ export const TaskTimelineItem: React.FC<TaskTimelineItemProps> = ({ task, step, 
 
     const effectiveSlaDays = getEffectiveSlaDays(step, statusInfo);
     const hasSlaOverride = statusInfo.slaToCompleteOverride != null;
-    const isSuperAdminUser =
-        currentUser.assignments?.some(
-            (a) =>
-                String(a.roleName ?? '')
-                    .trim()
-                    .toLowerCase()
-                    .replace(/\s+/g, ' ') === 'super admin',
-        ) ?? false;
+    const isPrivilegeUser = isWorkflowBypassRole(currentUser);
     const completedByCurrentUser =
         log != null && Number(log.completedByUserId) === Number(currentUser.id);
     const canEditCompletedRemark =
         !!log &&
         log.completedByType !== 'System' &&
-        (completedByCurrentUser || isSuperAdminUser);
+        (completedByCurrentUser || isPrivilegeUser);
     const canRevert =
-        !!log && log.completedByType !== 'System' && (completedByCurrentUser || isSuperAdminUser);
+        !!log && log.completedByType !== 'System' && (completedByCurrentUser || isPrivilegeUser);
     const canReport =
         !!log &&
         log.completedByType !== 'System' &&
@@ -188,7 +181,7 @@ export const TaskTimelineItem: React.FC<TaskTimelineItemProps> = ({ task, step, 
         !statusInfo.reportedNotYetByUserId;
     const canWithdraw =
         Number(statusInfo.reportedNotYetByUserId) === Number(currentUser.id) ||
-        (isSuperAdminUser && !!statusInfo.reportedNotYetByUserId);
+        (isPrivilegeUser && !!statusInfo.reportedNotYetByUserId);
 
     const handleSaveSlaOverride = async () => {
         if (!statusInfo.assetId) return;
@@ -441,7 +434,7 @@ Mohon segera ditindaklanjuti. Terima kasih.`;
                             </div>
                             {/* WhatsApp Button - only for Open tasks */}
                             {taskStatus !== TaskCurrentStatus.Done && (
-                                <button 
+                                <button type="button" 
                                     onClick={handleWhatsAppReminder}
                                     className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#128C7E] text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm"
                                     title="Send WhatsApp Reminder"
@@ -516,13 +509,13 @@ Mohon segera ditindaklanjuti. Terima kasih.`;
                              {actionError && <p className="text-danger text-xs text-center">{actionError}</p>}
                              <div className="flex items-center justify-end gap-2 flex-wrap">
                                 {canRevert && (
-                                    <button onClick={handleRevert} disabled={isSubmitting} className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-3 py-1.5 rounded-lg hover:bg-yellow-200 disabled:opacity-50">Revert to Open</button>
+                                    <button type="button" onClick={handleRevert} disabled={isSubmitting} className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-3 py-1.5 rounded-lg hover:bg-yellow-200 disabled:opacity-50">Revert to Open</button>
                                 )}
                                 {canReport && (
-                                    <button onClick={handleReport} disabled={isSubmitting} className="text-xs font-semibold bg-red-100 text-danger px-3 py-1.5 rounded-lg hover:bg-red-200 disabled:opacity-50">Report Not Yet Done</button>
+                                    <button type="button" onClick={handleReport} disabled={isSubmitting} className="text-xs font-semibold bg-red-100 text-danger px-3 py-1.5 rounded-lg hover:bg-red-200 disabled:opacity-50">Report Not Yet Done</button>
                                 )}
                                 {canWithdraw && (
-                                    <button onClick={handleWithdraw} disabled={isSubmitting} className="text-xs font-semibold bg-green-100 text-siloam-green px-3 py-1.5 rounded-lg hover:bg-green-200 disabled:opacity-50">Withdraw Report</button>
+                                    <button type="button" onClick={handleWithdraw} disabled={isSubmitting} className="text-xs font-semibold bg-green-100 text-siloam-green px-3 py-1.5 rounded-lg hover:bg-green-200 disabled:opacity-50">Withdraw Report</button>
                                 )}
                              </div>
                         </div>
@@ -623,14 +616,14 @@ Mohon segera ditindaklanjuti. Terima kasih.`;
                     {/* Show Reschedule / Mark as Done when workflow says actionable (Open + role) and task not Done */}
                     {isActionable && taskStatus !== TaskCurrentStatus.Done && !isRemarkVisible && (
                         <div className="mt-4 pt-4 border-t border-siloam-border grid grid-cols-2 gap-2">
-                            <button
+                            <button type="button"
                                 onClick={() => setIsRescheduleModalOpen(true)}
                                 disabled={isSubmitting}
                                 className="w-full bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 disabled:bg-gray-400"
                             >
                                 Reschedule
                             </button>
-                            <button
+                            <button type="button"
                                 onClick={handleMarkAsDoneClick}
                                 disabled={isSubmitting}
                                 className="w-full bg-siloam-blue text-white font-bold py-2 px-4 rounded-lg hover:bg-siloam-blue/90 disabled:bg-gray-400"
@@ -651,8 +644,8 @@ Mohon segera ditindaklanjuti. Terima kasih.`;
                                 rows={3}
                             />
                              <div className="mt-2 flex justify-end gap-2">
-                                <button onClick={() => setIsRemarkVisible(false)} className="px-4 py-2 rounded-lg border border-siloam-border text-sm">Cancel</button>
-                                <button
+                                <button type="button" onClick={() => setIsRemarkVisible(false)} className="px-4 py-2 rounded-lg border border-siloam-border text-sm">Cancel</button>
+                                <button type="button"
                                     onClick={handleSubmitRemark}
                                     disabled={isSubmitting || !remark}
                                     className="px-4 py-2 rounded-lg bg-siloam-blue text-white text-sm disabled:bg-gray-400"

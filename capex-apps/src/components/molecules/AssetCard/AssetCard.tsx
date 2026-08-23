@@ -11,7 +11,7 @@ interface AssetCardProps {
 
 export const AssetCard: React.FC<AssetCardProps> = ({ asset, isSelected, onClick, onMouseEnter }) => {
     return (
-        <button
+        <button type="button"
             onClick={onClick}
             onMouseEnter={onMouseEnter}
             className={`

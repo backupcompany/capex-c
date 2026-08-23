@@ -1,10 +1,10 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, type RefObject } from 'react';
 import type { Project, ProjectPriorityConfig, BudgetCategoryConfig } from '@/types';
 import { SpreadsheetTable, SpreadsheetColumn } from '@/components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { ProjectCard } from '@/components/molecules/ProjectCard/ProjectCard';
 import { Spinner } from '@/components/atoms/Spinner/Spinner';
 import { BudgetHuColumnSelector } from './BudgetHuColumnSelector';
-import { TABLE_PAGE_SIZE_OPTIONS } from '@/lib/table/pageSizeOptions';
+import { TABLE_PAGE_SIZE_OPTIONS, clampTablePageSize } from '@/lib/table/pageSizeOptions';
 import type { BudgetHuTableColumnId } from './budgetHuTableColumnIds';
 
 export type BudgetHuStrategicProjectsSectionProps = {
@@ -19,7 +19,12 @@ export type BudgetHuStrategicProjectsSectionProps = {
   itemsPerPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  onItemsPerPageChange: (size: number) => void;
+  /** null = Auto (viewport). */
+  pageSizeOverride: number | null;
+  viewportPageSize: number;
+  onPageSizeOverrideChange: (size: number | null) => void;
+  tableScrollHostRef: RefObject<HTMLDivElement | null>;
+  tableMaxHeight: string;
   projectColumns: SpreadsheetColumn<Project>[];
   onDataChange: (newData: Project[]) => void;
   canCreateProject: boolean;
@@ -45,6 +50,7 @@ type BudgetHuProjectsTableProps = {
   columns: SpreadsheetColumn<Project>[];
   rows: Project[];
   onDataChange: (newData: Project[]) => void;
+  maxHeight: string;
 };
 
 const BudgetHuProjectsTable = memo(function BudgetHuProjectsTable({
@@ -52,16 +58,17 @@ const BudgetHuProjectsTable = memo(function BudgetHuProjectsTable({
   columns,
   rows,
   onDataChange,
+  maxHeight,
 }: BudgetHuProjectsTableProps) {
   return (
-    <div className="hidden md:block">
+    <div className="hidden md:block h-full">
       <SpreadsheetTable
         key={huKey}
         columns={columns}
         data={rows}
         onDataChange={onDataChange}
         rowHeaderAccessor="projectName"
-        maxHeight="min(70vh, 720px)"
+        maxHeight={maxHeight}
         virtualizeRows="auto"
       />
     </div>
@@ -116,7 +123,11 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
   itemsPerPage,
   totalPages,
   onPageChange,
-  onItemsPerPageChange,
+  pageSizeOverride,
+  viewportPageSize,
+  onPageSizeOverrideChange,
+  tableScrollHostRef,
+  tableMaxHeight,
   projectColumns,
   onDataChange,
   canCreateProject,
@@ -219,7 +230,11 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
         </div>
       </div>
 
-      <div className="relative min-h-[12rem]" aria-busy={showTableBusy}>
+      <div
+        ref={tableScrollHostRef}
+        className="relative h-[min(70vh,36rem)]"
+        aria-busy={showTableBusy}
+      >
         {showTableBusy ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-surface/70 backdrop-blur-[1px]">
             <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
@@ -251,12 +266,13 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
             ) : null}
           </div>
         ) : tableProjects.length > 0 ? (
-          <div className={showTableBusy ? 'opacity-50 pointer-events-none select-none' : undefined}>
+          <div className={`h-full ${showTableBusy ? 'opacity-50 pointer-events-none select-none' : ''}`}>
             <BudgetHuProjectsTable
               huKey={huKey}
               columns={projectColumns}
               rows={tableProjects}
               onDataChange={onDataChange}
+              maxHeight={tableMaxHeight}
             />
 
             <BudgetHuProjectsMobileList
@@ -275,6 +291,11 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
         <div className="flex items-center gap-3">
           <div className="text-sm text-siloam-text-secondary">
             Showing {rangeStart} - {rangeEnd} dari {filteredCount} project
+            {pageSizeOverride == null ? (
+              <span className="ml-2 text-xs text-siloam-text-secondary/80">
+                (auto {itemsPerPage} rows/viewport)
+              </span>
+            ) : null}
             {isTableLoading ? (
               <span className="ml-2 text-xs text-siloam-blue">· Memperbarui…</span>
             ) : null}
@@ -292,12 +313,21 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-siloam-text-secondary">Per page:</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+            <label className="text-sm text-siloam-text-secondary" htmlFor="fld-per-page">Per page:</label>
+            <select id="fld-per-page"
+              value={pageSizeOverride == null ? 'auto' : String(pageSizeOverride)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === 'auto') {
+                  onPageSizeOverrideChange(null);
+                } else {
+                  onPageSizeOverrideChange(clampTablePageSize(Number(v)));
+                }
+                onPageChange(1);
+              }}
               className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
             >
+              <option value="auto">Auto ({viewportPageSize})</option>
               {TABLE_PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
                   {size}

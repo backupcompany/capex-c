@@ -149,18 +149,18 @@ export const CreatePOModal: React.FC<CreatePOModalProps> = ({ isOpen, onClose, o
                         <div className="p-4 border-t border-siloam-border bg-siloam-bg space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-sm font-medium">Vendor</label>
-                                    <select value={selectedVendorId} onChange={e => setSelectedVendorId(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md">
+                                    <label className="text-sm font-medium" htmlFor="fld-vendor">Vendor</label>
+                                    <select id="fld-vendor" value={selectedVendorId} onChange={e => setSelectedVendorId(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md">
                                         {allVendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                     </select>
                                 </div>
                                  <div>
-                                    <label className="text-sm font-medium">Shipping Address</label>
-                                    <input type="text" value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md" />
+                                    <label className="text-sm font-medium" htmlFor="fld-shipping-address">Shipping Address</label>
+                                    <input id="fld-shipping-address" type="text" value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md" />
                                 </div>
                                 <div className="md:col-span-2">
-                                     <label className="text-sm font-medium">Remarks</label>
-                                     <textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md" rows={2}></textarea>
+                                     <label className="text-sm font-medium" htmlFor="fld-remarks">Remarks</label>
+                                     <textarea id="fld-remarks" value={remarks} onChange={e => setRemarks(e.target.value)} className="w-full mt-1 p-2 border border-siloam-border rounded-md" rows={2}></textarea>
                                 </div>
                             </div>
                             <div className="text-right">
@@ -171,8 +171,8 @@ export const CreatePOModal: React.FC<CreatePOModalProps> = ({ isOpen, onClose, o
                     </>
                 )}
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || loading || poItems.length === 0} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
+                    <button type="button" onClick={handleSubmit} disabled={isSubmitting || loading || poItems.length === 0} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
                         {isSubmitting ? 'Creating...' : 'Create PO'}
                     </button>
                 </div>

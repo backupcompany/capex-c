@@ -359,11 +359,16 @@ function CapexProjectListDetailPanelInner({
           role="dialog"
           aria-modal="true"
           aria-label="Menu aksi asset"
-          onClick={onCloseActionPopup}
         >
+          <button
+            type="button"
+            className="absolute inset-0 z-0 border-0 bg-transparent p-0"
+            aria-label="Tutup menu aksi"
+            onClick={onCloseActionPopup}
+          />
           <div
-            className="w-full max-w-sm rounded-xl border border-siloam-border bg-siloam-surface shadow-soft p-4"
-            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 w-full max-w-sm rounded-xl border border-siloam-border bg-siloam-surface shadow-soft p-4"
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-siloam-text-primary">Aksi</h3>

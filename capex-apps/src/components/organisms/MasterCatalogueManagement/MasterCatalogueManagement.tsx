@@ -112,13 +112,13 @@ export const MasterCatalogueManagement: React.FC<MasterCatalogueManagementProps>
             className="hidden"
             accept=".xlsx, .xls"
           />
-          <button
+          <button type="button"
             onClick={() => fileInputRef.current?.click()}
             className="bg-siloam-green text-white px-4 py-2 rounded-xl hover:bg-siloam-green/90 transition shadow-soft text-sm"
           >
             Upload
           </button>
-          <button
+          <button type="button"
             onClick={() => onOpenModal(null)}
             className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm"
           >
@@ -161,10 +161,10 @@ export const MasterCatalogueManagement: React.FC<MasterCatalogueManagementProps>
                 <td className="px-4 py-3">{item.category}</td>
                 <td className="px-4 py-3 text-right">{formatCurrency(item.price)}</td>
                 <td className="px-4 py-3 space-x-2">
-                  <button onClick={() => onOpenModal(item)} className="text-siloam-blue hover:underline">
+                  <button type="button" onClick={() => onOpenModal(item)} className="text-siloam-blue hover:underline">
                     Edit
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => void onDelete(item.id)}
                     className="text-danger hover:underline"
                   >

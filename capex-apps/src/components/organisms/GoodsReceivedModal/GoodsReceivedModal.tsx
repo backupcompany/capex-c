@@ -96,8 +96,8 @@ export const GoodsReceivedModal: React.FC<GoodsReceivedModalProps> = ({
                 </div>
                 {error && <p className="p-4 text-sm text-center text-danger">{error}</p>}
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
+                    <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
                         {isSubmitting ? 'Saving...' : 'Save Received Quantities'}
                     </button>
                 </div>

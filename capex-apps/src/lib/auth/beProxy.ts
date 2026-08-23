@@ -131,7 +131,7 @@ async function forwardBePost(
       (err instanceof Error && err.message.includes('fetch failed'));
     const leafHint =
       base.includes(':300') && !base.endsWith(':3001')
-        ? ' Leaf service belum jalan — jalankan: make run-all-leaf (atau make run untuk monolith-only tanpa CAPEX_SERVICE_* di .env.local).'
+        ? ' Backend leaf URL di .env — untuk monolit hapus CAPEX_SERVICE_* dan pastikan CAPEXBE_URL mengarah ke capex-api.'
         : '';
     const message = unreachable
       ? `Backend tidak berjalan di ${base}.${leafHint} Monolith: cd capexbe && npm run start:dev`
@@ -148,7 +148,7 @@ async function refreshSessionOnServer(): Promise<string[] | null> {
   if (!base) return null;
 
   const cookieStore = await cookies();
-  if (!cookieStore.get(REFRESH_COOKIE)?.value) return null;
+  if (!cookieStore.get(REFRESH_COOKIE)?.value?.trim()) return null;
 
   const cookieHeader = authCookieHeaderFromStore(cookieStore);
   const refreshHeaders: Record<string, string> = { Cookie: cookieHeader };
@@ -185,7 +185,8 @@ export async function proxyBePost(
 
   const cookieStore = await cookies();
   const hasSession = Boolean(
-    cookieStore.get(ACCESS_COOKIE)?.value || cookieStore.get(REFRESH_COOKIE)?.value,
+    cookieStore.get(ACCESS_COOKIE)?.value?.trim() ||
+      cookieStore.get(REFRESH_COOKIE)?.value?.trim(),
   );
   if (!hasSession) {
     return NextResponse.json({ message: 'Authentication required' }, { status: 401 });

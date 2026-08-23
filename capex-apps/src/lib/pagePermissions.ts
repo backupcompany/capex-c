@@ -75,6 +75,58 @@ export function getPageDataOperationLevel(page: Page): HierarchyLevel {
   return PAGE_DATA_OPERATION_MAP[page] ?? getPageScreenHierarchy(page);
 }
 
+/**
+ * Screens that need assignment scope (All / Network / HU) to show data.
+ * Matrix "View" alone is not enough — without scope the page is empty.
+ */
+export const SCOPE_REQUIRED_NAV_PAGES: readonly Page[] = [
+  Page.BudgetPeriod,
+  Page.BudgetArchetype,
+  Page.BudgetHU,
+  Page.CapexProjectList,
+  Page.ExecutiveSummary,
+  Page.POUpdate,
+  Page.GRUpdate,
+  Page.FSUpdate,
+  Page.FSApproval,
+  Page.FSRealization,
+  Page.BDDConstruction,
+  Page.DailyMOMSummary,
+];
+
+export type UserDataScopeShape = {
+  all: boolean;
+  archetypes: Set<string>;
+  hus: Set<string>;
+  archetypeIds: Set<string>;
+  huIds: Set<string>;
+};
+
+export function userHasDataScope(scopes: UserDataScopeShape): boolean {
+  return (
+    scopes.all ||
+    scopes.archetypes.size > 0 ||
+    scopes.hus.size > 0 ||
+    scopes.archetypeIds.size > 0 ||
+    scopes.huIds.size > 0
+  );
+}
+
+export function pageRequiresDataScope(page: Page): boolean {
+  return (SCOPE_REQUIRED_NAV_PAGES as readonly Page[]).includes(page);
+}
+
+/** Matrix screen access + assignment scope (when the page needs scope). */
+export function canNavigateToPage(
+  page: Page,
+  canAccessScreen: boolean,
+  scopes: UserDataScopeShape,
+): boolean {
+  if (!canAccessScreen) return false;
+  if (!pageRequiresDataScope(page)) return true;
+  return userHasDataScope(scopes);
+}
+
 export type PageDataAction = 'view' | 'edit' | 'create' | 'delete';
 
 function permissionValueMeetsAction(value: number, action: PageDataAction): boolean {

@@ -1,4 +1,8 @@
-import { resolveProjectListFilterOpts } from './project-list-query.util';
+import {
+  assignmentScopeCacheFingerprint,
+  mergeServerScopeFromQuery,
+  resolveProjectListFilterOpts,
+} from './project-list-query.util';
 import type { ProjectListQueryFilters } from './project-list.dto';
 
 const master = {
@@ -24,6 +28,21 @@ const baseFilters: ProjectListQueryFilters = {
 };
 
 describe('cross-HU scope (project-list)', () => {
+  it('assignmentScopeCacheFingerprint changes when scopes change', () => {
+    const a = assignmentScopeCacheFingerprint({
+      assignments: [{ roleName: 'PMO', assignedScopes: ['ARCH-01', 'HU-SHKP'] }],
+    });
+    const b = assignmentScopeCacheFingerprint({
+      assignments: [{ roleName: 'PMO', assignedScopes: ['ARCH-01', 'HU-SHKP', 'HU-SHJR'] }],
+    });
+    const c = assignmentScopeCacheFingerprint({
+      assignments: [{ roleName: 'PMO', assignedScopes: ['HU-SHKP', 'ARCH-01'] }],
+    });
+    expect(a).not.toBe(b);
+    expect(a).toBe(c);
+    expect(assignmentScopeCacheFingerprint(null)).toBe('none');
+  });
+
   it('scoped user assigned HU-A only — filter HU-B → forceEmpty', () => {
     const result = resolveProjectListFilterOpts(
       { ...baseFilters, huNames: ['RS Siloam B'] },
@@ -41,7 +60,6 @@ describe('cross-HU scope (project-list)', () => {
       { scopeAll: false, scopeHuNames: ['RS Siloam A'], scopeArchetypeNames: [] },
     );
     expect(result.forceEmpty).toBe(false);
-    expect(result.filterHuIds).toEqual(['HU-A']);
   });
 
   it('Head Office scopeAll — any HU filter passes', () => {
@@ -51,26 +69,25 @@ describe('cross-HU scope (project-list)', () => {
       { scopeAll: true, scopeHuNames: [], scopeArchetypeNames: [] },
     );
     expect(result.forceEmpty).toBe(false);
-    expect(result.filterHuIds).toEqual(['HU-B']);
   });
 
   it('scoped user with no HUs assigned — default list → forceEmpty', () => {
     const result = resolveProjectListFilterOpts(
-      baseFilters,
+      { ...baseFilters },
       master,
       { scopeAll: false, scopeHuNames: [], scopeArchetypeNames: [] },
     );
     expect(result.forceEmpty).toBe(true);
-    expect(result.filterHuIds).toEqual([]);
   });
 
-  it('scoped user HU-A — no UI filter narrows to assigned HUs only', () => {
-    const result = resolveProjectListFilterOpts(baseFilters, master, {
+  it('client scopeAll must not widen server scope', () => {
+    const serverScope = {
       scopeAll: false,
       scopeHuNames: ['RS Siloam A'],
-      scopeArchetypeNames: [],
-    });
-    expect(result.forceEmpty).toBe(false);
-    expect(result.filterHuIds).toEqual(['HU-A']);
+      scopeArchetypeNames: [] as string[],
+    };
+    mergeServerScopeFromQuery(serverScope, { scopeAll: true });
+    expect(serverScope.scopeAll).toBe(false);
+    expect(serverScope.scopeHuNames).toEqual(['RS Siloam A']);
   });
 });

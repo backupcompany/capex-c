@@ -11,7 +11,6 @@ import { DeleteAssetConfirmModal } from '../DeleteAssetConfirmModal/DeleteAssetC
 import { AssetGoodsReceivedModal } from '../AssetGoodsReceivedModal/AssetGoodsReceivedModal';
 import { AssetDetailViewModal } from '../AssetDetailViewModal/AssetDetailViewModal';
 import { ProjectDetailViewModal } from '../ProjectDetailViewModal/ProjectDetailViewModal';
-import { formatCurrency } from '../../../lib/formatter';
 import * as configService from '../../../services/configService';
 import * as taskService from '../../../services/taskService';
 import { newAssetId, nextAssetCode } from '../../../utils/assetCodeUtils';
@@ -25,7 +24,7 @@ interface ProjectAssetsModalProps {
     onClose: () => void;
     project: Project | null;
     onSaveProject: (updatedProject: Project) => Promise<void> | void;
-    onSaveAsset: (updatedAsset: Asset) => void;
+    onSaveAsset: (updatedAsset: Asset) => void | Promise<void>;
     allWorkflows: WorkflowSet[];
     allAssetTypes: AssetTypeConfig[];
     allCategories: BudgetCategoryConfig[];
@@ -39,6 +38,11 @@ interface ProjectAssetsModalProps {
     huId?: string | null;
     onUseExistingProject?: (project: Project) => void | Promise<void>;
     onUseExistingAsset?: (asset: Asset) => void | Promise<void>;
+    /** Page-level draft dirty — Cancel/Save stay usable while this modal covers the page. */
+    isDirty?: boolean;
+    isSaving?: boolean;
+    onCancelChanges?: () => void;
+    onSaveChanges?: () => void | Promise<void>;
 }
 
 export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
@@ -60,6 +64,10 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
     huId = null,
     onUseExistingProject,
     onUseExistingAsset,
+    isDirty = false,
+    isSaving = false,
+    onCancelChanges,
+    onSaveChanges,
 }) => {
     const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -156,7 +164,9 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
         setEditingAsset(newAsset);
     };
 
-    const handleMassSaveAssets = (newAssetsData: Omit<Asset, 'id' | 'assetCode' | 'budgetCategoryId' | 'budgetAllocated' | 'consumedBudget'>[]) => {
+    const handleMassSaveAssets = async (
+        newAssetsData: Omit<Asset, 'id' | 'assetCode' | 'budgetCategoryId' | 'budgetAllocated' | 'consumedBudget'>[],
+    ) => {
         const built: Asset[] = [];
         const newAssets: Asset[] = newAssetsData.map((data) => {
             const asset: Asset = {
@@ -176,9 +186,13 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
             assets: sortAssetsByCode([...project.assets, ...newAssets]),
         };
 
-        onSaveProject(updatedProject);
-        showToast(`${newAssets.length} assets added successfully!`, 'success');
-        setIsMassAddModalOpen(false);
+        try {
+            await Promise.resolve(onSaveProject(updatedProject));
+            showToast(`${newAssets.length} assets added successfully!`, 'success');
+            setIsMassAddModalOpen(false);
+        } catch {
+            /* parent toasted */
+        }
     };
 
     const handleProjectEditorClose = () => {
@@ -209,17 +223,21 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
         }
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (!assetToDelete) return;
 
         const updatedProject = {
             ...project,
             assets: project.assets.filter(a => a.id !== assetToDelete.id),
         };
-        onSaveProject(updatedProject);
-        showToast('Asset dihapus dari daftar. Klik Save Changes untuk menyimpan.', 'success');
-        setAssetToDelete(null);
-        setAssetTaskStatuses([]);
+        try {
+            await Promise.resolve(onSaveProject(updatedProject));
+            showToast('Asset dihapus dari daftar. Klik Save Changes untuk menyimpan.', 'success');
+            setAssetToDelete(null);
+            setAssetTaskStatuses([]);
+        } catch {
+            /* parent toasted */
+        }
     };
 
     const handleOpenMarkReceived = (asset: Asset) => {
@@ -271,17 +289,24 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
     };
 
     const assetColumns: Column<Asset>[] = [
-        { header: 'Asset Code', accessor: 'assetCode' },
-        { header: 'Asset Name', accessor: 'assetName' },
-        { header: 'Ordered QTY', accessor: (item) => item.qty ?? 1 },
-        { header: 'Budget Plan', accessor: 'budgetPlan', isNumeric: true },
-        { header: 'Consumed Budget', accessor: 'consumedBudget', isNumeric: true },
-        { 
-            header: 'Status', 
+        {
+            header: 'Asset Code',
+            width: 190,
+            accessor: (item) => (
+                <span className="whitespace-nowrap font-mono text-xs">{item.assetCode}</span>
+            ),
+        },
+        { header: 'Asset Name', width: 180, accessor: 'assetName' },
+        { header: 'Ordered QTY', width: 88, accessor: (item) => item.qty ?? 1 },
+        { header: 'Budget Plan', width: 120, accessor: 'budgetPlan', isNumeric: true },
+        { header: 'Consumed Budget', width: 130, accessor: 'consumedBudget', isNumeric: true },
+        {
+            header: 'Status',
+            width: 140,
             accessor: (item) => {
                 const status = getAssetStatus(item);
                 return (
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${status.bg} ${status.color}`}>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${status.bg} ${status.color}`}>
                         {status.text}
                     </span>
                 );
@@ -289,27 +314,28 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
         },
         {
             header: 'Actions',
+            width: 260,
             accessor: (item) => (
-                <div className="flex items-center gap-2">
-                    <button
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-nowrap">
+                    <button type="button"
                         onClick={(e) => { e.stopPropagation(); handleViewDetail(item); }}
                         className="text-siloam-blue hover:underline text-xs font-semibold"
                     >
                         Details
                     </button>
-                    <button
+                    <button type="button"
                         onClick={(e) => { e.stopPropagation(); setEditingAsset(item); setIsCreatingAsset(false); }}
                         className="text-siloam-blue hover:underline text-xs font-semibold"
                     >
                         Edit
                     </button>
-                    <button
+                    <button type="button"
                         onClick={(e) => { e.stopPropagation(); handleOpenMarkReceived(item); }}
                         className="text-siloam-green hover:underline text-xs font-semibold"
                     >
                         Mark Received
                     </button>
-                    <button
+                    <button type="button"
                         onClick={(e) => { e.stopPropagation(); handleDeleteAsset(item); }}
                         className="text-danger hover:underline text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isLoadingDeleteCheck}
@@ -324,38 +350,38 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
     return (
         <>
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
-                <div className="bg-siloam-surface rounded-xl shadow-lg w-full max-w-6xl max-h-[90vh] flex flex-col">
+                <div className="bg-siloam-surface rounded-xl shadow-lg w-full max-w-7xl max-h-[90vh] flex flex-col">
                     <div className="flex-shrink-0 px-6 py-4 border-b border-siloam-border flex justify-between items-center">
                         <div>
                             <h3 className="text-xl font-bold text-siloam-text-primary">Asset Details: {project.projectName}</h3>
                             <p className="text-sm text-siloam-text-secondary">{project.projectCode}</p>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button onClick={() => setIsProjectDetailOpen(true)} className="flex items-center gap-1 text-sm text-siloam-blue hover:text-siloam-blue/80 hover:underline">
+                            <button type="button" onClick={() => setIsProjectDetailOpen(true)} className="flex items-center gap-1 text-sm text-siloam-blue hover:text-siloam-blue/80 hover:underline">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                 Project Details
                             </button>
-                            <button onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-1 text-sm text-siloam-blue hover:text-siloam-blue/80 hover:underline">
+                            <button type="button" onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-1 text-sm text-siloam-blue hover:text-siloam-blue/80 hover:underline">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 History Log
                             </button>
-                            <button onClick={onClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
+                            <button type="button" onClick={onClose} className="p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                     </div>
 
                     <div className="flex-shrink-0 px-6 py-3 border-b border-siloam-border flex items-center gap-2 flex-wrap">
-                        <button onClick={() => setIsProjectEditorOpen(true)} className="bg-siloam-sidebar text-siloam-text-primary px-4 py-2 text-sm rounded-xl hover:bg-siloam-border transition">
+                        <button type="button" onClick={() => setIsProjectEditorOpen(true)} className="bg-siloam-sidebar text-siloam-text-primary px-4 py-2 text-sm rounded-xl hover:bg-siloam-border transition">
                             Edit Project
                         </button>
-                        <button onClick={handleAddNewAsset} className="bg-siloam-blue text-white px-4 py-2 rounded-xl text-sm hover:bg-siloam-blue/90 transition shadow-soft">
+                        <button type="button" onClick={handleAddNewAsset} className="bg-siloam-blue text-white px-4 py-2 rounded-xl text-sm hover:bg-siloam-blue/90 transition shadow-soft">
                             + New Asset
                         </button>
-                        <button onClick={handleCopyFromProject} className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-green-700 transition shadow-soft">
+                        <button type="button" onClick={handleCopyFromProject} className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-green-700 transition shadow-soft">
                             Copy from Project
                         </button>
-                        <button onClick={() => setIsMassAddModalOpen(true)} className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-700 transition shadow-soft">
+                        <button type="button" onClick={() => setIsMassAddModalOpen(true)} className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-700 transition shadow-soft">
                             Mass Add Assets
                         </button>
                     </div>
@@ -410,13 +436,45 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
                         )}
                     </div>
 
-                    <div className="flex-shrink-0 px-6 py-4 border-t border-siloam-border flex justify-end">
-                         <button 
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90"
-                        >
-                            Close
-                        </button>
+                    <div className="flex-shrink-0 px-6 py-4 border-t border-siloam-border flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-siloam-text-secondary">
+                            {isDirty
+                                ? 'Ada draft belum disimpan. Cancel / Save Changes di sini sama dengan tombol di halaman Budget HU.'
+                                : 'Edit asset dulu; pakai Save Changes untuk menyimpan ke database.'}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            {onCancelChanges ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onCancelChanges();
+                                        onClose();
+                                    }}
+                                    disabled={!isDirty || isSaving}
+                                    className="px-4 py-2 text-sm rounded-lg border border-siloam-border hover:bg-siloam-bg text-siloam-text-primary font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Cancel
+                                </button>
+                            ) : null}
+                            {onSaveChanges ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void onSaveChanges()}
+                                    disabled={!isDirty || isSaving}
+                                    className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                    {isSaving ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                disabled={isSaving}
+                                className="px-4 py-2 text-sm rounded-lg border border-siloam-border hover:bg-siloam-bg text-siloam-text-primary font-semibold disabled:opacity-50"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -480,11 +538,15 @@ export const ProjectAssetsModal: React.FC<ProjectAssetsModalProps> = ({
                             }
                             : undefined
                     }
-                    onSave={(updatedAsset) => {
-                        onSaveAsset(updatedAsset);
-                        setEditingAsset(null);
-                        setIsCreatingAsset(false);
-                        showToast('Asset saved successfully!');
+                    onSave={async (updatedAsset) => {
+                        try {
+                            await Promise.resolve(onSaveAsset(updatedAsset));
+                            setEditingAsset(null);
+                            setIsCreatingAsset(false);
+                            showToast('Asset diubah sementara. Klik Save Changes untuk menyimpan.', 'success');
+                        } catch {
+                            /* parent already toasted */
+                        }
                     }}
                 />
             )}

@@ -31,7 +31,7 @@ const normId = (value: string | number | undefined | null): string =>
 
 const normRoleId = (value: string | number | undefined | null): number | null => {
   if (value == null || value === '') return null;
-  const n = typeof value === 'number' && Number.isFinite(value) ? value : parseInt(String(value), 10);
+  const n = typeof value === 'number' && Number.isFinite(value) ? value : Number.parseInt(String(value), 10);
   return Number.isFinite(n) ? n : null;
 };
 

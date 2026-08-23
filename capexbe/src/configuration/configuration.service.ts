@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthZService } from '../auth/auth-z.service';
 import { createSupabaseClient, getSupabaseServiceKey } from '../shared/supabase-client.factory';
+import { assertEmailDomainAllowedForUser } from '../shared/prod-env.util';
 import {
   perfCacheDelete,
   perfCacheDeleteByPrefix,
@@ -11,9 +12,10 @@ import {
 import { cacheKeys, configurationSliceTtlMs } from '../shared/cache-keys';
 import { fetchAllRecords, toCamelCase } from '../project-list/supabase-helpers';
 import { escapeIlikePattern } from '../shared/postgrest-filter.util';
-import { viewerCanSeeUserPii, viewerCanSeeVendorTaxId } from '../shared/pii-access.util';
+import { viewerCanSeeUserPii, viewerCanSeeVendorTaxId, viewerCanSeeRolePermissionMatrix } from '../shared/pii-access.util';
 import {
   sanitizeUsersForDirectory,
+  sanitizeRolesForViewer,
 } from '../shared/response-sanitize.util';
 import { sanitizeVendorRecord } from '../shared/pii-hash.util';
 import {
@@ -55,6 +57,9 @@ export const CONFIGURATION_SLICE_KEYS = [
 export type ConfigurationSliceKey = (typeof CONFIGURATION_SLICE_KEYS)[number];
 
 const SLICE_SET = new Set<string>(CONFIGURATION_SLICE_KEYS);
+
+/** Directory / RBAC slices — Configuration matrix only. Operational masters are readable by any signed-in user. */
+const ADMIN_DIRECTORY_SLICES = new Set<ConfigurationSliceKey>(['users', 'roles']);
 
 function buildBudgetPeriodSummaries(periodRows: any[]): any[] {
   if (!periodRows?.length) return [];
@@ -403,8 +408,12 @@ export class ConfigurationService {
     throw new BadRequestException(res.error?.message || 'Failed to save assignment scopes');
   }
 
-  private async assertConfigAccess(accessToken: string, userId: number) {
-    return this.authZ.assertConfigurationAccess(accessToken, userId);
+  private async assertConfigAccess(
+    accessToken: string,
+    userId: number,
+    level: 'view' | 'update' = 'update',
+  ) {
+    return this.authZ.assertConfigurationAccess(accessToken, userId, level);
   }
 
   /**
@@ -470,9 +479,16 @@ export class ConfigurationService {
   private async saveUserEntity(client: SupabaseClient, payload: Record<string, unknown>) {
     const userId = Number(payload.id);
     const username = String(payload.username ?? '').trim();
-    const email = String(payload.email ?? '').trim();
+    // SSO resolveAppUserByEmail is case-insensitive but we persist lowercase so
+    // Azure UPN/mail always matches what Super Admin typed at create time.
+    const email = String(payload.email ?? '').trim().toLowerCase();
     if (!Number.isFinite(userId) || userId <= 0 || !username || !email) {
       throw new BadRequestException('Invalid user payload');
+    }
+    try {
+      assertEmailDomainAllowedForUser(email);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Email domain tidak diizinkan.');
     }
     const assignments = Array.isArray(payload.assignments) ? payload.assignments : [];
 
@@ -547,6 +563,7 @@ export class ConfigurationService {
   /**
    * Satu round-trip HTTP: semua master config diparalel di server.
    * @param slices jika diisi, hanya key yang diminta (untuk refresh parsial).
+   * users/roles butuh hak Configuration; slice operasional (budget, HU, …) cukup session valid.
    */
   async loadConfigurationPack(
     accessToken: string,
@@ -558,13 +575,16 @@ export class ConfigurationService {
       throw new UnauthorizedException('Missing access token');
     }
 
-    const ctx = await this.assertConfigAccess(accessToken, userId);
-    const client = this.getConfigurationClient(ctx.client);
-
     const requested =
       slices?.length && slices.some(Boolean)
         ? [...new Set(slices.filter((s) => SLICE_SET.has(s)) as ConfigurationSliceKey[])]
         : [...CONFIGURATION_SLICE_KEYS];
+
+    const needsDirectoryAccess = requested.some((k) => ADMIN_DIRECTORY_SLICES.has(k));
+    const ctx = needsDirectoryAccess
+      ? await this.assertConfigAccess(accessToken, userId, 'view')
+      : await this.authZ.resolve(accessToken, userId);
+    const client = this.getConfigurationClient(ctx.client);
 
     const out: Partial<Record<ConfigurationSliceKey, unknown>> = {};
     const toLoad: ConfigurationSliceKey[] = [];
@@ -639,6 +659,10 @@ export class ConfigurationService {
       return (value as Record<string, unknown>[]).map((v) =>
         sanitizeVendorRecord(v, includeTaxId),
       );
+    }
+    if (key === 'roles' && Array.isArray(value)) {
+      const includeMatrix = await viewerCanSeeRolePermissionMatrix(this.authZ, accessToken, userId);
+      return sanitizeRolesForViewer(value as Record<string, unknown>[], includeMatrix);
     }
     return value;
   }
@@ -718,7 +742,7 @@ export class ConfigurationService {
       throw new BadRequestException('assetTypeId is required');
     }
 
-    const ctx = await this.assertConfigAccess(accessToken, userId);
+    const ctx = await this.assertConfigAccess(accessToken, userId, 'view');
     const client = this.getConfigurationClient(ctx.client);
 
     const { count, error } = await client
@@ -838,7 +862,8 @@ export class ConfigurationService {
   async getAppConfigByKey(accessToken: string, userId: number, key: string) {
     const configKey = String(key ?? '').trim();
     if (!configKey) throw new BadRequestException('key is required');
-    const ctx = await this.assertConfigAccess(accessToken, userId);
+    // Operational app_config keys (routine max, default workflows, sidebar) — any signed-in user.
+    const ctx = await this.authZ.resolve(accessToken, userId);
     const client = this.getConfigurationClient(ctx.client);
     const { data, error } = await client
       .from('app_config')

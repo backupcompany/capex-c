@@ -115,6 +115,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Budget Plan',
       accessor: 'budgetPlan',
       isNumeric: true,
+      numericDisplay: 'full',
       isEditable: isProjectEditable,
       align: 'right',
     },
@@ -123,6 +124,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Budget Carry Forward',
       accessor: 'budgetCarryForward',
       isNumeric: true,
+      numericDisplay: 'full',
       isEditable: isProjectEditable,
       align: 'right',
     },
@@ -131,6 +133,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Budget Allocated to Asset',
       accessor: 'budgetAllocated',
       isNumeric: true,
+      numericDisplay: 'full',
       align: 'right',
     },
     {
@@ -138,6 +141,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Remaining to Allocate',
       accessor: (p) => p.budgetPlan + p.budgetCarryForward - p.budgetAllocated,
       isNumeric: true,
+      numericDisplay: 'full',
       align: 'right',
     },
     {
@@ -145,6 +149,7 @@ export function buildBudgetHuProjectColumns({
       header: 'FS Budget',
       accessor: 'approvedBudget',
       isNumeric: true,
+      numericDisplay: 'full',
       isEditable: isProjectEditable,
       align: 'right',
     },
@@ -153,6 +158,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Remaining To Approved',
       accessor: (p) => p.budgetPlan + p.budgetCarryForward - p.approvedBudget,
       isNumeric: true,
+      numericDisplay: 'full',
       align: 'right',
     },
     {
@@ -160,6 +166,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Realization Budget',
       accessor: 'consumedBudget',
       isNumeric: true,
+      numericDisplay: 'full',
       align: 'right',
     },
     {
@@ -167,6 +174,7 @@ export function buildBudgetHuProjectColumns({
       header: 'Remaining to Consume',
       accessor: (p) => p.budgetPlan + p.budgetCarryForward - p.consumedBudget,
       isNumeric: true,
+      numericDisplay: 'full',
       align: 'right',
     },
     {

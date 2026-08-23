@@ -60,11 +60,9 @@ export const screenLoaders: Partial<Record<Page, ScreenLoader>> = {
 export function prefetchScreenChunk(page: Page): void {
   const load = screenLoaders[page];
   if (!load) return;
-  try {
-    void load();
-  } catch {
-    /* best-effort */
-  }
+  void load().catch(() => {
+    /* best-effort chunk warm */
+  });
 }
 
 export const LazyDashboardPage = lazyScreen(screenLoaders[Page.Dashboard]!);

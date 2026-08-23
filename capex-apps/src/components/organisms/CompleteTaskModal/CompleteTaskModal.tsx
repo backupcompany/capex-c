@@ -111,8 +111,8 @@ export const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ isOpen, on
                     {error && <p className="text-sm text-danger">{error}</p>}
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={handleClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || !remark.trim()} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">
+                    <button type="button" onClick={handleClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSubmit} disabled={isSubmitting || !remark.trim()} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">
                         {isSubmitting ? 'Submitting...' : 'Confirm Completion'}
                     </button>
                 </div>

@@ -22,6 +22,7 @@ import {
   type TaskMasterSpreadsheetRow,
   type TaskSpreadsheetValidation,
 } from '@/features/configuration/workflow/utils/workflowSpreadsheetUtils';
+import { secureId } from '@/lib/secureId';
 import {
   mergePastedTaskRows,
   parseClipboardToTaskRows,
@@ -193,7 +194,7 @@ export function TaskMasterSpreadsheet({ tasks, onSaved, onEditDetail }: TaskMast
         const partial = spreadsheetRowToTask(row);
         const taskToSave = {
           ...partial,
-          id: row._isNew ? `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` : row.id,
+          id: row._isNew ? secureId('task-') : row.id,
         } as Task;
         await saveConfigViaBeOrFallback('task', taskToSave);
       }

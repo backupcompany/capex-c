@@ -45,7 +45,8 @@ import {
 } from './azure-oauth.util';
 import { isSsoLoginEnabled } from '../shared/auth-mode.util';
 import { getDemoLoginCredentials, isVpsPostgresMode, matchVpsLogin } from '../shared/vps-postgres.util';
-import { isAppUserLookupUnauthorized } from './auth-oauth-errors.util';
+import { getLocalDevEnterEmail, isLocalDevEnterAllowed } from '../shared/demo-mode.util';
+import { isAppUserLookupUnauthorized, DB_UNAVAILABLE_LOGIN_MSG } from './auth-oauth-errors.util';
 
 function cookieOptions(maxAgeSec: number) {
   return {
@@ -85,6 +86,7 @@ export class AuthService {
       roles: user.roles,
       assignments: (user.assignments ?? []).map((a) => ({
         roleName: a.roleName,
+        ...(a.roleId != null && Number.isFinite(a.roleId) ? { roleId: a.roleId } : {}),
         assignedScopes: Array.isArray(a.assignedScopes) ? a.assignedScopes : [],
       })),
       idleTimeoutMs: this.idleTimeoutMs(user.roles),
@@ -342,6 +344,29 @@ export class AuthService {
 
     return this.establishSession(appUser, authId, res, {
       email: matchedEmail,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+  }
+
+  /** Local-only one-click enter (CAPEX_DEMO_MODE + non-production). No password. */
+  async localDevEnter(
+    res: Response,
+    meta?: { ip?: string; userAgent?: string },
+  ): Promise<AuthMeDto> {
+    if (!isLocalDevEnterAllowed()) {
+      throw new UnauthorizedException('Local dev enter is disabled');
+    }
+    const email = getLocalDevEnterEmail();
+    if (!email.includes('@')) {
+      throw new BadRequestException('LOCAL_DEV_ENTER_EMAIL is invalid');
+    }
+    const client = this.users.createServiceReadClient();
+    const appUser = await this.users.resolveAppUserByEmail(client, email);
+    const authId = resolveSessionAuthId(appUser.auth_id, email);
+    await this.users.ensureUserAuthIdLinked(appUser.id, authId, appUser.auth_id);
+    return this.establishSession(appUser, authId, res, {
+      email,
       ip: meta?.ip,
       userAgent: meta?.userAgent,
     });
@@ -710,6 +735,15 @@ export class AuthService {
     if (msg.includes('error getting user email') || msg.includes('did not return an email')) {
       return 'Microsoft tidak mengirim email. Pastikan scope email aktif di Azure App.';
     }
+    if (
+      msg.includes('database') ||
+      msg.includes('pgrst') ||
+      msg.includes('schema cache') ||
+      msg.includes('tidak tersedia') ||
+      msg.includes('unavailable')
+    ) {
+      return DB_UNAVAILABLE_LOGIN_MSG;
+    }
     if (msg.includes('access_denied') || msg.includes('consent_required')) {
       return 'Login Microsoft dibatalkan. Silakan coba lagi dengan akun yang benar.';
     }
@@ -806,6 +840,9 @@ export class AuthService {
         userAgent: meta?.userAgent,
       });
     } catch (e) {
+      if (e instanceof ServiceUnavailableException) {
+        return failRedirect(DB_UNAVAILABLE_LOGIN_MSG);
+      }
       if (e instanceof UnauthorizedException && isAppUserLookupUnauthorized(e.message)) {
         return failRedirect(
           'Akun Microsoft Anda tidak terdaftar di Capex Pro atau tidak memiliki akses. Hubungi admin.',

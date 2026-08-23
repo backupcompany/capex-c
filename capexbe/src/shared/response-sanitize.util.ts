@@ -108,3 +108,15 @@ export function sanitizeUsersForDirectory(
 ): DirectoryUser[] {
   return users.map((u) => sanitizeUserForDirectory(u, viewerUserId, includePii, exposeNumericId));
 }
+
+/** View-only Configuration: role labels only — no permission matrix egress. */
+export function sanitizeRolesForViewer(
+  roles: Record<string, unknown>[],
+  includePermissionMatrix: boolean,
+): Record<string, unknown>[] {
+  if (includePermissionMatrix) return roles;
+  return roles.map((role) => {
+    const { permissions: _drop, ...rest } = role;
+    return { ...rest, permissions: [] };
+  });
+}

@@ -44,8 +44,8 @@ export const RoomEditorModal: React.FC<{
         <h3 className="text-lg font-bold mb-4">{editedRoom.id ? 'Edit' : 'Create'} Room</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Room Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-room-name">Room Name</label>
+            <input id="fld-room-name"
               type="text"
               value={editedRoom.name || ''}
               onChange={(e) => setEditedRoom({ ...editedRoom, name: e.target.value })}

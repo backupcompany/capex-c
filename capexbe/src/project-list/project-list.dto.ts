@@ -110,13 +110,9 @@ export function parseProjectListQueryBody(body: unknown): ProjectListQueryBody {
     completionMin: min,
     completionMax: max,
     finishedTasks,
-    scopeAll: b.scopeAll === true,
-    scopeHuNames: Array.isArray(b.scopeHuNames)
-      ? b.scopeHuNames.map((n) => String(n).trim()).filter(Boolean)
-      : undefined,
-    scopeArchetypeNames: Array.isArray(b.scopeArchetypeNames)
-      ? b.scopeArchetypeNames.map((n) => String(n).trim()).filter(Boolean)
-      : undefined,
+    scopeAll: false,
+    scopeHuNames: undefined,
+    scopeArchetypeNames: undefined,
     bddConstructionOnly: b.bddConstructionOnly === true,
     hideUnassignedBdd: b.hideUnassignedBdd === true,
   };

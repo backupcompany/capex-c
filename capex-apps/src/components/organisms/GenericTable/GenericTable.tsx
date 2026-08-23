@@ -178,8 +178,15 @@ function GenericTableInner<T extends object>({
                   ) : null}
                 </div>
                 <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize column"
+                  tabIndex={0}
                   className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
                   onMouseDown={(e) => onMouseDown(e, col.header)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+                  }}
                 />
               </th>
             ))}
@@ -187,8 +194,12 @@ function GenericTableInner<T extends object>({
         </thead>
         <tbody>
           {useVirtualization && paddingTop > 0 ? (
-            <tr aria-hidden>
-              <td colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 'none' }} />
+            <tr>
+              <td
+                colSpan={columns.length}
+                aria-hidden="true"
+                style={{ height: paddingTop, padding: 0, border: 'none' }}
+              />
             </tr>
           ) : null}
           {useVirtualization
@@ -198,8 +209,12 @@ function GenericTableInner<T extends object>({
               })
             : data.map((item, index) => renderRow(item, index))}
           {useVirtualization && paddingBottom > 0 ? (
-            <tr aria-hidden>
-              <td colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 'none' }} />
+            <tr>
+              <td
+                colSpan={columns.length}
+                aria-hidden="true"
+                style={{ height: paddingBottom, padding: 0, border: 'none' }}
+              />
             </tr>
           ) : null}
         </tbody>

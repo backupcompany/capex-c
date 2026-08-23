@@ -64,7 +64,7 @@ export class ConfigurationController {
   private readonly logger = new Logger(ConfigurationController.name);
   constructor(private readonly configurationService: ConfigurationService) {}
 
-  @CONFIG_READ
+  // Pack: operational slices for any signed-in user; users/roles gated inside service.
   @Post('pack')
   async configurationPack(@Req() req: Request, @Body() body: ConfigurationPackBodyDto) {
     const token = requireAccessTokenFromRequest(req);
@@ -143,7 +143,6 @@ export class ConfigurationController {
     );
   }
 
-  @CONFIG_READ
   @Post('app-config-get')
   async appConfigGet(@Req() req: Request, @Body() body: AppConfigGetBodyDto) {
     const token = requireAccessTokenFromRequest(req);

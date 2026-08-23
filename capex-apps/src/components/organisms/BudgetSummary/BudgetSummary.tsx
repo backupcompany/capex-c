@@ -80,8 +80,9 @@ export const BudgetSummary: React.FC<BudgetSummaryProps> = ({ data, isCompact, o
 
     if (isCompact) {
         return (
-            <div 
-                className="relative bg-siloam-surface rounded-xl shadow-soft p-4 animate-fade-in cursor-pointer transition-all hover:shadow-lg hover:ring-2 hover:ring-siloam-blue/50"
+            <button
+                type="button"
+                className="relative w-full text-left bg-siloam-surface rounded-xl shadow-soft p-4 animate-fade-in cursor-pointer transition-all hover:shadow-lg hover:ring-2 hover:ring-siloam-blue/50"
                 onClick={onToggleCompact}
             >
                 <div className="flex flex-col md:flex-row md:items-center md:gap-6 gap-4">
@@ -115,20 +116,20 @@ export const BudgetSummary: React.FC<BudgetSummaryProps> = ({ data, isCompact, o
                         </div>
                     </div>
                 </div>
-                 <button 
-                    onClick={handleButtonClick}
-                    className="absolute top-3 right-3 text-siloam-blue bg-siloam-sidebar hover:bg-siloam-border p-2 rounded-full shadow-soft transition-all" 
+                 <span
+                    className="absolute top-3 right-3 text-siloam-blue bg-siloam-sidebar hover:bg-siloam-border p-2 rounded-full shadow-soft transition-all pointer-events-none"
                     title="Expand Summary"
+                    aria-hidden
                 >
                     <ChevronDownIcon />
-                </button>
-            </div>
+                </span>
+            </button>
         )
     }
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in relative">
-            <button 
+            <button type="button" 
                 onClick={handleButtonClick}
                 className="absolute top-4 right-4 text-siloam-blue bg-siloam-sidebar hover:bg-siloam-border p-2 rounded-full shadow-soft transition-all z-10" 
                 title="Minimize Summary"
@@ -136,8 +137,9 @@ export const BudgetSummary: React.FC<BudgetSummaryProps> = ({ data, isCompact, o
                 <ChevronUpIcon />
             </button>
             {/* Grand Total Card */}
-            <div 
-                className="lg:col-span-1 bg-siloam-surface rounded-xl shadow-soft p-6 flex flex-col space-y-4 cursor-pointer transition-all hover:shadow-lg hover:ring-2 hover:ring-siloam-blue/50"
+            <button
+                type="button"
+                className="lg:col-span-1 bg-siloam-surface rounded-xl shadow-soft p-6 flex flex-col space-y-4 cursor-pointer transition-all hover:shadow-lg hover:ring-2 hover:ring-siloam-blue/50 text-left"
                 onClick={onToggleCompact}
             >
                 <h3 className="text-xl font-bold text-siloam-text-primary">Summary</h3>
@@ -188,7 +190,7 @@ export const BudgetSummary: React.FC<BudgetSummaryProps> = ({ data, isCompact, o
                     </p>
                 </div>
 
-            </div>
+            </button>
 
             {/* Category Breakdown List */}
             <div className="lg:col-span-2 bg-siloam-surface rounded-xl shadow-soft p-6">

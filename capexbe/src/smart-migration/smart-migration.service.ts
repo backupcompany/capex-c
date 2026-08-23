@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthZService } from '../auth/auth-z.service';
 import * as XLSX from 'xlsx';
@@ -344,7 +345,7 @@ export class SmartMigrationService {
             bump++;
             id = `${base}-x${bump}`.substring(0, 255);
           }
-          if (usedIds.has(id)) id = `PROJ-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`.substring(0, 255);
+          if (usedIds.has(id)) id = `PROJ-${randomUUID()}`.substring(0, 255);
           usedIds.add(id);
         }
 
@@ -527,9 +528,9 @@ export class SmartMigrationService {
         const existing = byCode.get(codeKey);
         let id = existing?.id ? String(existing.id) : '';
         if (!id) {
-          id = `ASSET-${periodName || 'MIG'}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+          id = `ASSET-${periodName || 'MIG'}-${i}-${randomUUID()}`.substring(0, 255);
           while (usedIds.has(id)) {
-            id = `ASSET-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+            id = `ASSET-${randomUUID()}-${i}`.substring(0, 255);
           }
           usedIds.add(id);
         }

@@ -42,7 +42,10 @@ export const UserTableRow = memo(function UserTableRow({
             <td className="px-6 py-4 align-top">
                 <div className="space-y-2">
                     {user.assignments.map((a, i) => (
-                        <div key={i} className="flex flex-col text-xs">
+                        <div
+                            key={`${a.roleId ?? a.roleName ?? 'role'}-${(a.assignedScopes || []).join('|')}-${i}`}
+                            className="flex flex-col text-xs"
+                        >
                             <div className="flex items-center gap-2">
                                 <span className="font-bold bg-siloam-blue/10 text-siloam-blue px-2 py-0.5 rounded-full border border-siloam-blue/20">
                                     {a.roleName}
@@ -61,13 +64,13 @@ export const UserTableRow = memo(function UserTableRow({
             </td>
             <td className="px-6 py-4 text-right align-top">
                 <div className="flex items-center justify-end gap-3">
-                    <button
+                    <button type="button"
                         onClick={() => onEdit(user)}
                         className="text-siloam-blue hover:text-siloam-blue/80 font-medium text-xs bg-siloam-blue/5 px-3 py-1.5 rounded-lg hover:bg-siloam-blue/10 transition-colors"
                     >
                         Edit
                     </button>
-                    <button
+                    <button type="button"
                         onClick={() => onDelete(user.id)}
                         className="text-danger hover:text-red-700 font-medium text-xs bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
                     >

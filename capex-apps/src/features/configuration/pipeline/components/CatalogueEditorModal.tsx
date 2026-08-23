@@ -53,8 +53,8 @@ export const CatalogueEditorModal: React.FC<{
         <h3 className="text-lg font-bold mb-4">{editedItem.id ? 'Edit' : 'Create'} Catalogue Item</h3>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">RDS Code</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-rds-code">RDS Code</label>
+            <input id="fld-rds-code"
               type="text"
               value={editedItem.rdsCode || ''}
               onChange={(e) => setEditedItem({ ...editedItem, rdsCode: e.target.value })}
@@ -63,8 +63,8 @@ export const CatalogueEditorModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-name">Name</label>
+            <input id="fld-name"
               type="text"
               value={editedItem.name || ''}
               onChange={(e) => setEditedItem({ ...editedItem, name: e.target.value })}
@@ -73,8 +73,8 @@ export const CatalogueEditorModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Category</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-category">Category</label>
+            <input id="fld-category"
               type="text"
               value={editedItem.category || ''}
               onChange={(e) => setEditedItem({ ...editedItem, category: e.target.value })}
@@ -83,7 +83,7 @@ export const CatalogueEditorModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Price</label>
+            <p className="block text-sm font-medium text-siloam-text-secondary">Price</p>
             <CurrencyInput
               value={editedItem.price || 0}
               onValueChange={(val) => setEditedItem({ ...editedItem, price: val })}

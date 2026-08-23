@@ -68,13 +68,13 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
             className="hidden"
             accept=".xlsx, .xls"
           />
-          <button
+          <button type="button"
             onClick={() => fileInputRef.current?.click()}
             className="bg-siloam-green text-white px-4 py-2 rounded-xl hover:bg-siloam-green/90 transition shadow-soft text-sm"
           >
             Upload
           </button>
-          <button
+          <button type="button"
             onClick={() => onOpenModal(null)}
             className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm"
           >
@@ -107,10 +107,10 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
               <tr key={room.id} className="border-b border-siloam-border hover:bg-siloam-bg">
                 <td className="px-4 py-3 font-medium">{room.name}</td>
                 <td className="px-4 py-3 space-x-2">
-                  <button onClick={() => onOpenModal(room)} className="text-siloam-blue hover:underline">
+                  <button type="button" onClick={() => onOpenModal(room)} className="text-siloam-blue hover:underline">
                     Edit
                   </button>
-                  <button onClick={() => void onDelete(room.id)} className="text-danger hover:underline">
+                  <button type="button" onClick={() => void onDelete(room.id)} className="text-danger hover:underline">
                     Delete
                   </button>
                 </td>

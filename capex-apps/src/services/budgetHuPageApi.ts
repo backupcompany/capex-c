@@ -413,6 +413,8 @@ export async function fetchBudgetHuSyncStamp(
           credentials: useBackendSession() ? 'include' : 'same-origin',
           body: JSON.stringify({ periodName: pn, userId, hospitalUnitId: huId }),
           cache: 'no-store',
+          // Soft poll — never block the tab on a hung BE/tunnel (was ~19min in logs).
+          signal: AbortSignal.timeout(12_000),
         });
         if (!res.ok) return null;
         const body = (await res.json()) as Partial<BudgetHuSyncStamp>;

@@ -156,7 +156,7 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                         <WhatsAppIcon />
                         WhatsApp Reminder
                     </h3>
-                    <button onClick={onClose} className="text-siloam-text-secondary hover:text-siloam-text-primary">
+                    <button type="button" onClick={onClose} className="text-siloam-text-secondary hover:text-siloam-text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -195,11 +195,11 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                 {/* Recipient Selection */}
                 <div className="space-y-4 mb-4">
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-2">
                             Recipient Type
-                        </label>
+                        </p>
                         <div className="flex gap-2">
-                            <button
+                            <button type="button"
                                 onClick={() => setSelectedRecipientType('bic')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     selectedRecipientType === 'bic'
@@ -209,7 +209,7 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                             >
                                 BIC (Default)
                             </button>
-                            <button
+                            <button type="button"
                                 onClick={() => setSelectedRecipientType('role')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     selectedRecipientType === 'role'
@@ -219,7 +219,7 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                             >
                                 By Role
                             </button>
-                            <button
+                            <button type="button"
                                 onClick={() => setSelectedRecipientType('manual')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     selectedRecipientType === 'manual'
@@ -235,12 +235,12 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                     {/* BIC Selection */}
                     {selectedRecipientType === 'bic' && (
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                            <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-select-bic">
                                 Select BIC
                             </label>
-                            <select
+                            <select id="fld-select-bic"
                                 value={selectedUserId || ''}
-                                onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
+                                onChange={(e) => setSelectedUserId(Number.parseInt(e.target.value) || null)}
                                 className="w-full px-3 py-2 border border-siloam-border rounded-lg bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                             >
                                 <option value="">-- Select BIC --</option>
@@ -262,10 +262,10 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                     {selectedRecipientType === 'role' && (
                         <>
                             <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                                <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-select-role">
                                     Select Role
                                 </label>
-                                <select
+                                <select id="fld-select-role"
                                     value={selectedRoleId}
                                     onChange={(e) => {
                                         setSelectedRoleId(e.target.value);
@@ -283,12 +283,12 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                             </div>
                             {selectedRoleId && (
                                 <div>
-                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-select-user">
                                         Select User
                                     </label>
-                                    <select
+                                    <select id="fld-select-user"
                                         value={selectedUserId || ''}
-                                        onChange={(e) => setSelectedUserId(parseInt(e.target.value) || null)}
+                                        onChange={(e) => setSelectedUserId(Number.parseInt(e.target.value) || null)}
                                         className="w-full px-3 py-2 border border-siloam-border rounded-lg bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                                     >
                                         <option value="">-- Select User --</option>
@@ -311,10 +311,11 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
                     {/* Manual Input */}
                     {selectedRecipientType === 'manual' && (
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                            <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-whatsapp-number">
                                 WhatsApp Number <span className="text-red-500">*</span>
                             </label>
                             <input
+                                id="fld-whatsapp-number"
                                 type="text"
                                 value={manualPhoneNumber}
                                 onChange={(e) => setManualPhoneNumber(e.target.value)}
@@ -330,10 +331,10 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
 
                 {/* Message Template */}
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-message-template">
                         Message Template
                     </label>
-                    <textarea
+                    <textarea id="fld-message-template"
                         value={finalMessage}
                         onChange={(e) => setCustomMessage(e.target.value)}
                         className="w-full px-3 py-2 border border-siloam-border rounded-lg bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue font-mono text-sm"
@@ -346,13 +347,13 @@ export const WhatsAppReminderModal: React.FC<WhatsAppReminderModalProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex justify-end gap-2">
-                    <button
+                    <button type="button"
                         onClick={onClose}
                         className="px-4 py-2 rounded-lg border border-siloam-border hover:bg-siloam-bg text-siloam-text-primary"
                     >
                         Cancel
                     </button>
-                    <button
+                    <button type="button"
                         onClick={handleSend}
                         disabled={!recipientPhone || !finalMessage.trim()}
                         className="px-4 py-2 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"

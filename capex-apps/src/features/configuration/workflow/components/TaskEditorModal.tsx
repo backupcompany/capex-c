@@ -76,8 +76,8 @@ export const TaskEditorModal: React.FC<{
                 <h3 className="text-lg font-bold mb-4">{task.id ? 'Edit Task' : 'Create New Task'}</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Task Name</label>
-                        <input
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-task-name">Task Name</label>
+                        <input id="fld-task-name"
                             type="text"
                             value={task.name}
                             onChange={(e) => setTask({ ...task, name: e.target.value })}
@@ -85,15 +85,15 @@ export const TaskEditorModal: React.FC<{
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Description</label>
-                        <textarea
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-description">Description</label>
+                        <textarea id="fld-description"
                             value={task.description}
                             onChange={(e) => setTask({ ...task, description: e.target.value })}
                             className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Default SLA to Complete (in days)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary">Default SLA to Complete (in days)</p>
                         <NumericInput
                             min={0}
                             value={task.slaToComplete ?? 0}
@@ -121,17 +121,17 @@ export const TaskEditorModal: React.FC<{
                     </div>
                     {task.isSystemTriggered && (
                         <div>
-                            <label className="flex items-center text-sm font-medium text-siloam-text-secondary">
+                            <p className="flex items-center text-sm font-medium text-siloam-text-secondary">
                                 Trigger Events
-                                <div className="relative group ml-2">
+                                <span className="relative group ml-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <div className="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    <span className="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                                         Pilih satu atau lebih aksi aplikasi yang dapat menyelesaikan task ini secara otomatis. Salah satu event yang terjadi sudah cukup.
-                                    </div>
-                                </div>
-                            </label>
+                                    </span>
+                                </span>
+                            </p>
                             <div className="mt-2 space-y-2 rounded-xl border border-siloam-border p-3 bg-siloam-bg max-h-48 overflow-y-auto">
                                 {SYSTEM_TRIGGER_EVENTS.map((event) => (
                                     <label
@@ -158,8 +158,8 @@ export const TaskEditorModal: React.FC<{
                     {error && <p className="text-sm text-danger">{error}</p>}
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Task</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Task</button>
                 </div>
             </div>
         </div>

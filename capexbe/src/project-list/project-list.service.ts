@@ -20,6 +20,7 @@ import {
   getHospitalUnitsConfigSlim,
   getProjectPrioritiesSlim,
   getTasksIdNameOnly,
+  getUserById,
 } from './master-data.loader';
 import {
   canonicalAssetKey,
@@ -41,6 +42,7 @@ import { viewerCanSeeUserPii } from '../shared/pii-access.util';
 import { sanitizeUsersForDirectory } from '../shared/response-sanitize.util';
 import { parseProjectListQueryBody, projectListQueryCacheKey } from './project-list.dto';
 import {
+  assignmentScopeCacheFingerprint,
   filterRowsByAssignmentScope,
   PROJECT_LIST_DATA_POLICY,
   resolveAuthoritativeProjectListScope,
@@ -48,6 +50,8 @@ import {
 import { loadProjectListQueryPage } from './project-list-assets-query.loader';
 import { ProjectListCacheService } from './project-list-cache.service';
 import { slimProjectListWirePayload } from './project-list-slim.util';
+import { assignmentRolesCanSeeUnassignedBdd } from './bdd-construction.util';
+import type { ProjectListQueryBody } from './project-list.dto';
 
 type MasterListPayload = {
   expiresAt: number;
@@ -451,11 +455,13 @@ export class ProjectListService {
     const debug = cached._debug as Record<string, unknown> | undefined;
     const stalePolicy =
       debug?.dataPolicy && debug.dataPolicy !== PROJECT_LIST_DATA_POLICY;
+    const matched =
+      typeof debug?.dbMatchedCount === 'number' ? (debug.dbMatchedCount as number) : null;
+    const total =
+      typeof cached.totalAssetCount === 'number' ? (cached.totalAssetCount as number) : null;
+    // Compare to matched (RBAC), never dbTruth — scoped defaults legitimately have matched < truth.
     const stalePartial =
-      debug?.defaultQuery === true &&
-      typeof debug.dbTruthCount === 'number' &&
-      typeof cached.totalAssetCount === 'number' &&
-      (cached.totalAssetCount as number) < (debug.dbTruthCount as number);
+      debug?.defaultQuery === true && matched != null && total != null && total < matched;
     return !!(stalePolicy || stalePartial);
   }
 
@@ -552,14 +558,20 @@ export class ProjectListService {
    * Server-side search/filter + pagination — always reads DB; optional short-lived cache (cache-aside).
    */
   async loadQueryPage(accessToken: string, body: unknown) {
-    const query = parseProjectListQueryBody(body);
+    let query = parseProjectListQueryBody(body);
     await this.authZ.assertHierarchyPermission(
       accessToken,
       query.userId,
       'Capex Project List',
       'view',
     );
-    const cacheKey = projectListQueryCacheKey(query.userId, query.periodName, query);
+    if (query.bddConstructionOnly) {
+      query = await this.applyBddUnassignedPolicy(accessToken, query);
+    }
+    const { userId } = await this.authContext.getRlsClient(accessToken, query.userId);
+    query = { ...query, userId };
+    const scopeUser = await getUserById(this.authContext.createServiceClient(), userId);
+    const cacheKey = `${projectListQueryCacheKey(userId, query.periodName, query)}:${assignmentScopeCacheFingerprint(scopeUser)}`;
     const isBddQuery = query.bddConstructionOnly === true;
 
     const bypassCache = query.skipCache;
@@ -629,6 +641,33 @@ export class ProjectListService {
       exportAll: true,
       skipCache: b.skipCache === true,
     });
+  }
+
+  /**
+   * BDD Construction: derive hideUnassignedBdd from assignment role names.
+   * Client flag is ignored — otherwise any Capex Project List viewer can request unassigned rows.
+   */
+  private async applyBddUnassignedPolicy(
+    accessToken: string,
+    query: ProjectListQueryBody,
+  ): Promise<ProjectListQueryBody> {
+    const { client, userId } = await this.authContext.getRlsClient(accessToken, query.userId);
+    const { data, error } = await client
+      .from('user_assignments')
+      .select('roles(role_name)')
+      .eq('user_id', userId);
+    if (error) {
+      throw new BadRequestException(error.message || 'Failed to resolve BDD role policy');
+    }
+    const roleNames: string[] = [];
+    for (const row of data ?? []) {
+      const roles = (row as { roles?: { role_name?: string } | { role_name?: string }[] }).roles;
+      const roleObj = Array.isArray(roles) ? roles[0] : roles;
+      const name = String(roleObj?.role_name ?? '').trim();
+      if (name) roleNames.push(name);
+    }
+    const hideUnassignedBdd = !assignmentRolesCanSeeUnassignedBdd(roleNames);
+    return { ...query, hideUnassignedBdd };
   }
 
   private async loadBddMasterPayload(client: SupabaseClient): Promise<BddMasterPayload> {

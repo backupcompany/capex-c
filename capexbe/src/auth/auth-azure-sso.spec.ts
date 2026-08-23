@@ -1,5 +1,5 @@
 import { pickUserRowByEmail, emailsMatch, type AppUserRow } from './auth-user.resolver';
-import { isAppUserLookupUnauthorized } from './auth-oauth-errors.util';
+import { isAppUserLookupUnauthorized, isPostgrestInfraError } from './auth-oauth-errors.util';
 import { roleNameToSlug } from './auth.constants';
 import { resolveSessionAuthId, isUuid } from './azure-oauth.util';
 
@@ -88,5 +88,22 @@ describe('isAppUserLookupUnauthorized (error masking)', () => {
     expect(isAppUserLookupUnauthorized('JWT secret not configured')).toBe(false);
     expect(isAppUserLookupUnauthorized('Database not configured')).toBe(false);
     expect(isAppUserLookupUnauthorized('Unauthorized')).toBe(false);
+  });
+});
+
+describe('isPostgrestInfraError', () => {
+  it('detects PGRST002 schema-cache outage', () => {
+    expect(
+      isPostgrestInfraError({
+        code: 'PGRST002',
+        message: 'Could not query the database for the schema cache. Retrying.',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not flag empty lookup as infra', () => {
+    expect(isPostgrestInfraError({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' })).toBe(
+      false,
+    );
   });
 });

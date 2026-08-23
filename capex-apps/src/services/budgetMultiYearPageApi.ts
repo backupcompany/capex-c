@@ -69,7 +69,7 @@ async function postBudgetMultiYear<T>(
     const status =
       err && typeof err === 'object' && 'status' in err
         ? Number((err as { status?: number }).status)
-        : NaN;
+        : Number.NaN;
     trackBackendFetch(source, 'fallback', {
       reason: 'http_error',
       ...(Number.isFinite(status) ? { httpStatus: status } : {}),

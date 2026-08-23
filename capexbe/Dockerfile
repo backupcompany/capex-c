@@ -1,27 +1,22 @@
-# Build from monorepo root (required — @capex/auth-core is file:../packages/...):
-#   docker build -f capexbe/Dockerfile -t capex-api .
-#
-# Context MUST be repo root, not capexbe/ alone.
+# Sole API image for Siloam/prod monolith (capex-api).
+# Build from capexbe/ (compose context) or:
+#   docker build -f capexbe/Dockerfile -t capex-api ./capexbe
 
 FROM node:22-alpine AS build
 WORKDIR /w
 
-COPY packages/capex-auth-core ./packages/capex-auth-core
-COPY capexbe/package.json capexbe/package-lock.json ./capexbe/
+# Explicit paths only (sonar docker:S6470 — no COPY . .)
+COPY package.json package-lock.json ./
+COPY scripts ./scripts
 
-WORKDIR /w/capexbe
-RUN npm ci
+# Lockfile + ci (docker:S8543); no lifecycle scripts (docker:S6505); patch matches postinstall / CI
+RUN npm ci --ignore-scripts --legacy-peer-deps \
+  && node scripts/patch-nest-typescript6.mjs
 
-COPY capexbe/ ./
+COPY src ./src
+COPY nest-cli.json tsconfig.json tsconfig.build.json tsconfig.shared.json .swcrc ./
 
-# Monolith imports local ./auth-core.module — package is only needed for npm file: install.
-# Ensure package main resolves without a fragile cross-repo tsc path.
-RUN mkdir -p ../packages/capex-auth-core/dist \
-  && if [ ! -f ../packages/capex-auth-core/dist/index.js ]; then \
-       printf '%s\n' '"use strict"; Object.defineProperty(exports,"__esModule",{value:true});' \
-         > ../packages/capex-auth-core/dist/index.js; \
-     fi \
-  && npm run build
+RUN npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -29,14 +24,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 
-COPY --from=build /w/capexbe/package.json /w/capexbe/package-lock.json ./
-COPY --from=build /w/capexbe/node_modules ./node_modules
-COPY --from=build /w/capexbe/dist ./dist
-COPY --from=build /w/packages/capex-auth-core /packages/capex-auth-core
+COPY --from=build /w/package.json /w/package-lock.json ./
+COPY --from=build /w/node_modules ./node_modules
+COPY --from=build /w/dist ./dist
 
-RUN rm -rf node_modules/@capex/auth-core \
-  && ln -s /packages/capex-auth-core node_modules/@capex/auth-core \
-  && chown -R node:node /app /packages
+RUN chown -R node:node /app
 
 EXPOSE 3001
 

@@ -32,7 +32,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onCompleteClick }) => 
         const startDate = new Date(task.startDate);
         
         // Ensure dates are valid before calculation
-        if (isNaN(targetDate.getTime()) || isNaN(startDate.getTime())) return 'On Track';
+        if (Number.isNaN(targetDate.getTime()) || Number.isNaN(startDate.getTime())) return 'On Track';
 
         const totalDuration = (targetDate.getTime() - startDate.getTime());
         const remainingTime = (targetDate.getTime() - now.getTime());
@@ -91,7 +91,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onCompleteClick }) => 
                     <p>Due: {task.targetEndDate ? new Date(task.targetEndDate).toLocaleDateString() : '—'}</p>
                 </div>
                 {!isDone && (
-                    <button
+                    <button type="button"
                         onClick={onCompleteClick}
                         className="bg-siloam-blue text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-siloam-blue/90 transition shadow-soft"
                     >

@@ -39,8 +39,8 @@ export const MasterDataEditorModal: React.FC<{
         <h3 className="text-lg font-bold mb-4">{title}</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-name">Name</label>
+            <input id="fld-name"
               type="text"
               value={String(item.name ?? '')}
               onChange={(e) => setItem({ ...item, name: e.target.value })}
@@ -48,8 +48,8 @@ export const MasterDataEditorModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Code</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-code">Code</label>
+            <input id="fld-code"
               type="text"
               value={String(item.code ?? '')}
               onChange={(e) => setItem({ ...item, code: e.target.value })}
@@ -59,8 +59,8 @@ export const MasterDataEditorModal: React.FC<{
           {type === 'hu' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-siloam-text-secondary">HU Number</label>
-                <input
+                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-hu-number">HU Number</label>
+                <input id="fld-hu-number"
                   type="text"
                   value={String(item.huNumber ?? '')}
                   onChange={(e) => setItem({ ...item, huNumber: e.target.value })}
@@ -68,8 +68,8 @@ export const MasterDataEditorModal: React.FC<{
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-siloam-text-secondary">Network</label>
-                <select
+                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-network">Network</label>
+                <select id="fld-network"
                   value={String(item.archetypeId ?? '')}
                   onChange={(e) => setItem({ ...item, archetypeId: e.target.value })}
                   className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -83,8 +83,8 @@ export const MasterDataEditorModal: React.FC<{
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-siloam-text-secondary">Regional</label>
-                <select
+                <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-regional">Regional</label>
+                <select id="fld-regional"
                   value={String(item.regionalId ?? '')}
                   onChange={(e) => setItem({ ...item, regionalId: e.target.value })}
                   className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"

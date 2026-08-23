@@ -43,8 +43,8 @@ export const RoomEquipmentEditor: React.FC<RoomEquipmentEditorProps> = ({ room, 
     }, [masterCatalogue, searchTerm]);
 
     const handleLocalQtyChange = (catalogueId: string, value: string) => {
-        const newQty = parseInt(value, 10);
-        if (isNaN(newQty) || newQty < 0) {
+        const newQty = Number.parseInt(value, 10);
+        if (Number.isNaN(newQty) || newQty < 0) {
             onQtyChange(catalogueId, room.id, 0);
         } else {
             onQtyChange(catalogueId, room.id, newQty);

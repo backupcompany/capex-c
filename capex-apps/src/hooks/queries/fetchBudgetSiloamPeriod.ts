@@ -19,7 +19,7 @@ const PAGE_STALE_MS = 120_000;
 function resolveUserId(userId?: number): number | null {
   if (userId != null && Number.isFinite(userId)) return userId;
   if (typeof window === 'undefined') return null;
-  const fromSession = parseInt(sessionStorage.getItem('currentUserId') || '', 10);
+  const fromSession = Number.parseInt(sessionStorage.getItem('currentUserId') || '', 10);
   return Number.isFinite(fromSession) ? fromSession : null;
 }
 
@@ -45,7 +45,7 @@ async function loadActiveCategories(userId: number | null): Promise<BudgetCatego
       const status =
         err && typeof err === 'object' && 'status' in err
           ? Number((err as { status?: number }).status)
-          : NaN;
+          : Number.NaN;
       trackBackendFetch('budgetSiloam.categories', 'fallback', {
         reason: 'http_error',
         ...(Number.isFinite(status) ? { httpStatus: status } : {}),
@@ -93,7 +93,7 @@ async function loadBudgetPeriodFromBackend(
     const status =
       err && typeof err === 'object' && 'status' in err
         ? Number((err as { status?: number }).status)
-        : NaN;
+        : Number.NaN;
     trackBackendFetch('budgetSiloam.period', 'fallback', {
       reason: 'http_error',
       ...(Number.isFinite(status) ? { httpStatus: status } : {}),

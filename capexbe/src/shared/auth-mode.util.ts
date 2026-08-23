@@ -4,9 +4,8 @@ export type CapexAuthMode = 'password' | 'sso' | 'both';
 export function getAuthMode(): CapexAuthMode {
   const raw = (process.env.CAPEX_AUTH_MODE || '').trim().toLowerCase();
   if (raw === 'password' || raw === 'sso' || raw === 'both') return raw;
-  if (process.env.CAPEX_DEMO_MODE === 'true') return 'both';
-  // Explicit CAPEX_AUTH_MODE=sso for Microsoft-only prod.
-  return 'both';
+  // Default: Microsoft SSO only (no email/password API).
+  return 'sso';
 }
 
 export function isSsoLoginEnabled(): boolean {

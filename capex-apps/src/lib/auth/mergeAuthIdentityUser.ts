@@ -9,6 +9,7 @@ import {
 
 export type AuthSessionAssignment = {
   roleName: string;
+  roleId?: number;
   assignedScopes?: string[];
 };
 
@@ -32,6 +33,7 @@ export function mapSessionAssignmentsToUserAssignments(
       .filter((a) => String(a.roleName ?? '').trim())
       .map((a) => ({
         roleName: String(a.roleName).trim(),
+        ...(a.roleId != null && Number.isFinite(a.roleId) ? { roleId: a.roleId } : {}),
         assignedScopes: Array.isArray(a.assignedScopes) ? a.assignedScopes : [],
       }));
   }
@@ -78,14 +80,24 @@ export function mergeAuthIdentityUser(
   );
   const previousAssignments = previous?.assignments ?? [];
 
+  // Session assignments are authoritative for *which role*. Never keep a cached
+  // PMO (many HU scopes) over a fresh Super Admin (scope "All" = 1 entry).
   let assignments = fromSession;
-  if (previousAssignments.length) {
-    if (!fromSession.length) {
-      assignments = previousAssignments;
-    } else if (
+  if (!fromSession.length && previousAssignments.length) {
+    assignments = previousAssignments;
+  } else if (fromSession.length && previousAssignments.length) {
+    const sessionRoles = fromSession
+      .map((a) => normalizeRoleNameKey(a.roleName))
+      .sort()
+      .join(',');
+    const prevRoles = previousAssignments
+      .map((a) => normalizeRoleNameKey(a.roleName))
+      .sort()
+      .join(',');
+    if (
+      sessionRoles === prevRoles &&
       assignmentScopeCount(previousAssignments) > assignmentScopeCount(fromSession)
     ) {
-      // Cache bootstrap biasanya punya scope lebih lengkap; jangan ditimpa stub kosong.
       assignments = previousAssignments;
     }
   }

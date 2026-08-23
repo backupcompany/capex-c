@@ -58,8 +58,8 @@ export const BudgetCategoryManagement: React.FC<{
           onSave={save}
         >
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Category Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-category-name">Category Name</label>
+            <input id="fld-category-name"
               type="text"
               value={modal.draft.name || ''}
               onChange={(e) => modal.patchDraft({ name: e.target.value })}

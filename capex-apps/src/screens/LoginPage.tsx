@@ -3,6 +3,7 @@
 import React, { useState, memo, useEffect } from 'react';
 import {
   invalidateAuthProbeCache,
+  localDevEnter,
   loginWithBackend,
   setSessionCookieHint,
 } from '../lib/auth/authApi';
@@ -11,11 +12,13 @@ import {
   isPasswordLoginEnabled,
   useBackendSession,
 } from '../lib/auth/authConstants';
+import { isDemoMode } from '../lib/auth/demoMode';
 import { writeCachedAuthUser } from '../lib/authSessionCache';
 import { consumeOAuthError, signInWithAzure } from '../lib/authAzure';
 import { POST_LOGIN_PATH } from '@/lib/auth/loginRoute';
 import { normalizeAuthEmail, normalizeAuthPassword } from '@/lib/auth/normalizeAuthInput';
 import { ExternalLink } from '@/components/atoms/ExternalLink/ExternalLink';
+import { SSO_RETURN_STORAGE_KEY } from '../lib/authAzure';
 
 const ADMIN_WHATSAPP = '6282230353419';
 
@@ -66,6 +69,7 @@ export const LoginPage = memo(function LoginPage() {
 
   const passwordLoginEnabled = isPasswordLoginEnabled();
   const azureSsoEnabled = isAzureSsoEnabled();
+  const localDevDoor = isDemoMode();
 
   useEffect(() => {
     const oauthError = consumeOAuthError();
@@ -94,6 +98,35 @@ export const LoginPage = memo(function LoginPage() {
     }
   };
 
+  const handleLocalDevEnter = async () => {
+    setError('');
+    if (!useBackendSession()) {
+      setError('Frontend loaded — backend session off. Set NEXT_PUBLIC_USE_BACKEND_SESSION=true.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await localDevEnter();
+      if (!result.user) {
+        setError(result.error || 'Local enter gagal.');
+        setIsLoading(false);
+        return;
+      }
+      setSessionCookieHint(true);
+      writeCachedAuthUser(result.user);
+      invalidateAuthProbeCache();
+      try {
+        sessionStorage.setItem(SSO_RETURN_STORAGE_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      window.location.replace(POST_LOGIN_PATH);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.');
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -118,17 +151,22 @@ export const LoginPage = memo(function LoginPage() {
       const result = await loginWithBackend(cleanEmail, cleanPassword);
       if (!result.user) {
         setError(result.error || 'Email atau password salah.');
+        setIsLoading(false);
         return;
       }
 
       setSessionCookieHint(true);
       writeCachedAuthUser(result.user);
       invalidateAuthProbeCache();
+      try {
+        sessionStorage.setItem(SSO_RETURN_STORAGE_KEY, '1');
+      } catch {
+        /* ignore */
+      }
       window.location.replace(POST_LOGIN_PATH);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi.';
       setError(msg);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -166,9 +204,11 @@ export const LoginPage = memo(function LoginPage() {
               Log Masuk: Aplikasi Procurement Capex RS
             </h1>
             <p className="mb-6 text-sm leading-relaxed text-[#4a6a8a]">
-              {azureSsoEnabled && !passwordLoginEnabled
-                ? 'Masuk dengan akun Microsoft Siloam Hospitals. Hanya karyawan yang sudah terdaftar di Capex Pro.'
-                : 'Selamat Datang di Capex Pro. Kelola Anggaran & Pengadaan Alat Kesehatan Rumah Sakit Anda.'}
+              {localDevDoor
+                ? 'Mode lokal: masuk cepat tanpa password, atau uji SSO Microsoft (callback localhost).'
+                : azureSsoEnabled && !passwordLoginEnabled
+                  ? 'Masuk dengan akun Microsoft Siloam Hospitals. Hanya karyawan yang sudah terdaftar di Capex Pro.'
+                  : 'Selamat Datang di Capex Pro. Kelola Anggaran & Pengadaan Alat Kesehatan Rumah Sakit Anda.'}
             </p>
 
             {error && (
@@ -180,16 +220,39 @@ export const LoginPage = memo(function LoginPage() {
               </div>
             )}
 
-            {azureSsoEnabled && (
+            {localDevDoor && (
               <button
                 type="button"
-                onClick={() => void handleMicrosoftSignIn()}
+                onClick={() => void handleLocalDevEnter()}
                 disabled={isLoading}
-                className="mb-4 flex w-full items-center justify-center gap-3 rounded-full border border-[#b8d4e8] bg-white px-6 py-3.5 text-sm font-bold text-[#1e4a7a] shadow-sm transition hover:bg-[#f5fbff] disabled:cursor-not-allowed disabled:opacity-60"
+                className="mb-4 flex w-full items-center justify-center rounded-full bg-gradient-to-r from-[#3485B4] to-[#2BBBAD] px-6 py-3.5 text-sm font-bold text-white shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <MicrosoftIcon />
-                {isLoading ? 'Membuka Microsoft…' : 'Masuk dengan Microsoft'}
+                {isLoading ? 'Masuk…' : 'Masuk lokal (Wahyu) — tanpa password'}
               </button>
+            )}
+
+            {azureSsoEnabled && (
+              <>
+                {localDevDoor && (
+                  <div className="relative mb-4 py-1 text-center text-xs uppercase tracking-wide text-[#4a6a8a]">
+                    <span className="bg-[rgba(220,240,255,0.88)] px-2">atau SSO Microsoft</span>
+                    <div className="absolute inset-x-0 top-1/2 -z-10 border-t border-[#b8d4e8]" aria-hidden />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleMicrosoftSignIn()}
+                  disabled={isLoading}
+                  className="mb-4 flex w-full items-center justify-center gap-3 rounded-full border border-[#b8d4e8] bg-white px-6 py-3.5 text-sm font-bold text-[#1e4a7a] shadow-sm transition hover:bg-[#f5fbff] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <MicrosoftIcon />
+                  {isLoading
+                    ? 'Membuka Microsoft…'
+                    : localDevDoor
+                      ? 'Masuk dengan Microsoft (localhost)'
+                      : 'Masuk dengan Microsoft'}
+                </button>
+              </>
             )}
 
             {!azureSsoEnabled && !passwordLoginEnabled && (

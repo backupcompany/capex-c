@@ -20,6 +20,10 @@ export const permissionValues: Record<PermissionLevel, number> = {
 /**
  * Map hierarchy → nilai permission numerik (maksimum dari semua role user).
  * Tanpa user atau sebelum role master dimuat: sembunyikan akses (hindari flash semua menu di sidebar).
+ *
+ * Callers that gate a screen after shell ready MUST pass shell `allRoles`.
+ * Empty `allRoles` ⇒ everything Hide (including Capex Project List) — never use
+ * preload/master roles alone for page access; AppRouteRenderer already gates once.
  */
 export function buildConsolidatedPermissionMap(
   currentUser: User | null,

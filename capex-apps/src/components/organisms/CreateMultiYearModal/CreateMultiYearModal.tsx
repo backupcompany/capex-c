@@ -48,8 +48,8 @@ export const CreateMultiYearModal: React.FC<CreateMultiYearModalProps> = ({ isOp
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">Plan Name</label>
-              <input 
+              <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-plan-name">Plan Name</label>
+              <input id="fld-plan-name" 
                   type="text" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -58,7 +58,7 @@ export const CreateMultiYearModal: React.FC<CreateMultiYearModalProps> = ({ isOp
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">Start Year</label>
+              <p className="block text-sm font-medium text-siloam-text-secondary">Start Year</p>
               <NumericInput
                   value={startYear}
                   onValueChange={setStartYear}
@@ -68,7 +68,7 @@ export const CreateMultiYearModal: React.FC<CreateMultiYearModalProps> = ({ isOp
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary">End Year</label>
+              <p className="block text-sm font-medium text-siloam-text-secondary">End Year</p>
               <NumericInput
                   value={endYear}
                   onValueChange={setEndYear}

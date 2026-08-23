@@ -42,7 +42,7 @@ export class NotificationsService {
 
   async list(accessToken: string, body: unknown) {
     const userId = this.parseUserId(body);
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'My Task', 'view');
+    await this.authZ.resolve(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const { data, error } = await client
       .from('notifications')
@@ -58,7 +58,7 @@ export class NotificationsService {
   async save(accessToken: string, body: unknown) {
     const b = (body ?? {}) as { userId?: number; notification?: NotificationInput };
     const userId = this.parseUserId(b);
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'My Task', 'update');
+    await this.authZ.resolve(accessToken, userId);
     const notification = b.notification;
     if (!notification?.id?.trim()) throw new BadRequestException('notification.id is required');
     if (Number(notification.userId) !== userId) {
@@ -79,7 +79,7 @@ export class NotificationsService {
   async markRead(accessToken: string, body: unknown) {
     const b = (body ?? {}) as { userId?: number; notificationId?: string };
     const userId = this.parseUserId(b);
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'My Task', 'view');
+    await this.authZ.resolve(accessToken, userId);
     const notificationId = String(b.notificationId ?? '').trim();
     if (!notificationId) throw new BadRequestException('notificationId is required');
 
@@ -95,7 +95,7 @@ export class NotificationsService {
 
   async markAllRead(accessToken: string, body: unknown) {
     const userId = this.parseUserId(body);
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'My Task', 'view');
+    await this.authZ.resolve(accessToken, userId);
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const { error } = await client
       .from('notifications')

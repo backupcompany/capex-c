@@ -102,7 +102,7 @@ export const AddAdhocTaskModal: React.FC<AddAdhocTaskModalProps> = ({ isOpen, on
                         <select
                             id="assignee"
                             value={assignedToUserId || ''}
-                            onChange={(e) => setAssignedToUserId(parseInt(e.target.value, 10))}
+                            onChange={(e) => setAssignedToUserId(Number.parseInt(e.target.value, 10))}
                             className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                         >
                             <option value="" disabled>Select a user</option>

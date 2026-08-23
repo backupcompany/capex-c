@@ -43,7 +43,7 @@ export const BudgetSummaryCard: React.FC<BudgetSummaryCardProps> = ({ title, tot
 
             {isEditable && onEditClick && (
                 <div className="pt-4 border-t border-siloam-border flex justify-end">
-                    <button
+                    <button type="button"
                         onClick={(e) => { e.stopPropagation(); onEditClick(); }}
                         className="text-sm bg-siloam-sidebar text-siloam-text-primary px-3 py-1.5 rounded-lg hover:bg-siloam-border transition"
                     >

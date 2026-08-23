@@ -120,8 +120,8 @@ function FSUpdateTableBlockInner({
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-siloam-text-secondary">Per page:</label>
-              <select
+              <label className="text-sm text-siloam-text-secondary" htmlFor="fld-per-page">Per page:</label>
+              <select id="fld-per-page"
                 value={pageSizeOverride == null ? 'auto' : String(pageSizeOverride)}
                 onChange={(e) => {
                   const v = e.target.value;

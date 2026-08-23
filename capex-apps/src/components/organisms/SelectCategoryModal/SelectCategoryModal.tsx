@@ -37,8 +37,8 @@ export const SelectCategoryModal: React.FC<SelectCategoryModalProps> = ({ isOpen
                     <p className="text-sm text-siloam-text-secondary mt-1">Please select a category to continue creating the new project.</p>
                 </div>
                 <div className="p-6">
-                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2">Budget Category</label>
-                    <select 
+                    <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-budget-category">Budget Category</label>
+                    <select id="fld-budget-category" 
                         value={selectedId} 
                         onChange={e => setSelectedId(e.target.value)}
                         className="w-full border border-siloam-border rounded-lg p-2 bg-siloam-bg focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -49,8 +49,8 @@ export const SelectCategoryModal: React.FC<SelectCategoryModalProps> = ({ isOpen
                     </select>
                 </div>
                 <div className="p-6 border-t border-siloam-border flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleNext} disabled={!selectedId} className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400">Next</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleNext} disabled={!selectedId} className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400">Next</button>
                 </div>
             </div>
         </div>

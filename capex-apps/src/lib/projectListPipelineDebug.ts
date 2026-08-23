@@ -1,5 +1,7 @@
+import { useAuthStore } from '@/stores/authStore';
+
 /** Must match capexbe PROJECT_LIST_DATA_POLICY — bump invalidates FE disk caches. */
-export const PROJECT_LIST_DATA_POLICY = 'v8-slim-wire-payload';
+export const PROJECT_LIST_DATA_POLICY = 'v9-scope-fp';
 
 export const PROJECT_LIST_DATA_POLICY_MARKER_KEY = 'capex.projectList.dataPolicy';
 
@@ -39,6 +41,7 @@ export type ProjectListPipelineDebug = {
   enrichDroppedCount?: number;
   cacheLayer?: string;
   defaultQuery?: boolean;
+  scopeAll?: boolean;
 };
 
 export function logProjectListPipelineStage(
@@ -48,6 +51,8 @@ export function logProjectListPipelineStage(
   if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_PROJECT_LIST_DEBUG !== '1') {
     return;
   }
+  // Skip after logout / anonymous — in-flight query effects must not keep logging.
+  if (useAuthStore.getState().status !== 'authenticated') return;
   console.info(`[capex-project-list:${stage}]`, payload);
 }
 
@@ -57,6 +62,20 @@ export function isStaleProjectListBundle(
 ): boolean {
   if (!debug?.defaultQuery) return false;
   if (debug.dataPolicy && debug.dataPolicy !== PROJECT_LIST_DATA_POLICY) return true;
+  // forceEmpty / stale-scope cache: period has assets but matched none (not Super Admin all-scope).
+  if (
+    debug.scopeAll !== true &&
+    typeof debug.dbTruthCount === 'number' &&
+    debug.dbTruthCount > 0 &&
+    typeof debug.dbMatchedCount === 'number' &&
+    debug.dbMatchedCount === 0 &&
+    (totalAssetCount ?? 0) === 0
+  ) {
+    return true;
+  }
+  if (typeof debug.dbMatchedCount === 'number') {
+    return typeof totalAssetCount === 'number' && totalAssetCount < debug.dbMatchedCount;
+  }
   if (
     typeof debug.dbTruthCount === 'number' &&
     typeof totalAssetCount === 'number' &&

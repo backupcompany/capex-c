@@ -200,7 +200,26 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   if (!headers.has('Content-Type') && init?.body) {
     headers.set('Content-Type', 'application/json');
   }
-  const noRetryPaths = new Set(['/login', '/exchange', '/refresh', '/session', '/forgot-password']);
+  const noRetryPaths = new Set([
+    '/login',
+    '/dev-enter',
+    '/exchange',
+    '/refresh',
+    '/session',
+    '/forgot-password',
+  ]);
+
+  // Session probe must not go through authenticatedFetch: that bootstraps CSRF via another
+  // /session call. Nested/aborted probes show up in Safari as "access control checks".
+  if (path === '/session') {
+    return fetch(url, {
+      ...init,
+      headers,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  }
+
   const mergedInit = withCsrfHeaders({ ...init, headers });
   return authenticatedFetch(url, {
     ...mergedInit,
@@ -332,6 +351,56 @@ export async function loginWithBackend(
   return loginWithServerPassword(email, password);
 }
 
+/** Local demo one-click enter (no password). Backend gated by CAPEX_DEMO_MODE. */
+export async function localDevEnter(): Promise<{
+  user: User | null;
+  roles: string[];
+  error: string | null;
+}> {
+  if (!useBackendSession()) {
+    return { user: null, roles: [], error: 'Backend session disabled' };
+  }
+  try {
+    const res = await authFetch('/dev-enter', { method: 'POST' });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string | string[];
+      };
+      return {
+        user: null,
+        roles: [],
+        error: errorFromAuthResponse(res.status, body),
+      };
+    }
+    const data = parseAuthMePayload(await res.json());
+    if (!data) {
+      return { user: null, roles: [], error: 'Respons dev-enter tidak valid.' };
+    }
+    if (data.session) updateSessionMeta(data.session);
+    clearTabSessionState();
+    setSessionCookieHint(true);
+    try {
+      return {
+        user: sessionUserToAppUser(data),
+        roles: Array.isArray(data.roles) ? data.roles : [],
+        error: null,
+      };
+    } catch (err) {
+      return {
+        user: null,
+        roles: [],
+        error: err instanceof Error ? err.message : 'Dev enter gagal',
+      };
+    }
+  } catch {
+    return {
+      user: null,
+      roles: [],
+      error: 'Frontend loaded — backend dev-enter unreachable. Start capexbe.',
+    };
+  }
+}
+
 /** Request password reset email via backend (Supabase Auth). */
 export async function requestPasswordResetBackend(
   email: string,
@@ -453,6 +522,11 @@ export async function refreshBackendSessionWithStatus(): Promise<RefreshSessionS
   if (!hasSessionCookieHint()) return 'invalid';
   try {
     const res = await authFetch('/refresh', { method: 'POST' });
+    // 204 = BFF soft-miss (no refresh cookie) — not an error, just logged out.
+    if (res.status === 204) {
+      clearStaleClientSessionHints();
+      return 'invalid';
+    }
     if (res.ok) {
       const data = (await res.json().catch(() => null)) as { session?: AuthSessionMeta } | null;
       if (data?.session) updateSessionMeta(data.session);

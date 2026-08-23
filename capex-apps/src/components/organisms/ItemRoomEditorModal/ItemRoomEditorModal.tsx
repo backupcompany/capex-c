@@ -68,7 +68,7 @@ export const ItemRoomEditorModal: React.FC<ItemRoomEditorModalProps> = ({ isOpen
 
                 {/* Footer */}
                 <div className="flex-shrink-0 px-6 py-4 border-t border-siloam-border flex justify-end">
-                    <button
+                    <button type="button"
                         onClick={onClose}
                         className="bg-siloam-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-siloam-blue/90 transition"
                     >

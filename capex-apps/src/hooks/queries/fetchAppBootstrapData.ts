@@ -1,6 +1,7 @@
 import type { BudgetMultiYear, BudgetPeriod, User, UserRole } from '@/types';
 import { getAccessTokenForBackend } from '@/lib/authSession';
 import { fetchAuthSession } from '@/lib/auth/authApi';
+import { isDefinitiveUnauthenticated } from '@/lib/auth/sessionValidity';
 import { fetchAppInitPackFromBackend } from '@/services/appBootstrapApi';
 import { useBackendSession } from '@/lib/auth/authConstants';
 import { readCachedAuthUser } from '@/lib/authSessionCache';
@@ -16,9 +17,11 @@ async function resolveBootstrapUserId(): Promise<number | null> {
       const uid = decodeUserPublicId(me.user.publicId);
       if (uid) return uid;
     }
+    // Guest / logged-out: do not use sessionStorage/disk cache — that fires pack+refresh 401s.
+    if (isDefinitiveUnauthenticated(me)) return null;
     const fromSession = sessionStorage.getItem('currentUserId');
     if (fromSession) {
-      const uid = parseInt(fromSession, 10);
+      const uid = Number.parseInt(fromSession, 10);
       if (Number.isFinite(uid)) return uid;
     }
     const cached = readCachedAuthUser();
@@ -28,7 +31,7 @@ async function resolveBootstrapUserId(): Promise<number | null> {
 
   const fromSession = sessionStorage.getItem('currentUserId');
   if (fromSession) {
-    const uid = parseInt(fromSession, 10);
+    const uid = Number.parseInt(fromSession, 10);
     if (Number.isFinite(uid)) return uid;
   }
 
@@ -84,9 +87,12 @@ export async function fetchAppBootstrapData(
   }
 
   if (!users.length) {
-    console.warn(
-      '[bootstrap] Backend pack unavailable — sign in and ensure capexbe is running.',
-    );
+    // Only warn when we expected a pack (signed-in user id) — guests are silent.
+    if (bootstrapUserId != null) {
+      console.warn(
+        '[bootstrap] Backend pack unavailable — sign in and ensure capexbe is running.',
+      );
+    }
   }
 
   return { users, roles, multiYears, allPeriods: periodSummaries, usersDirectoryAvailable };

@@ -1,6 +1,7 @@
-# Used when building API from repo root: docker build -f capexbe/Dockerfile .
+# Build context = repo root (capexbe/Dockerfile)
 .git
 .github
+.cursor
 **/.next
 **/node_modules
 **/dist
@@ -13,5 +14,9 @@ capex-apps
 services
 deploy
 docs
+scripts
 *.md
 .DS_Store
+**/*.tsbuildinfo
+**/*spec.ts
+**/test

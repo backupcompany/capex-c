@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, UserRole, ArchetypeConfig, HospitalUnitConfig } from '@/types';
 import { useToast } from '@/contexts/ToastContext';
+import { isAllowedCapexUserEmail, allowedEmailDomainsHint } from '@/lib/auth/authConstants';
 
 export const UserEditorModal: React.FC<{
     isOpen: boolean;
@@ -13,7 +14,19 @@ export const UserEditorModal: React.FC<{
     roles: UserRole[];
     archetypes: ArchetypeConfig[];
     hospitalUnits: HospitalUnitConfig[];
-}> = ({ isOpen, onClose, onSave, isSaving = false, user: initialUser, roles, archetypes, hospitalUnits }) => {
+    /** immediate = password Auth on Save | manual-sync = Configuration Sync | sso = Microsoft only */
+    authProvisionMode?: 'immediate' | 'manual-sync' | 'sso';
+}> = ({
+    isOpen,
+    onClose,
+    onSave,
+    isSaving = false,
+    user: initialUser,
+    roles,
+    archetypes,
+    hospitalUnits,
+    authProvisionMode = 'sso',
+}) => {
     const { showToast } = useToast();
     const [user, setUser] = useState<Partial<User> | null>(initialUser);
     const isNew = useMemo(() => !initialUser?.id, [initialUser]);
@@ -53,6 +66,13 @@ export const UserEditorModal: React.FC<{
         }
         if (!user.email?.trim()) {
             showToast('Email wajib diisi.', 'error');
+            return;
+        }
+        if (!isAllowedCapexUserEmail(user.email)) {
+            showToast(
+                `Email harus memakai domain yang diizinkan (${allowedEmailDomainsHint()}).`,
+                'error',
+            );
             return;
         }
         if (!roles.length && (user.assignments?.length ?? 0) > 0) {
@@ -113,8 +133,8 @@ export const UserEditorModal: React.FC<{
                 <div className="overflow-y-auto pr-2 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary">Username</label>
-                            <input 
+                            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-username">Username</label>
+                            <input id="fld-username" 
                                 type="text" 
                                 value={user.username || ''} 
                                 onChange={e => setUser({...user, username: e.target.value})} 
@@ -123,17 +143,23 @@ export const UserEditorModal: React.FC<{
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary">Email</label>
-                            <input 
+                            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-email">Email</label>
+                            <input id="fld-email" 
                                 type="email" 
                                 value={user.email || ''} 
                                 onChange={e => setUser({...user, email: e.target.value})} 
+                                placeholder={`nama@${allowedEmailDomainsHint().split(',')[0]?.trim() || 'siloamhospitals.com'}`}
                                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" 
                             />
+                            {authProvisionMode === 'sso' ? (
+                              <p className="mt-1 text-xs text-siloam-text-secondary">
+                                Hanya domain: {allowedEmailDomainsHint()}
+                              </p>
+                            ) : null}
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Phone Number (WhatsApp)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary">Phone Number (WhatsApp)</p>
                         <div className="mt-1 flex rounded-xl shadow-sm">
                             <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-siloam-border bg-siloam-bg text-gray-500 text-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-whatsapp mr-1" viewBox="0 0 16 16">
@@ -149,11 +175,19 @@ export const UserEditorModal: React.FC<{
                             />
                         </div>
                     </div>
-                    <p className="text-sm text-siloam-text-secondary">Login menggunakan Supabase Auth (email + password di Auth). Setelah simpan, gunakan &quot;Sync ke Auth&quot; agar user bisa login (password default: 123456).</p>
+                    {isNew ? (
+                        <p className="text-sm text-siloam-text-secondary rounded-xl border border-siloam-border bg-siloam-bg px-3 py-2">
+                            {authProvisionMode === 'sso'
+                                ? 'Tidak ada sign-up / password. Save mendaftarkan user di Capex. Login hanya lewat Microsoft SSO dengan email yang sama (harus sudah terdaftar di sini).'
+                                : authProvisionMode === 'immediate'
+                                  ? 'Save membuat baris user + akun Auth (email/password) dan menghubungkannya 1:1. Password sementara ditampilkan sekali setelah simpan.'
+                                  : 'Setelah Save, jalankan Sync ke Auth di User Management agar email punya akun Auth (mode password).'}
+                        </p>
+                    ) : null}
                     <h4 className="text-md font-semibold mt-2">Role Assignments</h4>
                     {user.assignments?.map((assignment, index) => (
                         <div key={index} className="bg-siloam-bg p-4 rounded-lg border border-siloam-border relative">
-                             <button 
+                             <button type="button" 
                                 onClick={() => removeAssignment(index)}
                                 className="absolute top-2 right-2 text-siloam-text-secondary hover:text-danger"
                                 aria-label="Remove assignment"
@@ -162,20 +196,24 @@ export const UserEditorModal: React.FC<{
                             </button>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-siloam-text-secondary">Role</label>
-                                    <select
+                                    <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-role">Role</label>
+                                    <select id="fld-role"
                                         value={assignment.roleName}
                                         onChange={(e) => handleAssignmentChange(index, e.target.value)}
                                         className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                                     >
-                                        {roles.map(r => <option key={r.id} value={r.roleName}>{r.roleName}</option>)}
+                                        {roles.map((r, ri) => (
+                                            <option key={`edit-role-${r.id ?? r.roleName}-${ri}`} value={r.roleName}>
+                                                {r.roleName}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Data Scope (All / Network / HU)</p>
+                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-data-scope-all-network-hu">Data Scope (All / Network / HU)</label>
                                     <div className="mt-1 max-h-40 overflow-y-auto border border-siloam-border rounded-xl p-3 bg-siloam-surface space-y-3">
                                         <div className="flex items-center">
-                                            <input
+                                            <input id="fld-data-scope-all-network-hu"
                                                 type="checkbox"
                                                 id={`scope-${index}-All`}
                                                 checked={assignment.assignedScopes.includes('All')}
@@ -229,11 +267,11 @@ export const UserEditorModal: React.FC<{
                             </div>
                         </div>
                     ))}
-                    <button onClick={addAssignment} className="text-sm text-siloam-blue hover:underline">+ Add another role</button>
+                    <button type="button" onClick={addAssignment} className="text-sm text-siloam-blue hover:underline">+ Add another role</button>
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button"
                         onClick={handleSave}
                         disabled={isSaving}
                         className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:opacity-60 disabled:cursor-not-allowed"

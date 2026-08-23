@@ -22,7 +22,7 @@ export function maxNnForHuYy(
         const code = p.projectCode || '';
         const parts = code.split('.');
         if (parts.length < 3 || parts[0] !== huCode || parts[1] !== yy) continue;
-        const n = parseInt(parts[2], 10);
+        const n = Number.parseInt(parts[2], 10);
         if (!Number.isNaN(n) && n > max) max = n;
     }
     return max;

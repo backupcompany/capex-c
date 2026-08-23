@@ -25,6 +25,8 @@ export type ProjectListServerFilters = {
   scopeAll: boolean;
   scopeHuNames: string[];
   scopeArchetypeNames: string[];
+  /** FE request-cache only — not sent to BE. Busts stale empty lists after role/scope edits. */
+  scopeCacheKey?: string;
   bddConstructionOnly?: boolean;
   hideUnassignedBdd?: boolean;
 };
@@ -81,6 +83,12 @@ export function buildProjectListServerFilters(input: {
   const bf = input.selectedBudgetFilter;
   const sortBy = input.sortBy ?? DEFAULT_PROJECT_LIST_SORT;
   const scopeAll = input.userScopes.all;
+  const scopeCacheKey = scopeAll
+    ? 'all'
+    : [
+        ...[...input.userScopes.hus].map(String).sort(),
+        ...[...input.userScopes.archetypes].map(String).sort(),
+      ].join('\u0001');
   return {
     sortBy,
     search: input.searchTerm.trim(),
@@ -97,6 +105,7 @@ export function buildProjectListServerFilters(input: {
     // RBAC HU/archetype scope is resolved on the server from DB assignments — never sent from FE.
     scopeHuNames: [],
     scopeArchetypeNames: [],
+    scopeCacheKey,
     bddConstructionOnly: input.bddConstructionOnly ?? false,
     hideUnassignedBdd: input.hideUnassignedBdd ?? false,
   };

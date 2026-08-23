@@ -126,7 +126,7 @@ export function useBddConstructionTablePipeline({
         completionRange: debouncedCompletionRange,
         userScopes: permissions.userScopes,
         bddConstructionOnly: true,
-        hideUnassignedBdd: !isSuperAdmin && !hasBDDRole,
+        hideUnassignedBdd: !hasBDDRole,
       }),
     [
       debouncedSearch,
@@ -137,7 +137,6 @@ export function useBddConstructionTablePipeline({
       debouncedCompletionRange.min,
       debouncedCompletionRange.max,
       permissions.userScopes,
-      isSuperAdmin,
       hasBDDRole,
     ],
   );

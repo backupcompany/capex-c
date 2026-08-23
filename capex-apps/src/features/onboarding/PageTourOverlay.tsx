@@ -244,7 +244,7 @@ export const PageTourOverlay: React.FC<PageTourOverlayProps> = ({
           maxWidth: tooltipStyle.maxWidth,
           zIndex: TOUR_Z + 1,
         }}
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 mb-2">
           <p className="text-xs font-medium text-siloam-text-secondary">{progressLabel}</p>

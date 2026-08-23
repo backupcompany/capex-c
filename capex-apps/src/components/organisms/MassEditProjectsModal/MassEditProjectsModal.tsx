@@ -60,8 +60,8 @@ export const MassEditProjectsModal: React.FC<MassEditProjectsModalProps> = ({ is
                 </div>
                 
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-md bg-siloam-blue text-white">Save Changes</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-md bg-siloam-blue text-white">Save Changes</button>
                 </div>
             </div>
         </div>

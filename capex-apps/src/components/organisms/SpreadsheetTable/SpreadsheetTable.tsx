@@ -2,7 +2,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { SmartNumericDisplay } from '../../atoms/SmartNumericDisplay/SmartNumericDisplay';
 import { NumericInput } from '../../atoms/NumericInput/NumericInput';
+import { CurrencyInput } from '../../atoms/CurrencyInput/CurrencyInput';
 import { parseGroupedNumericInput, parseNumericInput } from '../../../lib/numericInput';
+import { parseCurrency } from '../../../lib/formatter';
 import { SPREADSHEET_VIRTUAL_DEFAULTS } from '../../../lib/table/virtualTableDefaults';
 
 const ESTIMATED_ROW_HEIGHT = SPREADSHEET_VIRTUAL_DEFAULTS.estimatedRowHeight;
@@ -24,8 +26,8 @@ export interface SpreadsheetColumn<T> {
   alwaysShowEditor?: boolean;
   editorDisabled?: boolean | ((item: T) => boolean);
   align?: 'left' | 'right' | 'center';
-  /** Default `currency` (SmartNumericDisplay). Use `plain` for counts/months (e.g. payback). */
-  numericDisplay?: 'currency' | 'plain';
+  /** Default `currency` (scaled SmartNumericDisplay). `full` = always Rp + full digits. `plain` = raw number. */
+  numericDisplay?: 'currency' | 'plain' | 'full';
   formatCellDisplay?: (value: unknown, item: T) => React.ReactNode;
 }
 
@@ -71,7 +73,7 @@ function renderNumericCell(value: number, display: SpreadsheetColumn<unknown>['n
       </div>
     );
   }
-  return <SmartNumericDisplay value={value} />;
+  return <SmartNumericDisplay value={value} mode={display === 'full' ? 'full' : 'scaled'} />;
 }
 
 export const SpreadsheetTable = <T extends Record<string, any>>({
@@ -239,7 +241,7 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
            const accessorKey = column.accessor as keyof T & string;
            const useGrouped = column.isNumeric && column.numericDisplay !== 'plain';
            const finalValue = column.isNumeric
-             ? (useGrouped ? parseGroupedNumericInput(cellValue) : parseNumericInput(cellValue.replace(/[^0-9.-]+/g, '')))
+             ? (useGrouped ? parseCurrency(cellValue) || parseGroupedNumericInput(cellValue) : parseNumericInput(cellValue.replace(/[^0-9.-]+/g, '')))
              : cellValue;
            newData[currentRowIndex] = { ...newData[currentRowIndex], [accessorKey]: finalValue };
            dataChanged = true;
@@ -316,8 +318,12 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
         </thead>
         <tbody>
           {windowingEnabled && paddingTop > 0 ? (
-            <tr aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 'none' }} />
+            <tr>
+              <td
+                colSpan={columns.length}
+                aria-hidden="true"
+                style={{ height: paddingTop, padding: 0, border: 'none' }}
+              />
             </tr>
           ) : null}
           {rowsToRender.map(({ rowIndex, item }) => {
@@ -408,18 +414,30 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
                          );
                        }
                        if (col.isNumeric) {
-                           const groupThousands = col.numericDisplay !== 'plain';
+                           const useCurrencyEditor = col.numericDisplay !== 'plain';
+                           const numericValue =
+                             typeof item[accessorKey] === 'number' ? item[accessorKey] : 0;
                            return (
                                <td key={String(col.accessor)} className={`p-0 border-r border-siloam-border last:border-r-0 ${isLastColumn ? 'sticky right-0 bg-siloam-surface border-l border-siloam-border' : ''}`}>
-                                   <NumericInput
-                                       value={typeof item[accessorKey] === 'number' ? item[accessorKey] : 0}
+                                   {useCurrencyEditor ? (
+                                     <CurrencyInput
+                                       value={numericValue}
                                        onValueChange={(val) => handleValueChange(rowIndex, accessorKey, val)}
                                        onBlur={handleBlur}
-                                       groupThousands={groupThousands}
-                                       allowDecimal={!groupThousands}
                                        className="w-full h-full px-4 py-3 bg-transparent border-none outline-none focus:ring-2 focus:ring-inset focus:ring-siloam-blue"
                                        autoFocus
-                                   />
+                                     />
+                                   ) : (
+                                     <NumericInput
+                                       value={numericValue}
+                                       onValueChange={(val) => handleValueChange(rowIndex, accessorKey, val)}
+                                       onBlur={handleBlur}
+                                       groupThousands={false}
+                                       allowDecimal
+                                       className="w-full h-full px-4 py-3 bg-transparent border-none outline-none focus:ring-2 focus:ring-inset focus:ring-siloam-blue"
+                                       autoFocus
+                                     />
+                                   )}
                                </td>
                            );
                        }
@@ -492,8 +510,12 @@ export const SpreadsheetTable = <T extends Record<string, any>>({
           );
           })}
           {windowingEnabled && paddingBottom > 0 ? (
-            <tr aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 'none' }} />
+            <tr>
+              <td
+                colSpan={columns.length}
+                aria-hidden="true"
+                style={{ height: paddingBottom, padding: 0, border: 'none' }}
+              />
             </tr>
           ) : null}
         </tbody>

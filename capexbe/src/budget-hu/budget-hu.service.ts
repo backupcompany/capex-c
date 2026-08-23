@@ -687,7 +687,6 @@ export class BudgetHuService {
     }
 
     for (const projectId of deletedProjectIds) {
-      if (!changedProjectIds.has(projectId)) continue;
       await deleteProjectCascade(persistClient, projectId);
     }
 
@@ -832,7 +831,11 @@ export class BudgetHuService {
     const projectId = String(project.id ?? '').trim();
     if (!projectId) throw new BadRequestException('project.id is required');
 
-    await this.authZ.assertHierarchyPermission(accessToken, userId, 'Capex Project List', 'update');
+    try {
+      await this.authZ.assertHierarchyPermission(accessToken, userId, 'Capex Project List', 'update');
+    } catch {
+      await this.assertBudgetStackUpdate(accessToken, userId);
+    }
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
     const persistClient = this.getPersistClient(client);
 

@@ -62,8 +62,8 @@ export const SelectAssetTypeModal: React.FC<SelectAssetTypeModalProps> = ({ isOp
                     {activeAssetTypes.length === 0 && <p className="text-center text-siloam-text-secondary">No asset types available. Please configure them in the admin settings.</p>}
                 </div>
                 <div className="p-6 border-t border-siloam-border flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleNext} disabled={!selectedId} className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400">Next</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleNext} disabled={!selectedId} className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400">Next</button>
                 </div>
             </div>
         </div>

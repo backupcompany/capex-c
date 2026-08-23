@@ -25,6 +25,7 @@ import {
 
 const AUTH_RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   '/api/auth/login': { max: 8, windowMs: 15 * 60 * 1000 },
+  '/api/auth/dev-enter': { max: 8, windowMs: 15 * 60 * 1000 },
   '/api/auth/forgot-password': { max: 2, windowMs: 60 * 60 * 1000 },
   '/api/auth/refresh': { max: 60, windowMs: 15 * 60 * 1000 },
   '/api/auth/exchange': { max: 20, windowMs: 15 * 60 * 1000 },
@@ -32,6 +33,7 @@ const AUTH_RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
 
 const AUTH_RATE_LIMITS_DEMO: Record<string, { max: number; windowMs: number }> = {
   '/api/auth/login': { max: 40, windowMs: 15 * 60 * 1000 },
+  '/api/auth/dev-enter': { max: 40, windowMs: 15 * 60 * 1000 },
   '/api/auth/forgot-password': { max: 10, windowMs: 60 * 60 * 1000 },
   '/api/auth/refresh': { max: 120, windowMs: 15 * 60 * 1000 },
   '/api/auth/exchange': { max: 40, windowMs: 15 * 60 * 1000 },

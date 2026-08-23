@@ -30,9 +30,17 @@ const AssetCard: React.FC<{ asset: EnrichedAsset; onClick: () => void }> = ({ as
 
     return (
         <div
+            role="button"
+            tabIndex={0}
             draggable
             onDragStart={handleDragStart}
             onClick={onClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }}
             className="bg-white p-4 rounded-xl border border-siloam-border shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all space-y-3 group"
         >
             <div>

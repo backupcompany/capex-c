@@ -1,7 +1,11 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { roleNameToSlug, type EnterpriseRoleSlug } from './auth.constants';
 import { isUuid } from './azure-oauth.util';
+import {
+  DB_UNAVAILABLE_LOGIN_MSG,
+  isPostgrestInfraError,
+} from './auth-oauth-errors.util';
 import {
   createSupabaseClient,
   getSharedServiceSupabaseClient,
@@ -19,7 +23,7 @@ export type AppUserRow = {
 
 export type ResolvedAppUser = AppUserRow & {
   roles: EnterpriseRoleSlug[];
-  assignments: { roleName: string; assignedScopes: string[] }[];
+  assignments: { roleName: string; roleId?: number; assignedScopes: string[] }[];
 };
 
 /** Case/whitespace-insensitive email match (Azure lowercases; DB may be PascalCase). */
@@ -78,19 +82,27 @@ export class AuthUserResolver {
     email?: string | null,
   ): Promise<ResolvedAppUser> {
     let lastReason: string | null = null;
+    let sawInfraError = false;
     const { data: byAuth, error: authErr } = await client
       .from('users')
       .select('id, username, email, auth_id')
       .eq('auth_id', authId)
       .maybeSingle();
-    if (authErr) lastReason = `lookup-by-auth_id failed: ${authErr.message || 'unknown'}`;
+    if (authErr) {
+      lastReason = `lookup-by-auth_id failed: ${authErr.message || 'unknown'}`;
+      if (isPostgrestInfraError(authErr)) sawInfraError = true;
+    }
 
     let row = byAuth as AppUserRow | null;
     if (!row && email) {
-      const { data: rows } = await client
+      const { data: rows, error: emailErr } = await client
         .from('users')
         .select('id, username, email, auth_id')
         .ilike('email', escapeIlikePattern(email.trim()));
+      if (emailErr) {
+        lastReason = `lookup-by-email failed: ${emailErr.message || 'unknown'}`;
+        if (isPostgrestInfraError(emailErr)) sawInfraError = true;
+      }
       if (!rows?.length) lastReason = lastReason ?? 'lookup-by-email returned 0 rows';
       row = pickUserRowByEmail(rows as AppUserRow[] | null, email);
     }
@@ -124,7 +136,10 @@ export class AuthUserResolver {
           .select('id, username, email, auth_id')
           .eq('auth_id', authId)
           .maybeSingle();
-        if (byAuthSvcErr) lastReason = `service lookup-by-auth_id failed: ${byAuthSvcErr.message || 'unknown'}`;
+        if (byAuthSvcErr) {
+          lastReason = `service lookup-by-auth_id failed: ${byAuthSvcErr.message || 'unknown'}`;
+          if (isPostgrestInfraError(byAuthSvcErr)) sawInfraError = true;
+        }
         row = byAuthSvc as AppUserRow | null;
 
         if (!row && email) {
@@ -132,7 +147,10 @@ export class AuthUserResolver {
             .from('users')
             .select('id, username, email, auth_id')
             .ilike('email', escapeIlikePattern(email.trim()));
-          if (rowsSvcErr) lastReason = `service lookup-by-email failed: ${rowsSvcErr.message || 'unknown'}`;
+          if (rowsSvcErr) {
+            lastReason = `service lookup-by-email failed: ${rowsSvcErr.message || 'unknown'}`;
+            if (isPostgrestInfraError(rowsSvcErr)) sawInfraError = true;
+          }
           if (!rowsSvc?.length) lastReason = lastReason ?? 'service lookup-by-email returned 0 rows';
           row = pickUserRowByEmail(rowsSvc as AppUserRow[] | null, email);
           if (
@@ -157,8 +175,11 @@ export class AuthUserResolver {
     // resolves the user successfully, do not fail the exchange flow.
     if (!row?.id) {
       this.logger.error(
-        `resolveAppUserByAuthId failed authId=${authId} email=${email ?? 'n/a'} reason=${lastReason ?? 'no match'}`,
+        `resolveAppUserByAuthId failed authId=${authId} email=${email ?? 'n/a'} reason=${lastReason ?? 'no match'} infra=${sawInfraError}`,
       );
+      if (sawInfraError) {
+        throw new ServiceUnavailableException(DB_UNAVAILABLE_LOGIN_MSG);
+      }
       throw new UnauthorizedException('User not registered in application');
     }
 
@@ -185,8 +206,15 @@ export class AuthUserResolver {
       .from('users')
       .select('id, username, email, auth_id')
       .ilike('email', escapeIlikePattern(normalized));
+    if (error) {
+      this.logger.error(
+        `resolveAppUserByEmail DB error email=${normalized} code=${error.code ?? ''} msg=${error.message}`,
+      );
+      throw new ServiceUnavailableException(DB_UNAVAILABLE_LOGIN_MSG);
+    }
     let row = pickUserRowByEmail(rows as AppUserRow[] | null, normalized);
-    if (error || !row?.id) {
+    if (!row?.id) {
+      this.logger.warn(`resolveAppUserByEmail no match email=${normalized}`);
       throw new UnauthorizedException('User lookup failed');
     }
 
@@ -247,10 +275,10 @@ export class AuthUserResolver {
   private async loadAssignments(
     client: SupabaseClient,
     userId: number,
-  ): Promise<{ roleName: string; assignedScopes: string[] }[]> {
+  ): Promise<{ roleName: string; roleId?: number; assignedScopes: string[] }[]> {
     const { data } = await client
       .from('user_assignments')
-      .select('id, roles(role_name)')
+      .select('id, role_id, roles(role_name)')
       .eq('user_id', userId);
     const assignmentRows = data ?? [];
     const assignmentIds = assignmentRows
@@ -266,9 +294,10 @@ export class AuthUserResolver {
       scopeRows = scopes ?? [];
     }
 
-    const out: { roleName: string; assignedScopes: string[] }[] = [];
+    const out: { roleName: string; roleId?: number; assignedScopes: string[] }[] = [];
     for (const row of assignmentRows) {
       const aid = Number((row as { id?: number }).id);
+      const roleId = Number((row as { role_id?: number }).role_id);
       const roles = (
         row as {
           roles?: { role_name?: string; name?: string } | { role_name?: string; name?: string }[];
@@ -289,7 +318,11 @@ export class AuthUserResolver {
             .filter((x) => x !== ''),
         ),
       ];
-      out.push({ roleName: String(roleName), assignedScopes });
+      out.push({
+        roleName: String(roleName),
+        ...(Number.isFinite(roleId) && roleId > 0 ? { roleId } : {}),
+        assignedScopes,
+      });
     }
     return out;
   }

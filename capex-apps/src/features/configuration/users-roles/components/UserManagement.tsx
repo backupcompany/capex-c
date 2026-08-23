@@ -5,7 +5,7 @@ import { User, UserRole, ArchetypeConfig, HospitalUnitConfig } from '@/types';
 import * as configService from '@/services/configService';
 import { useToast } from '@/contexts/ToastContext';
 import { getAccessTokenForBackend } from '@/lib/authSession';
-import { useBackendSession } from '@/lib/auth/authConstants';
+import { useBackendSession, isPasswordLoginEnabled } from '@/lib/auth/authConstants';
 import { resolveMyTasksAccessToken } from '@/services/myTasksApi';
 import * as userAdminApi from '@/services/userAdminApi';
 import type { OfficeListDiffRow } from '@/services/userAdminApi';
@@ -16,6 +16,7 @@ import { getCurrentAppUserIdFromSession } from '@/features/configuration/shared/
 import { USER_TABLE_PAGE_SIZE, USER_TABLE_SCROLL_THRESHOLD_PX, MAX_OFFICE_UPLOAD_SIZE_BYTES } from '@/features/configuration/shared/configConstants';
 import { UserEditorModal } from './UserEditorModal';
 import { UserTableRow } from './UserTableRow';
+import { AuthBusyOverlay } from '@/components/auth/AuthBusyOverlay';
 
 export const UserManagement: React.FC<{
     users: User[];
@@ -33,6 +34,7 @@ export const UserManagement: React.FC<{
     const [effectiveRoles, setEffectiveRoles] = useState<UserRole[]>(roles);
     const [selectedUser, setSelectedUser] = useState<Partial<User> | null>(null);
     const [isSavingUser, setIsSavingUser] = useState(false);
+    const [isLoggingOutAfterRoleChange, setIsLoggingOutAfterRoleChange] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebouncedValue(searchTerm, 280);
     const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('');
@@ -185,6 +187,34 @@ export const UserManagement: React.FC<{
             setEffectiveUsers(nextUsers);
             patchUsersList(nextUsers);
             await Promise.resolve(onUsersChange());
+            if (savedUser.id === currentUserId) {
+              // Own role/scope → loading overlay → session ended toast → hard logout.
+              setSelectedUser(null);
+              setIsLoggingOutAfterRoleChange(true);
+              setIsSavingUser(false);
+              await new Promise((r) => setTimeout(r, 450));
+              const { clearCachedAuthUser } = await import('@/lib/authSessionCache');
+              const { clearCachedBootstrap } = await import('@/lib/appBootstrapCache');
+              const { clearCachedRoles } = await import('@/lib/appRolesCache');
+              clearCachedAuthUser();
+              clearCachedBootstrap();
+              clearCachedRoles();
+              try {
+                sessionStorage.removeItem('currentUserId');
+              } catch {
+                /* private mode */
+              }
+              const { logoutBackend } = await import('@/lib/auth/authApi');
+              await logoutBackend({ allDevices: true }).catch(() => undefined);
+              const { signOutSupabaseAuth } = await import('@/lib/authAzure');
+              await signOutSupabaseAuth().catch(() => undefined);
+              showToast('Session ended. Please sign in again with your new role.', 'success', {
+                title: 'Logged out',
+              });
+              await new Promise((r) => setTimeout(r, 900));
+              window.location.assign('/');
+              return;
+            }
             showToast('User dan scope berhasil disimpan.', 'success');
         } catch (e) {
             showToast(e instanceof Error ? e.message : 'Gagal menyimpan user.', 'error');
@@ -251,7 +281,8 @@ export const UserManagement: React.FC<{
         if (
             !window.confirm(
                 'Sinkronkan semua user dari tabel users ke Supabase Auth? ' +
-                    'User baru dibuat dengan password 123456. User yang sudah ada di Auth akan di-reset password ke 123456.',
+                    'User baru dapat password sementara yang digenerate (bukan 123456). ' +
+                    'Email yang sudah ada di Auth hanya di-link jika belum terhubung ke user lain.',
             )
         ) {
             return;
@@ -261,7 +292,7 @@ export const UserManagement: React.FC<{
             const result = await configService.syncUsersToAuth(currentUserId);
             const msg =
                 `Auth sync: ${result.created} dibuat, ${result.updated ?? 0} di-update, ${result.skipped} dilewati. ` +
-                `${result.errors.length ? `Error: ${result.errors.join('; ')}` : 'Password default: 123456.'}`;
+                `${result.errors.length ? `Error: ${result.errors.join('; ')}` : 'Password sementara digenerate untuk akun baru — cek log/hasil sync.'}`;
             showToast(msg.trim(), result.errors.length ? 'error' : 'success');
         } catch (e) {
             showToast((e instanceof Error ? e.message : 'Sync gagal') + '', 'error');
@@ -475,14 +506,17 @@ export const UserManagement: React.FC<{
                         className="px-4 py-2 border border-siloam-border rounded-xl focus:outline-none focus:ring-2 focus:ring-siloam-blue text-sm bg-white"
                     >
                         <option value="">All Roles</option>
-                        {effectiveRoles.map(role => (
-                            <option key={role.id} value={role.roleName}>{role.roleName}</option>
+                        {effectiveRoles.map((role, roleIdx) => (
+                            <option key={`role-${role.id ?? role.roleName}-${roleIdx}`} value={role.roleName}>
+                                {role.roleName}
+                            </option>
                         ))}
                     </select>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button
+                    {isPasswordLoginEnabled() ? (
+                    <button type="button"
                         onClick={handleSyncToAuth}
                         disabled={syncingAuth || effectiveUsers.length === 0}
                         className="bg-siloam-green text-white px-4 py-2 rounded-xl hover:bg-siloam-green/90 transition shadow-soft text-sm font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
@@ -490,7 +524,8 @@ export const UserManagement: React.FC<{
                     >
                         {syncingAuth ? 'Syncing...' : 'Sync ke Auth'}
                     </button>
-                    <button onClick={handleNewUser} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm font-semibold whitespace-nowrap">
+                    ) : null}
+                    <button type="button" onClick={handleNewUser} className="bg-siloam-blue text-white px-4 py-2 rounded-xl hover:bg-siloam-blue/90 transition shadow-soft text-sm font-semibold whitespace-nowrap">
                         + New User
                     </button>
                 </div>
@@ -592,11 +627,15 @@ export const UserManagement: React.FC<{
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-siloam-border bg-white">
-                                            {officeDiff.notInOffice.map((u) => {
+                                            {officeDiff.notInOffice.map((u, rowIdx) => {
                                                 const isSelf = u.id === currentUserId;
                                                 const checked = selectedMismatchIds.has(u.id);
+                                                const rowKey =
+                                                    u.id != null && Number.isFinite(Number(u.id))
+                                                        ? `mismatch-${u.id}`
+                                                        : `mismatch-${u.email || 'no-email'}-${rowIdx}`;
                                                 return (
-                                                    <tr key={u.id} className={isSelf ? 'bg-siloam-bg/60' : 'hover:bg-siloam-bg/50'}>
+                                                    <tr key={rowKey} className={isSelf ? 'bg-siloam-bg/60' : 'hover:bg-siloam-bg/50'}>
                                                         <td className="px-2 py-2 align-middle">
                                                             <input
                                                                 type="checkbox"
@@ -656,9 +695,13 @@ export const UserManagement: React.FC<{
                         </thead>
                         <tbody className="divide-y divide-siloam-border">
                             {visibleUsers.length > 0 ? (
-                                visibleUsers.map(user => (
+                                visibleUsers.map((user, userIdx) => (
                                     <UserTableRow
-                                        key={user.id}
+                                        key={
+                                            user.id != null && Number.isFinite(Number(user.id))
+                                                ? `user-${user.id}`
+                                                : `user-${user.email || user.username || 'row'}-${userIdx}`
+                                        }
                                         user={user}
                                         formatScopes={formatScopes}
                                         onEdit={setSelectedUser}
@@ -701,7 +744,15 @@ export const UserManagement: React.FC<{
                 roles={effectiveRoles}
                 archetypes={archetypes}
                 hospitalUnits={hospitalUnits}
+                authProvisionMode={isPasswordLoginEnabled() ? 'manual-sync' : 'sso'}
             />
+
+            {isLoggingOutAfterRoleChange && (
+              <AuthBusyOverlay
+                title="Memuat ulang sesi…"
+                label="Keluar"
+              />
+            )}
         </div>
     );
 };

@@ -14,6 +14,15 @@ export const humanizeOAuthError = (raw: string): string => {
   if (msg.includes('error getting user email') || msg.includes('did not return an email')) {
     return 'Microsoft tidak mengirim email. Pastikan scope email aktif di Azure App.';
   }
+  if (
+    msg.includes('database') ||
+    msg.includes('pgrst') ||
+    msg.includes('schema cache') ||
+    msg.includes('tidak tersedia') ||
+    msg.includes('unavailable')
+  ) {
+    return 'Database Capex sedang tidak tersedia. Coba lagi sebentar atau hubungi admin.';
+  }
   if (msg.includes('access_denied') || msg.includes('consent_required')) {
     return 'Login Microsoft dibatalkan. Silakan coba lagi dengan akun yang benar.';
   }

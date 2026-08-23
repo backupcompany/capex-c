@@ -21,6 +21,11 @@ class BulkDeleteBodyDto {
   ids!: number[];
 }
 
+class ProvisionAuthBodyDto {
+  userId!: number;
+  targetUserId!: number;
+}
+
 @Roles('super_admin', 'pmo')
 @Controller('user-admin')
 export class UserAdminController {
@@ -60,5 +65,17 @@ export class UserAdminController {
     const token = requireAccessTokenFromRequest(req);
     const appUserId = getCallerUserId(req);
     return this.userAdminService.syncUsersToAuth(token, appUserId);
+  }
+
+  /** Super Admin only (enforced in service): link one public.users row to auth.users. */
+  @Post('provision-auth')
+  async provisionAuth(@Req() req: Request, @Body() body: ProvisionAuthBodyDto) {
+    const token = requireAccessTokenFromRequest(req);
+    const appUserId = getCallerUserId(req);
+    return this.userAdminService.provisionAuthForAppUser(
+      token,
+      appUserId,
+      Number(body?.targetUserId),
+    );
   }
 }

@@ -84,6 +84,7 @@ async function postPack(
     return null;
   }
 
+  let authDead = false;
   const invoke = async (): Promise<Partial<ConfigurationDataPack> | null> => {
     if (Date.now() < forbiddenUntilTs) {
       trackBackendFetch('configuration.pack', 'fallback', {
@@ -112,6 +113,7 @@ async function postPack(
         ...(bff ? { retryOn401: true } : {}),
       });
       if (!res.ok) {
+        if (res.status === 401) authDead = true;
         if (res.status === 403) {
           forbiddenUntilTs = Date.now() + FORBIDDEN_COOLDOWN_MS;
         }
@@ -132,6 +134,8 @@ async function postPack(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const result = await invoke();
     if (result) return result;
+    // Dead session — don't loop pack→refresh→pack (browser 401 spam).
+    if (authDead) return null;
     if (attempt < MAX_ATTEMPTS) {
       await new Promise((r) => setTimeout(r, 250 * attempt));
     }

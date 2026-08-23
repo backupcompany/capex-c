@@ -99,10 +99,10 @@ export const DeleteAssetTypeModal: React.FC<DeleteAssetTypeModalProps> = ({
                                     </p>
                                     {migrationOptions.length > 0 ? (
                                         <div>
-                                            <label className="block text-sm font-medium text-siloam-text-secondary">
+                                            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-migrate-assets-to">
                                                 Migrate assets to:
                                             </label>
-                                            <select
+                                            <select id="fld-migrate-assets-to"
                                                 value={migrationTargetId}
                                                 onChange={(e) => setMigrationTargetId(e.target.value)}
                                                 className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"

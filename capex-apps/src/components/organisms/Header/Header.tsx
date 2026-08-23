@@ -61,7 +61,7 @@ export const Header = memo(function Header({
   return (
     <header className="flex-shrink-0 bg-siloam-surface border-b border-siloam-border px-4 py-3 md:px-6 flex justify-between items-center sticky top-0 z-30">
       <div className="flex items-center">
-        <button
+        <button type="button"
           className="p-2 mr-2 md:hidden"
           onClick={onMenuClick}
           aria-label="Open navigation menu"

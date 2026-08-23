@@ -104,7 +104,7 @@ export function filterBddConstructionAssets(
       if (!inHuScope && !inArchetypeScope) return false;
     }
 
-    if (!isSuperAdmin && !hasBDDRole) {
+    if (!hasBDDRole) {
       if (!asset.bddPriority || asset.bddPriority === 'unassigned' || asset.bddPriority === '') {
         return false;
       }

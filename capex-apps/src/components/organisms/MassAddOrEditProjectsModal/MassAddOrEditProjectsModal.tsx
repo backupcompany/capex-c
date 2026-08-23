@@ -57,9 +57,9 @@ export const MassAddOrEditProjectsModal: React.FC<MassAddOrEditProjectsModalProp
         const rowErrors: RowErrors = {};
         if (!row.projectName?.trim()) rowErrors.projectName = 'Required';
         if (!row.budgetCategoryId) rowErrors.budgetCategoryId = 'Required';
-        if (isNaN(row.budgetPlan || NaN)) rowErrors.budgetPlan = 'Invalid number';
-        if (isNaN(row.budgetCarryForward || NaN)) rowErrors.budgetCarryForward = 'Invalid number';
-        if (isNaN(row.approvedBudget || NaN)) rowErrors.approvedBudget = 'Invalid number';
+        if (Number.isNaN(row.budgetPlan || Number.NaN)) rowErrors.budgetPlan = 'Invalid number';
+        if (Number.isNaN(row.budgetCarryForward || Number.NaN)) rowErrors.budgetCarryForward = 'Invalid number';
+        if (Number.isNaN(row.approvedBudget || Number.NaN)) rowErrors.approvedBudget = 'Invalid number';
         return rowErrors;
     }, []);
 
@@ -199,7 +199,7 @@ export const MassAddOrEditProjectsModal: React.FC<MassAddOrEditProjectsModalProp
                         <h3 className="text-lg font-bold text-siloam-text-primary">Bulk Manage Projects</h3>
                         <p className="text-sm text-siloam-text-secondary">Paste from Excel (Project Name | AX Code | Budget Plan | Category Name | Carry Forward | Approved Budget | Target Budget Start | Budget Revenue Permonth).</p>
                     </div>
-                    <button onClick={handleCopyToClipboard} className="bg-siloam-sidebar text-siloam-text-primary px-4 py-2 rounded-xl text-sm hover:bg-siloam-border transition shadow-soft whitespace-nowrap">
+                    <button type="button" onClick={handleCopyToClipboard} className="bg-siloam-sidebar text-siloam-text-primary px-4 py-2 rounded-xl text-sm hover:bg-siloam-border transition shadow-soft whitespace-nowrap">
                         Copy Table
                     </button>
                 </div>
@@ -237,18 +237,18 @@ export const MassAddOrEditProjectsModal: React.FC<MassAddOrEditProjectsModalProp
                                         <td className="p-1"><CurrencyInput value={row.approvedBudget || 0} onValueChange={(val) => handleRowChange(row._internalId, 'approvedBudget', val)} className={`w-full p-2 bg-transparent border rounded-md ${rowErrors.approvedBudget ? 'border-red-500 bg-red-50' : 'border-siloam-border'}`} /></td>
                                         <td className="p-1"><input type="date" value={row.targetBudgetStart || ''} onChange={e => handleRowChange(row._internalId, 'targetBudgetStart', e.target.value)} className="w-full p-2 bg-transparent border rounded-md border-siloam-border" /></td>
                                         <td className="p-1"><CurrencyInput value={row.budgetRevenuePermonth ?? 0} onValueChange={(val) => handleRowChange(row._internalId, 'budgetRevenuePermonth', val)} className="w-full p-2 bg-transparent border rounded-md border-siloam-border" /></td>
-                                        <td className="text-center"><button onClick={() => deleteRow(row._internalId)} className="text-red-500 text-xl font-bold p-1 rounded-full hover:bg-red-100">&times;</button></td>
+                                        <td className="text-center"><button type="button" onClick={() => deleteRow(row._internalId)} className="text-red-500 text-xl font-bold p-1 rounded-full hover:bg-red-100">&times;</button></td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
-                     <button onClick={addRow} className="mt-4 text-sm text-siloam-blue hover:underline">+ Add Row</button>
+                     <button type="button" onClick={addRow} className="mt-4 text-sm text-siloam-blue hover:underline">+ Add Row</button>
                 </div>
                 
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
-                    <button onClick={handleSave} disabled={isSaveDisabled} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border">Cancel</button>
+                    <button type="button" onClick={handleSave} disabled={isSaveDisabled} className="px-4 py-2 rounded-md bg-siloam-blue text-white disabled:bg-gray-400">
                         Save Changes
                     </button>
                 </div>

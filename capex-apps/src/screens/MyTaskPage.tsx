@@ -156,8 +156,8 @@ const MyTaskPaginationBar = memo(function MyTaskPaginationBar({
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-siloam-text-secondary">Per page:</label>
-          <select
+          <label className="text-sm text-siloam-text-secondary" htmlFor="fld-per-page">Per page:</label>
+          <select id="fld-per-page"
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
             className="px-2 py-1 border border-siloam-border rounded bg-siloam-bg text-sm focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -537,7 +537,7 @@ export const MyTaskPage: React.FC<MyTaskPageProps> = ({
 
   if (!canView) {
     return (
-      <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>
+      <div className="text-center p-8 text-danger">Anda tidak memiliki izin untuk melihat halaman ini.</div>
     );
   }
 

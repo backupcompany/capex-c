@@ -12,12 +12,13 @@ import {
 import { buildProjectListServerFilters } from '@/services/projectListQueryTypes';
 import { fetchBddConstructionQueryPage } from '@/hooks/queries/fetchBddConstructionQuery';
 import { defaultScopesForDiskPrefetch } from '@/lib/capexProjectListDiskCache';
+import { userCanAccessUnassignedBdd } from '@/lib/bddRolePolicy';
 
 const TABLE_STALE_MS = 5 * 60 * 1000;
 const DEFAULT_PREFETCH_PAGE_SIZE = 25;
 
 function hideUnassignedBddForUser(user: User): boolean {
-  return !user.assignments.some((a) => a.roleName === 'Super Admin' || a.roleName === 'BDD');
+  return !userCanAccessUnassignedBdd(user);
 }
 
 export function hydrateBddConstructionTableFromDisk(

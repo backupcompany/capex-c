@@ -76,8 +76,8 @@ export const ExecutiveSummaryPortfolioToolbar = memo(function ExecutiveSummaryPo
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <label className="text-siloam-text-secondary font-semibold">Sort</label>
-          <select
+          <label className="text-siloam-text-secondary font-semibold" htmlFor="fld-sort">Sort</label>
+          <select id="fld-sort"
             value={sortBy}
             onChange={(e) => onSortByChange(e.target.value as ProjectSortField)}
             className="border border-siloam-border rounded-lg px-2 py-1.5 bg-siloam-surface text-siloam-text-primary"

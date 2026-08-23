@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   allocateNextAssetCode,
@@ -15,11 +16,7 @@ function truncateString(str: string | undefined | null, maxLength: number): stri
 }
 
 function newAssetId(): string {
-  const uid =
-    typeof globalThis.crypto !== 'undefined' && globalThis.crypto.randomUUID
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `ASSET-${uid}`.substring(0, 255);
+  return `ASSET-${randomUUID()}`.substring(0, 255);
 }
 
 function isRoutineCode(code: string): boolean {

@@ -99,9 +99,9 @@ export const AssetGoodsReceivedModal: React.FC<AssetGoodsReceivedModalProps> = (
 
                         {/* Input Field */}
                         <div>
-                            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+                            <p className="block text-sm font-medium text-siloam-text-secondary mb-2">
                                 Received Quantity
-                            </label>
+                            </p>
                             <NumericInput
                                 min={0}
                                 max={orderedQty}
@@ -135,10 +135,10 @@ export const AssetGoodsReceivedModal: React.FC<AssetGoodsReceivedModalProps> = (
                 </div>
                 {error && <p className="p-4 text-sm text-center text-danger">{error}</p>}
                 <div className="p-4 border-t border-siloam-border flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border hover:bg-siloam-bg">
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border border-siloam-border hover:bg-siloam-bg">
                         Cancel
                     </button>
-                    <button 
+                    <button type="button" 
                         onClick={handleSubmit} 
                         disabled={isSubmitting}
                         className="px-4 py-2 rounded-md bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400 disabled:cursor-not-allowed"

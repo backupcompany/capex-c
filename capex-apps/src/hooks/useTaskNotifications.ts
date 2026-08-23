@@ -190,6 +190,7 @@ export function useTaskNotifications({
     };
 
     const checkTaskNotifications = async () => {
+      if (cancelled) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       if (taskNotificationCheckInFlightRef.current) return;
       taskNotificationCheckInFlightRef.current = true;
@@ -230,13 +231,27 @@ export function useTaskNotifications({
             }
           }
         } catch (pollErr) {
+          const status =
+            pollErr != null && typeof pollErr === 'object'
+              ? Number((pollErr as { status?: number; httpStatus?: number }).status ??
+                  (pollErr as { httpStatus?: number }).httpStatus)
+              : Number.NaN;
+          const forbidden = status === 403;
+          const unauthorized = status === 401;
           const benign =
             cancelled ||
+            forbidden ||
+            unauthorized ||
             (pollErr != null &&
               typeof pollErr === 'object' &&
               ((pollErr as { name?: string }).name === 'CancelledError' ||
                 (pollErr as { name?: string }).name === 'AbortError'));
           if (!benign) console.warn('Task notification poll failed:', pollErr);
+          // Session dead — stop this poller; AuthSessionSync / notifyAuthFailure handles logout.
+          if (forbidden || unauthorized) {
+            cancelled = true;
+            return;
+          }
           const snapshot = await import('@/lib/myTasksDiskCache').then((m) =>
             m.readMyTasksCacheAnyAge(currentUser.id, selectedPeriodName || undefined),
           );

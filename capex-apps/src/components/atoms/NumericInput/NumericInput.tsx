@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   clampNumericValue,
   formatNumericForInputMode,
@@ -7,6 +7,7 @@ import {
   parseNumericInput,
   parseNumericInputMode,
 } from '../../../lib/numericInput';
+import { caretAfterDigitCount, digitCountBefore } from '../CurrencyInput/currencyInputCaret';
 
 export interface NumericInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> {
@@ -32,8 +33,10 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   onBlur,
   ...rest
 }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(() => formatNumericForInputMode(value, groupThousands));
   const [isFocused, setIsFocused] = useState(false);
+  const pendingCaret = useRef<number | null>(null);
 
   const minNum = min !== undefined ? Number(min) : undefined;
   const maxNum = max !== undefined ? Number(max) : undefined;
@@ -45,28 +48,40 @@ export const NumericInput: React.FC<NumericInputProps> = ({
     }
   }, [value, isFocused, useGroupedIntegers]);
 
+  useEffect(() => {
+    if (pendingCaret.current == null || !inputRef.current) return;
+    const pos = pendingCaret.current;
+    pendingCaret.current = null;
+    inputRef.current.setSelectionRange(pos, pos);
+  }, [text]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      let next = e.target.value;
+      const raw = e.target.value;
+      const caret = e.target.selectionStart ?? raw.length;
+
       if (useGroupedIntegers) {
-        next = next.replace(/[^\d-]/g, '');
-      } else if (!allowDecimal) {
-        next = next.replace(/[^\d-]/g, '');
-      } else {
-        next = next.replace(/[^\d.-]/g, '');
+        const digitsOnly = raw.replace(/\D/g, '');
+        if (!digitsOnly) {
+          pendingCaret.current = 0;
+          setText('');
+          onValueChange(0);
+          return;
+        }
+        const digitsBefore = digitCountBefore(raw, caret);
+        const parsed = clampNumericValue(parseGroupedNumericInput(raw), minNum, maxNum);
+        const formatted = formatNumericForInputMode(parsed, true);
+        pendingCaret.current = caretAfterDigitCount(formatted, digitsBefore);
+        setText(formatted);
+        onValueChange(parsed);
+        return;
       }
-      if (!useGroupedIntegers) {
-        next = normalizeNumericTyping(next);
-      }
-      const parsed = clampNumericValue(
-        useGroupedIntegers ? parseGroupedNumericInput(next) : parseNumericInput(next),
-        minNum,
-        maxNum,
-      );
+
+      let next = allowDecimal ? raw.replace(/[^\d.-]/g, '') : raw.replace(/[^\d-]/g, '');
+      next = normalizeNumericTyping(next);
+      const parsed = clampNumericValue(parseNumericInput(next), minNum, maxNum);
       onValueChange(parsed);
-      setText(
-        useGroupedIntegers ? formatNumericForInputMode(parsed, true) : next,
-      );
+      setText(next);
     },
     [allowDecimal, maxNum, minNum, onValueChange, useGroupedIntegers],
   );
@@ -77,6 +92,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   return (
     <input
       {...rest}
+      ref={inputRef}
       type="text"
       inputMode={allowDecimal ? 'decimal' : 'numeric'}
       value={text}
@@ -84,7 +100,12 @@ export const NumericInput: React.FC<NumericInputProps> = ({
       onChange={handleChange}
       onFocus={(e) => {
         setIsFocused(true);
-        e.target.select();
+        // Keep value intact so user can edit one digit mid-number (Ctrl/Cmd+A still selects all).
+        const el = e.currentTarget;
+        requestAnimationFrame(() => {
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        });
         onFocus?.(e);
       }}
       onBlur={(e) => {
@@ -94,7 +115,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
         setText(formatNumericForInputMode(parsed, useGroupedIntegers));
         onBlur?.(e);
       }}
-      className={`${alignClass} ${className}`.trim()}
+      className={`${alignClass} tabular-nums ${className}`.trim()}
     />
   );
 };

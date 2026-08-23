@@ -180,8 +180,8 @@ export const FSRealizationModal: React.FC<FSRealizationModalProps> = ({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Actual Revenue Start Date</label>
-                        <input
+                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-actual-revenue-start-date">Actual Revenue Start Date</label>
+                        <input id="fld-actual-revenue-start-date"
                             type="date"
                             value={actualStartDate}
                             onChange={(e) => setActualStartDate(e.target.value)}
@@ -274,11 +274,11 @@ export const FSRealizationModal: React.FC<FSRealizationModalProps> = ({
                     )}
                 </div>
                 <div className="p-6 border-t border-siloam-border flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">
                         {readOnly ? 'Close' : 'Cancel'}
                     </button>
                     {!readOnly && (
-                        <button
+                        <button type="button"
                             onClick={() => void handleSave()}
                             disabled={isSaving || !actualStartDate || months.length === 0}
                             className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400"

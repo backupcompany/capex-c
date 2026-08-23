@@ -89,8 +89,8 @@ export const FSProposalModal: React.FC<FSProposalModalProps> = ({
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">FS Type</label>
-                        <select
+                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-fs-type">FS Type</label>
+                        <select id="fld-fs-type"
                             value={fsType}
                             onChange={(e) => setFsType(e.target.value)}
                             disabled={readOnly}
@@ -102,35 +102,35 @@ export const FSProposalModal: React.FC<FSProposalModalProps> = ({
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Amount (Rp mn)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Amount (Rp mn)</p>
                         <CurrencyInput value={amount} onValueChange={setAmount} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">IRR (%)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">IRR (%)</p>
                         <NumericInput value={irr} onValueChange={setIrr} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Payback Period (months)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Payback Period (months)</p>
                         <NumericInput value={paybackPeriod} onValueChange={setPaybackPeriod} disabled={readOnly} className={inputClass} allowDecimal={false} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">NPV (Rp mn)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">NPV (Rp mn)</p>
                         <CurrencyInput value={npv} onValueChange={setNpv} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">ROI (%)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">ROI (%)</p>
                         <NumericInput value={roi} onValueChange={setRoi} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Planned Revenue Start</label>
-                        <input type="date" value={plannedRevenueStartDate} onChange={(e) => setPlannedRevenueStartDate(e.target.value)} disabled={readOnly} className={inputClass} />
+                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-planned-revenue-start">Planned Revenue Start</label>
+                        <input id="fld-planned-revenue-start" type="date" value={plannedRevenueStartDate} onChange={(e) => setPlannedRevenueStartDate(e.target.value)} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Monthly Revenue Plan</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Monthly Revenue Plan</p>
                         <CurrencyInput value={monthlyRevenuePlan} onValueChange={setMonthlyRevenuePlan} disabled={readOnly} className={inputClass} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Throughput a month (Qty Object)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary mb-1">Throughput a month (Qty Object)</p>
                         <NumericInput
                             value={throughput}
                             onValueChange={setThroughput}
@@ -142,24 +142,24 @@ export const FSProposalModal: React.FC<FSProposalModalProps> = ({
                     {existingFS && (
                         <>
                             <div>
-                                <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Conclusion</label>
-                                <input type="text" value={existingFS.conclusion} disabled className={inputClass} />
+                                <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-conclusion">Conclusion</label>
+                                <input id="fld-conclusion" type="text" value={existingFS.conclusion} disabled className={inputClass} />
                             </div>
                             {existingFS.followUpAction && (
                                 <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-1">Follow Up Action</label>
-                                    <textarea value={existingFS.followUpAction} disabled className={inputClass} rows={2} />
+                                    <label className="block text-sm font-medium text-siloam-text-secondary mb-1" htmlFor="fld-follow-up-action">Follow Up Action</label>
+                                    <textarea id="fld-follow-up-action" value={existingFS.followUpAction} disabled className={inputClass} rows={2} />
                                 </div>
                             )}
                         </>
                     )}
                 </div>
                 <div className="p-6 border-t border-siloam-border flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-siloam-border text-siloam-text-primary font-semibold hover:bg-siloam-bg">
                         {readOnly ? 'Close' : 'Cancel'}
                     </button>
                     {!readOnly && (
-                        <button
+                        <button type="button"
                             onClick={() => void handleSubmit()}
                             disabled={isSaving || !plannedRevenueStartDate}
                             className="px-4 py-2 text-sm rounded-lg bg-siloam-blue text-white font-semibold hover:bg-siloam-blue/90 disabled:bg-gray-400"

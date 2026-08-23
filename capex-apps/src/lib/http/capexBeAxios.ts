@@ -4,12 +4,12 @@ import { authDebug } from '../auth/authDebug';
 import { coordinatedRefreshSession } from '../auth/authRefreshCoordinator';
 import { isAuthProbeComplete } from '../auth/authProbeGate';
 import { isBackendSessionValid } from '../auth/sessionValidity';
-import { hasSessionCookieHint } from '../auth/sessionCookieHint';
 import { getCsrfToken, ensureCsrfToken } from '../auth/csrfToken';
 import {
   redactOutgoingUserId,
   redactOutgoingUserIdJson,
 } from '../redactApiUserId';
+import { secureInt } from '../secureId';
 
 const MAX_401_RETRIES = 1;
 const MAX_503_RETRIES = 1;
@@ -70,7 +70,7 @@ capexBeAxios.interceptors.response.use(
       config._retry503Count = (config._retry503Count ?? 0) + 1;
       authDebug('axios 503: retrying', { url: config.url, attempt: config._retry503Count });
       await delay(
-        RETRY_503_DELAY_MS * config._retry503Count + Math.floor(Math.random() * RETRY_503_JITTER_MS),
+        RETRY_503_DELAY_MS * config._retry503Count + secureInt(RETRY_503_JITTER_MS),
       );
       return capexBeAxios.request(config);
     }
@@ -85,24 +85,25 @@ capexBeAxios.interceptors.response.use(
       const refreshed = await coordinatedRefreshSession();
       if (!refreshed) {
         const stillValid = await isBackendSessionValid();
-        if (!stillValid && hasSessionCookieHint()) {
-          if (!isAuthProbeComplete()) {
-            authDebug('axios 401: auth probe pending — skip logout');
-            return Promise.reject(error);
-          }
-          authDebug('axios 401: session invalid — cleanup');
-          const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
-            await import('../auth/authApi');
-          invalidateStaleAuthCookies();
-          invalidateAuthProbeCache();
-          void clearServerAuthCookies();
-          const { useAuthStore } = await import('../../stores/authStore');
-          if (useAuthStore.getState().status === 'authenticated') {
-            const { notifyAuthFailure } = await import('../auth/authFailureHandler');
-            notifyAuthFailure();
-          }
-        } else {
+        // Same as authenticatedFetch: do not require cookie hint (cleared on refresh 401).
+        if (stillValid) {
           authDebug('axios 401: refresh failed but /me still valid — keep session');
+          return Promise.reject(error);
+        }
+        if (!isAuthProbeComplete()) {
+          authDebug('axios 401: auth probe pending — skip logout');
+          return Promise.reject(error);
+        }
+        authDebug('axios 401: session invalid — cleanup');
+        const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
+          await import('../auth/authApi');
+        invalidateStaleAuthCookies();
+        invalidateAuthProbeCache();
+        void clearServerAuthCookies();
+        const { useAuthStore } = await import('../../stores/authStore');
+        if (useAuthStore.getState().status === 'authenticated') {
+          const { notifyAuthFailure } = await import('../auth/authFailureHandler');
+          notifyAuthFailure();
         }
         return Promise.reject(error);
       }

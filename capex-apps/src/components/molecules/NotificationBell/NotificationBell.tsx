@@ -100,7 +100,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ notification
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button 
+            <button type="button" 
                 onClick={() => setIsOpen(!isOpen)} 
                 className="relative p-2 rounded-full text-siloam-text-secondary hover:bg-siloam-border hover:text-siloam-text-primary transition-colors"
                 aria-label={`Notifications (${unreadCount} unread)`}
@@ -115,7 +115,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ notification
                     <div className="px-4 py-3 border-b border-siloam-border flex justify-between items-center">
                         <h3 className="font-bold text-siloam-text-primary">Notifications</h3>
                         {unreadCount > 0 && (
-                            <button onClick={onMarkAllAsRead} className="text-xs text-siloam-blue hover:underline">
+                            <button type="button" onClick={onMarkAllAsRead} className="text-xs text-siloam-blue hover:underline">
                                 Mark all as read
                             </button>
                         )}

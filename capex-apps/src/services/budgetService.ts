@@ -45,7 +45,7 @@ export const isAssetTypeInUse = async (
 ): Promise<{ inUse: boolean; count: number }> => {
     const userId =
         currentUserId ??
-        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN);
+        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
     if (Number.isFinite(userId)) {
         const backend = await getAssetTypeUsageCountViaBackend(userId, assetType.id);
         if (backend != null) {
@@ -96,7 +96,7 @@ export const getAllMultiYears = async (): Promise<BudgetMultiYear[]> => {
 export const saveMultiYear = async (multiYear: BudgetMultiYear, currentUserId?: number): Promise<void> => {
     const uid =
         currentUserId ??
-        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN);
+        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
     if (Number.isFinite(uid)) {
         const saved = await saveMultiYearViaBackend(uid, multiYear);
         if (saved) {
@@ -115,7 +115,7 @@ export const saveMultiYear = async (multiYear: BudgetMultiYear, currentUserId?: 
 
 export const createMultiYear = async (name: string, startYear: number, endYear: number): Promise<{ success: boolean; message: string }> => {
     const uid =
-        typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN;
+        typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN;
 
     if (Number.isFinite(uid)) {
         const emptyBudgetItem: BudgetItem = {
@@ -550,7 +550,7 @@ export const savePeriodCategoryPlans = async (
 ): Promise<void> => {
     const uid =
         currentUserId ??
-        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN);
+        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
     if (Number.isFinite(uid)) {
         const saved = await savePeriodCategoryPlansViaBackend(uid, period, categoryIds);
         if (saved) {
@@ -572,7 +572,7 @@ export const saveArchetypeBudgetPlans = async (
 ): Promise<void> => {
     const uid =
         currentUserId ??
-        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN);
+        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
     const catIds = categoryIds?.length ? categoryIds : Object.keys(updatedPeriod.budget ?? {});
     const rows = collectArchetypePlanChanges(originalPeriod, updatedPeriod, catIds);
     if (!rows.length) {
@@ -602,7 +602,7 @@ export const saveHuBudgetPlans = async (
 ): Promise<void> => {
     const uid =
         currentUserId ??
-        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN);
+        (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
     const catIds = categoryIds?.length ? categoryIds : Object.keys(updatedPeriod.budget ?? {});
     const rows = collectHuPlanChanges(originalPeriod, updatedPeriod, catIds, archetypeId);
     if (!rows.length) {
@@ -625,7 +625,7 @@ export const saveHuBudgetPlans = async (
 
 export const createBudgetPeriod = async (periodName: string, startDate: string, endDate: string, multiYearName: string): Promise<{ success: boolean; message: string }> => {
     const uid =
-        typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : NaN;
+        typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN;
     if (Number.isFinite(uid)) {
         const created = await createBudgetPeriodViaBackend(uid, periodName, startDate, endDate, multiYearName);
         if (created) {

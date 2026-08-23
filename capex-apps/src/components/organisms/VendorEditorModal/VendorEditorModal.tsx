@@ -60,8 +60,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
         <h3 className="text-lg font-bold mb-4">{editedItem.id ? 'Edit' : 'Create'} Vendor</h3>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Vendor Name</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-vendor-name">Vendor Name</label>
+            <input id="fld-vendor-name"
               type="text"
               value={editedItem.name || ''}
               onChange={(e) => setEditedItem({ ...editedItem, name: e.target.value })}
@@ -70,8 +70,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Address</label>
-            <textarea
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-address">Address</label>
+            <textarea id="fld-address"
               value={editedItem.address || ''}
               onChange={(e) => setEditedItem({ ...editedItem, address: e.target.value })}
               rows={3}
@@ -80,8 +80,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">NPWP</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-npwp">NPWP</label>
+            <input id="fld-npwp"
               type="text"
               value={editedItem.npwp || ''}
               onChange={(e) => setEditedItem({ ...editedItem, npwp: e.target.value })}
@@ -91,8 +91,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Contact Person</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-contact-person">Contact Person</label>
+            <input id="fld-contact-person"
               type="text"
               value={editedItem.contactPerson || ''}
               onChange={(e) => setEditedItem({ ...editedItem, contactPerson: e.target.value })}
@@ -101,8 +101,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Contact Email</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-contact-email">Contact Email</label>
+            <input id="fld-contact-email"
               type="email"
               value={editedItem.contactEmail || ''}
               onChange={(e) => setEditedItem({ ...editedItem, contactEmail: e.target.value })}
@@ -111,8 +111,8 @@ export const VendorEditorModal: React.FC<VendorEditorModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary">Contact Phone</label>
-            <input
+            <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-contact-phone">Contact Phone</label>
+            <input id="fld-contact-phone"
               type="tel"
               value={editedItem.contactPhone || ''}
               onChange={(e) => setEditedItem({ ...editedItem, contactPhone: e.target.value })}

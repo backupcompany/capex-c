@@ -30,6 +30,9 @@ export type ProjectListDebugInfo = {
   cacheLayer?: string;
   usedProgressFilter?: boolean;
   defaultQuery?: boolean;
+  scopeAll?: boolean;
+  /** Scoped search empty, but same term matches assets/projects outside assignment HUs. */
+  searchOutsideScope?: boolean;
 };
 
 /** @deprecated Use CapexBeHttpError */
@@ -373,6 +376,7 @@ export function invalidateProjectListCache(periodName: string, userId: number): 
 export async function fetchProjectListQuery(
   params: ProjectListQueryParams,
   accessToken?: string | null,
+  signal?: AbortSignal,
 ): Promise<ProjectListQueryResult> {
   const bff = useBeBffProxy();
   if (!bff && !process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim()) {
@@ -389,6 +393,7 @@ export async function fetchProjectListQuery(
     method: 'POST',
     headers,
     credentials: bff ? 'include' : 'same-origin',
+    signal,
     body: JSON.stringify({
       periodName: params.periodName,
       userId: params.userId,
@@ -496,6 +501,7 @@ export async function fetchProjectListExport(
 export async function fetchProjectListPageBundle(
   params: ProjectListQueryParams,
   accessToken?: string | null,
+  signal?: AbortSignal,
 ): Promise<ProjectListQueryResult> {
   const bff = useBeBffProxy();
   if (!bff && !process.env.NEXT_PUBLIC_CAPEXBE_URL?.trim()) {
@@ -512,6 +518,7 @@ export async function fetchProjectListPageBundle(
     method: 'POST',
     headers,
     credentials: bff ? 'include' : 'same-origin',
+    signal,
     body: JSON.stringify({
       periodName: params.periodName,
       userId: params.userId,
@@ -539,7 +546,7 @@ export async function fetchProjectListPageBundle(
     ...(bff ? { retryOn401: true } : {}),
   });
   if (!res.ok) {
-    return fetchProjectListQuery(params, accessToken);
+    return fetchProjectListQuery(params, accessToken, signal);
   }
   return res.json() as Promise<ProjectListQueryResult>;
 }

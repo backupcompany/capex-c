@@ -7,12 +7,14 @@ import type { BudgetMultiYear, BudgetPeriod, User, UserRole, ChangeSummary, Noti
 import { prefetchScreenChunk } from '@/app-shell/screenRegistry';
 import { AppAuthGateViews } from '@/app-shell/AppAuthGateViews';
 import { AppAuthenticatedLayout } from '@/app-shell/AppAuthenticatedLayout';
+import { AuthBusyOverlay } from '@/components/auth/AuthBusyOverlay';
 import { useAppPeriodFilters } from '@/app-shell/useAppPeriodFilters';
 import { resolvePendingUnsavedChanges } from '@/lib/navigation/unsavedChangesGuard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useNavPrefetch } from '@/hooks/useNavPrefetch';
 import { useRouteWarm } from '@/hooks/useRouteWarm';
 import { usePagePreloads } from '@/hooks/usePagePreloads';
+import { secureId } from '@/lib/secureId';
 import {
   cloneRolesForApp,
   sameUserSession,
@@ -25,6 +27,7 @@ import { type ShowToastOptions } from '@/contexts/ToastContext';
 import * as taskService from '@/services/taskService';
 import * as notificationService from '@/services/notificationService';
 import { NAV_ITEMS } from '@/constants';
+import { canNavigateToPage } from '@/lib/pagePermissions';
 import { pageToHref, pathnameToPage, profilePublicIdFromPathname } from '@/lib/pageRoutes';
 import { decodeUserPublicId, encodeUserPublicId } from '@/lib/publicUserId';
 import { resolvePostLoginLandingPage } from '@/lib/postLoginLanding';
@@ -87,6 +90,7 @@ import { isCapexBeConfigured } from '@/lib/capexBeClient';
 import { useAuthStore } from '@/stores/authStore';
 import { writePeriodShellCache } from '@/lib/periodSelectionCache';
 import { pickDefaultBudgetPeriodNameForYear } from '@/lib/appShell/periodSelectionUtils';
+import { userCanAccessUnassignedBdd } from '@/lib/bddRolePolicy';
 import {
   refreshActiveConfigurationQueries,
   refreshBudgetHuMasterConfigQueries,
@@ -164,6 +168,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     type: 'success' | 'error';
     title?: string;
   } | null>(null);
+  const [authBusy, setAuthBusy] = useState<{ title: string; subtitle?: string } | null>(null);
+  /** Brief full-page pause after SSO/local login before revealing the shell. */
+  const [entryHold, setEntryHold] = useState(false);
+  const entryHoldArmedRef = useRef(false);
   const dismissToast = useCallback(() => setToast(null), []);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -194,8 +202,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   const pushNotification = useCallback((message: string, dedupeKey?: string) => {
     if (!currentUser) return;
 
-    const stableKey =
-      dedupeKey ?? `ephemeral-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const stableKey = dedupeKey ?? secureId('ephemeral-');
     if (sentNotificationDedupeKeysRef.current.has(stableKey)) return;
     sentNotificationDedupeKeysRef.current.add(stableKey);
 
@@ -222,10 +229,18 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       'Notification' in window &&
       Notification.permission === 'granted'
     ) {
-      new window.Notification('Capex Reminder', {
-        body: message,
-        tag: `capex-task-${nextNotification.id}`,
-      });
+      try {
+        const desktop = new window.Notification('Capex Reminder', {
+          body: message,
+          tag: `capex-task-${nextNotification.id}`,
+        });
+        desktop.onclick = () => {
+          window.focus();
+          desktop.close();
+        };
+      } catch {
+        /* Notification API can throw if blocked mid-flight */
+      }
     }
   }, [currentUser, desktopNotificationsEnabled, prependNotification]);
 
@@ -273,10 +288,12 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   });
 
   const shellDataReady = authenticatedNetworkReady && dataInitialized;
+  const canPollMyTaskNotifications =
+    shellDataReady && Boolean(currentUser) && permissions.canAccessPage(Page.MyTask);
 
   const { resetTaskNotificationState } = useTaskNotifications({
-    enabled: shellDataReady,
-    currentUser: shellDataReady ? currentUser : null,
+    enabled: canPollMyTaskNotifications,
+    currentUser: canPollMyTaskNotifications ? currentUser : null,
     userScopes: permissions.userScopes,
     allRoles,
     selectedPeriodName,
@@ -302,7 +319,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   const refreshBudgetListOnly = useCallback(async () => {
     const uid =
       currentUser?.id ??
-      (typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('currentUserId') || '', 10) : NaN);
+      (typeof window !== 'undefined' ? Number.parseInt(sessionStorage.getItem('currentUserId') || '', 10) : Number.NaN);
 
     let multiYears: BudgetMultiYear[] = [];
     let summaries: BudgetPeriod[] = [];
@@ -499,6 +516,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
           } catch {
             /* ignore */
           }
+          if (ssoReturn) entryHoldArmedRef.current = true;
 
           if (
             !shouldRunAuthSessionProbe({
@@ -542,6 +560,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             if (!cancelled) {
               useAuthStore.getState().setSessionReady(true);
               void ensureCsrfToken();
+              if (entryHoldArmedRef.current) {
+                entryHoldArmedRef.current = false;
+                setEntryHold(true);
+              }
             }
             if (initialBootstrap?.users?.length) {
               setDataInitialized(true);
@@ -558,6 +580,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
               if (!cancelled) {
                 useAuthStore.getState().setSessionReady(true);
                 setDataInitialized(true);
+                if (entryHoldArmedRef.current) {
+                  entryHoldArmedRef.current = false;
+                  setEntryHold(true);
+                }
               }
               return;
             }
@@ -607,16 +633,19 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     const skipAuthOverwrite = isShellCachePatchGuarded();
 
     if (!skipAuthOverwrite) {
-      setAllUsers(d.users);
-      setAllRoles(d.roles);
-      writeCachedRoles(d.roles);
-    } else {
+      if (d.users.length) setAllUsers(d.users);
+      // Empty roles from a failed/partial bootstrap must not wipe a good Viewer matrix.
+      if (d.roles.length) {
+        setAllRoles(d.roles);
+        writeCachedRoles(d.roles);
+      }
+    } else if (d.roles.length) {
       writeCachedRoles(d.roles);
     }
     setAllPeriods(d.allPeriods);
     writeCachedBootstrap(d);
     syncPeriodSelectionFromLists(d.multiYears, d.allPeriods);
-    if (!skipAuthOverwrite) {
+    if (!skipAuthOverwrite && d.roles.length) {
       setCurrentUser((prev) => {
         if (!prev) return prev;
         const full = enrichUserAssignments(
@@ -765,7 +794,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   ]);
 
   const visibleNavItems = useMemo(
-    () => NAV_ITEMS.filter((item) => permissions.canAccessPage(item.label)),
+    () =>
+      NAV_ITEMS.filter((item) =>
+        canNavigateToPage(item.label, permissions.canAccessPage(item.label), permissions.userScopes),
+      ),
     [permissions, sidebarNavRevision, allRoles, currentUser],
   );
 
@@ -898,11 +930,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   });
 
   const hideUnassignedBdd = useMemo(
-    () =>
-      !!currentUser &&
-      !currentUser.assignments.some(
-        (a) => a.roleName === 'Super Admin' || a.roleName === 'BDD',
-      ),
+    () => !!currentUser && !userCanAccessUnassignedBdd(currentUser),
     [currentUser],
   );
 
@@ -969,7 +997,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     const run = async () => {
       const savedUserId = sessionStorage.getItem('currentUserId');
       if (savedUserId && usersSnapshot.length > 0) {
-        const parsed = parseInt(savedUserId, 10);
+        const parsed = Number.parseInt(savedUserId, 10);
         if (Number.isFinite(parsed)) {
           const fromList = usersSnapshot.find((u) => u.id === parsed);
           if (fromList) applyUser(fromList);
@@ -1172,39 +1200,65 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
   // Handle logout
   const handleLogout = useCallback(async (options?: { skipBackend?: boolean }) => {
-    sentNotificationDedupeKeysRef.current.clear();
-    resetTaskNotificationState();
-    invalidateAuthProbeCache();
-    setCurrentUser(null);
-    clearCachedAuthUser();
-    clearCachedRoles();
-    clearCachedBootstrap();
-    clearShellCachePatchGuard();
-    clearPersistedQueryCache();
-    sessionStorage.removeItem('currentUserId');
-    if (useBackendSession()) {
-      if (!options?.skipBackend) {
-        await logoutBackend({ allDevices: true });
-      }
-    }
-    queueMicrotask(() => useAuthStore.getState().clearSession());
-    useAuthStore.getState().setSessionReady(false);
-    void queryClient.removeQueries({
-      predicate: (q) =>
-        Array.isArray(q.queryKey) &&
-        (q.queryKey[0] === 'screen' || q.queryKey[0] === 'app'),
+    setAuthBusy({
+      title: 'Keluar…',
     });
+    try {
+      sentNotificationDedupeKeysRef.current.clear();
+      resetTaskNotificationState();
+      invalidateAuthProbeCache();
+      setCurrentUser(null);
+      clearCachedAuthUser();
+      clearCachedRoles();
+      clearCachedBootstrap();
+      clearShellCachePatchGuard();
+      clearPersistedQueryCache();
+      sessionStorage.removeItem('currentUserId');
+      if (useBackendSession()) {
+        if (!options?.skipBackend) {
+          await logoutBackend({ allDevices: true });
+        }
+      }
+      useAuthStore.getState().clearSession();
+      useAuthStore.getState().setSessionReady(false);
+      void queryClient.cancelQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) &&
+          (q.queryKey[0] === 'screen' || q.queryKey[0] === 'app'),
+      });
+      void queryClient.removeQueries({
+        predicate: (q) =>
+          Array.isArray(q.queryKey) &&
+          (q.queryKey[0] === 'screen' || q.queryKey[0] === 'app'),
+      });
 
-    const { signOutSupabaseAuth } = await import('@/lib/authAzure');
-    await signOutSupabaseAuth();
+      const { signOutSupabaseAuth } = await import('@/lib/authAzure');
+      await signOutSupabaseAuth();
 
-  showToast(
-      options?.skipBackend
-        ? 'Session ended after inactivity'
-        : 'You have been logged out',
-      'success',
-    );
+      showToast(
+        options?.skipBackend
+          ? 'Session ended after inactivity'
+          : 'You have been logged out',
+        'success',
+      );
+    } catch {
+      setAuthBusy(null);
+    }
   }, [queryClient, showToast]);
+
+  // Keep logout pause on screen so the swap to login isn't abrupt.
+  useEffect(() => {
+    if (currentUser || !authBusy) return;
+    const t = window.setTimeout(() => setAuthBusy(null), 1200);
+    return () => window.clearTimeout(t);
+  }, [currentUser, authBusy]);
+
+  // Post-login pause after Microsoft/local enter — then reveal the app.
+  useEffect(() => {
+    if (!entryHold) return;
+    const t = window.setTimeout(() => setEntryHold(false), 1400);
+    return () => window.clearTimeout(t);
+  }, [entryHold]);
 
   useEffect(() => {
     if (!useBackendSession()) return;
@@ -1230,17 +1284,33 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     }
   }, [currentUser, handleLogout]);
 
-  if (!currentUser) {
-    return (
+  // Wait for /auth/session probe — avoid flash of login right after SSO/local enter succeeds.
+  let main: React.ReactNode;
+  if (authBusy) {
+    main = (
+      <AuthBusyOverlay
+        title={authBusy.title}
+        subtitle={authBusy.subtitle}
+        label="Keluar"
+      />
+    );
+  } else if (!authProbeComplete || entryHold) {
+    main = (
+      <AuthBusyOverlay
+        title="Memuat…"
+        label="Memuat"
+      />
+    );
+  } else if (!currentUser) {
+    main = (
       <AppAuthGateViews
         toast={toast}
         dismissToast={dismissToast}
         showToast={showToast}
       />
     );
-  }
-
-  return (
+  } else {
+    main = (
     <AppAuthenticatedLayout
       showToast={showToast}
       onForceLogout={handleLogout}
@@ -1309,7 +1379,10 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       dismissToast={dismissToast}
       backendServiceDown={bootstrapQuery.isError}
     />
-  );
+    );
+  }
+
+  return main;
 };
 
 export default AppRoot;

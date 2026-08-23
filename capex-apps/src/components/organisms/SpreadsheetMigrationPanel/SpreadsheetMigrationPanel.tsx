@@ -348,10 +348,10 @@ function SpreadsheetMigrationPanelInner({ currentUser, onComplete }: Spreadsheet
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+            <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-migration-target">
               Migration Target
             </label>
-            <select
+            <select id="fld-migration-target"
               value={target}
               onChange={(e) => setTarget(e.target.value as MigrationTarget)}
               className="w-full p-3 border border-siloam-border rounded-xl bg-white focus:ring-2 focus:ring-siloam-blue outline-none"
@@ -370,10 +370,10 @@ function SpreadsheetMigrationPanelInner({ currentUser, onComplete }: Spreadsheet
 
           {needsPeriod && (
             <div>
-              <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+              <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-target-period">
                 Target Period
               </label>
-              <select
+              <select id="fld-target-period"
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
                 disabled={periodsLoading && periods.length === 0}
@@ -395,10 +395,11 @@ function SpreadsheetMigrationPanelInner({ currentUser, onComplete }: Spreadsheet
 
         {needsWorkflowSets && (
           <div>
-            <label className="block text-sm font-medium text-siloam-text-secondary mb-2">
+            <label className="block text-sm font-medium text-siloam-text-secondary mb-2" htmlFor="fld-asset-type-workflow">
               Asset Type (Workflow) <span className="text-red-500">*</span>
             </label>
             <select
+              id="fld-asset-type-workflow"
               value={selectedAssetType}
               onChange={(e) => setSelectedAssetType(e.target.value)}
               disabled={workflowsLoading && workflows.length === 0}

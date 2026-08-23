@@ -11,8 +11,8 @@ type ProjectPriorityFormProps = {
 export function ProjectPriorityForm({ draft, onChange }: ProjectPriorityFormProps) {
   return (
     <div>
-      <label className="block text-sm font-medium text-siloam-text-secondary">Priority Name</label>
-      <input
+      <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-priority-name">Priority Name</label>
+      <input id="fld-priority-name"
         type="text"
         value={draft.name || ''}
         onChange={(e) => onChange({ name: e.target.value })}

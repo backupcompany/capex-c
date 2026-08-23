@@ -88,7 +88,7 @@ export const AIAnalyticsPage: React.FC<AIAnalyticsPageProps> = ({ currentUser })
                     Gain strategic insights, detect hidden risks, and receive intelligent recommendations across your entire CAPEX portfolio using Gemini AI.
                 </p>
                 {error && <div className="mb-4 p-4 bg-red-100 text-red-800 rounded-lg max-w-md">{error}</div>}
-                <button
+                <button type="button"
                     onClick={handleGenerateAnalysis}
                     className="bg-siloam-blue text-white px-8 py-3 rounded-xl font-bold shadow-soft hover:bg-siloam-blue/90 hover:shadow-lg transition-all"
                 >
@@ -111,7 +111,7 @@ export const AIAnalyticsPage: React.FC<AIAnalyticsPageProps> = ({ currentUser })
                     </h1>
                     <p className="text-sm text-siloam-text-secondary mt-1">Last Updated: {new Date(lastUpdated).toLocaleString()}</p>
                 </div>
-                <button
+                <button type="button"
                     onClick={handleGenerateAnalysis}
                     className="bg-siloam-sidebar text-siloam-text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-siloam-border transition flex items-center gap-2"
                 >
@@ -171,7 +171,7 @@ export const AIAnalyticsPage: React.FC<AIAnalyticsPageProps> = ({ currentUser })
             <div className="border-b border-siloam-border">
                 <nav className="-mb-px flex space-x-8">
                     {['overview', 'dimensions', 'risks'].map((tab) => (
-                        <button
+                        <button type="button"
                             key={tab}
                             onClick={() => setActiveTab(tab as any)}
                             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${

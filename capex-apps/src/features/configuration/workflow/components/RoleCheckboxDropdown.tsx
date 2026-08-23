@@ -46,7 +46,7 @@ export function RoleCheckboxDropdown({
   };
 
   return (
-    <div ref={rootRef} className="relative w-full min-w-[9rem]" onClick={(e) => e.stopPropagation()}>
+    <div ref={rootRef} className="relative w-full min-w-[9rem]" onMouseDown={(e) => e.stopPropagation()}>
       <button
         type="button"
         disabled={disabled}

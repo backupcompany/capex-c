@@ -1425,7 +1425,11 @@ export function useProjectListTablePipeline(
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     refetchOnMount: true,
-    placeholderData: (prev) => prev ?? (mayUseDiskSeed ? diskTableSeed : undefined),
+    // Never keep the unfiltered page as placeholder while search/filters load —
+    // that made "mrcc" look like it did nothing (still Showing 1531).
+    placeholderData: hasActiveTableFilters
+      ? undefined
+      : (prev) => prev ?? (mayUseDiskSeed ? diskTableSeed : undefined),
     queryFn: async ({ signal }) => {
       if (!currentUser) throw new Error('Missing user');
       const bff = useBeBffProxy();
@@ -1437,8 +1441,7 @@ export function useProjectListTablePipeline(
         }
       }
       try {
-        const skipServerCache =
-          mustRefetchTableRef.current || isMultiPeriodView || hasActiveTableFilters;
+        const skipServerCache = mustRefetchTableRef.current || isMultiPeriodView;
         const result = await fetchMergedProjectListPage(
           effectivePeriods,
           {
@@ -1449,6 +1452,7 @@ export function useProjectListTablePipeline(
           currentPage,
           itemsPerPage,
           token,
+          signal,
         );
         if (signal.aborted) return null;
         mustRefetchTableRef.current = false;
@@ -1502,6 +1506,7 @@ export function useProjectListTablePipeline(
 
   const resolvedServerBundle = useMemo((): ProjectListBundle | null => {
     if (!needsPanelServerFetch) return null;
+    if (tableQuery.isPlaceholderData) return null;
     const fromQuery =
       tableQuery.data &&
       !isStaleProjectListBundle(tableQuery.data.totalAssetCount, tableQuery.data._debug)
@@ -1509,6 +1514,7 @@ export function useProjectListTablePipeline(
         : null;
     if (fromQuery) return fromQuery;
     if (
+      !hasActiveTableFilters &&
       diskTableSeed &&
       !isStaleProjectListBundle(diskTableSeed.totalAssetCount, diskTableSeed._debug) &&
       bundleMatchesTableFilters(diskTableSeed)
@@ -1518,7 +1524,9 @@ export function useProjectListTablePipeline(
     return null;
   }, [
     needsPanelServerFetch,
+    hasActiveTableFilters,
     tableQuery.data,
+    tableQuery.isPlaceholderData,
     diskTableSeed,
     bundleMatchesTableFilters,
   ]);
@@ -1527,7 +1535,9 @@ export function useProjectListTablePipeline(
   const serverPageTotalCount =
     typeof resolvedServerBundle?.totalAssetCount === 'number'
       ? resolvedServerBundle.totalAssetCount
-      : listTotalAssetCount;
+      : hasActiveTableFilters
+        ? 0
+        : listTotalAssetCount;
 
   const hasListData =
     serverPageAssets.length > 0 ||
@@ -1543,15 +1553,20 @@ export function useProjectListTablePipeline(
 
   const showBlockingSkeleton =
     needsPanelServerFetch &&
-    tableQuery.isPending &&
-    !hasListData &&
-    !tableQuery.isPlaceholderData;
+    !tableQuery.isPlaceholderData &&
+    ((hasActiveTableFilters &&
+      tableQuery.isFetching &&
+      !resolvedServerBundle &&
+      !(isSearchActive && poolReadyForInstantPanelFilters)) ||
+      (tableQuery.isPending && !hasListData && !(isSearchActive && poolReadyForInstantPanelFilters)));
 
   const isBackgroundRefetch =
-    hasListData && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging;
+    hasListData && tableQuery.isFetching && !tableQuery.isPending && !isSearchStaging && !isSearchActive;
 
+  /** Typing debounce OR in-flight filtered/search query — drives table "Mencari…" overlay. */
   const isFilterRefreshing =
-    isSearchStaging || (tableQuery.isFetching && hasListData);
+    isSearchStaging ||
+    (tableQuery.isFetching && (hasActiveTableFilters || hasListData));
 
   return {
     allAssets,

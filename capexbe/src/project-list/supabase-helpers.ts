@@ -11,7 +11,7 @@ export const canonicalAssetKey = (v: unknown): string =>
 
 export const normRoleId = (v: unknown): number | null => {
   if (v == null || v === '') return null;
-  const n = typeof v === 'number' && Number.isFinite(v) ? v : parseInt(String(v), 10);
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : Number.parseInt(String(v), 10);
   return Number.isFinite(n) ? n : null;
 };
 
@@ -302,8 +302,9 @@ export async function fetchRecordsInBatches(
   return allRecords;
 }
 
-/** PostgREST: keep IN batches small to avoid URL/query limits. */
-const ASSET_ID_IN_CHUNK = 120;
+/** PostgREST/Nginx: large asset_id IN (...) → 502; VM confirmed 25 works (120 did not). */
+// ponytail: fixed 25; raise via code if PostgREST URL limits improve
+const ASSET_ID_IN_CHUNK = 25;
 
 /**
  * Only rows for the given assets — avoids full-table scans (major latency win vs fetchAllRecords).

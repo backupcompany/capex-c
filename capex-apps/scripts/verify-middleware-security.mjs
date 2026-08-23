@@ -72,11 +72,41 @@ function read(rel) {
   return readFileSync(join(ROOT, rel), 'utf8');
 }
 
+/** Avoid `/\/+$/` (Sonar S8786 backtracking) — scripts only. */
+function stripTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path.charCodeAt(end - 1) === 47 /* / */) end -= 1;
+  return end === path.length ? path : path.slice(0, end);
+}
+
+/** Parse `@Controller('x')` without unbounded `\s*` backtracking. */
+function nestControllerBase(text) {
+  const marker = '@Controller(';
+  const start = text.indexOf(marker);
+  if (start < 0) return '';
+  let i = start + marker.length;
+  while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) {
+    i += 1;
+  }
+  const quote = text[i];
+  if (quote !== "'" && quote !== '"' && quote !== '`') return '';
+  i += 1;
+  const from = i;
+  while (i < text.length && text[i] !== quote) i += 1;
+  return text.slice(from, i);
+}
+
 function extractAllowlistPrefixes() {
   const src = read('src/lib/auth/bePathAllowlist.ts');
-  const match = src.match(/ALLOWED_PATH_PREFIXES\s*=\s*\[([\s\S]*?)\]\s*as const/);
-  if (!match) return [];
-  return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const marker = 'ALLOWED_PATH_PREFIXES';
+  const start = src.indexOf(marker);
+  if (start < 0) return [];
+  const bracket = src.indexOf('[', start);
+  if (bracket < 0) return [];
+  const end = src.indexOf('] as const', bracket);
+  if (end < 0) return [];
+  const body = src.slice(bracket + 1, end);
+  return [...body.matchAll(/'([^']+)'/g)].map((m) => m[1]);
 }
 
 function collectBeControllerRoutes(dir) {
@@ -87,14 +117,18 @@ function collectBeControllerRoutes(dir) {
       if (statSync(p).isDirectory()) walk(p);
       else if (name.endsWith('.controller.ts')) {
         const text = readFileSync(p, 'utf8');
-        const controllerMatch = text.match(/@Controller\(\s*['"`]([^'"`]*)['"`]?\s*\)/);
-        const base = controllerMatch?.[1] ?? '';
-        for (const m of text.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*['"`]([^'"`]*)['"`]/g)) {
+        const base = nestControllerBase(text);
+        for (const m of text.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s{0,8}['"`]([^'"`]*)['"`]/g)) {
           const segment = m[2];
-          const full = [base, segment].filter(Boolean).join('/').replace(/\/+/g, '/');
+          const full = [base, segment]
+            .filter(Boolean)
+            .join('/')
+            .split('/')
+            .filter(Boolean)
+            .join('/');
           if (full) routes.add(full);
         }
-        for (const m of text.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*\)/g)) {
+        for (const m of text.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s{0,8}\)/g)) {
           if (base) routes.add(base);
         }
       }
@@ -105,7 +139,7 @@ function collectBeControllerRoutes(dir) {
 }
 
 function prefixHasController(prefix, routes) {
-  const norm = prefix.replace(/\/+$/, '');
+  const norm = stripTrailingSlashes(prefix);
   for (const route of routes) {
     if (route === norm || route.startsWith(`${norm}/`)) return true;
     if (norm.startsWith(route) || norm.startsWith(`${route}/`)) return true;
@@ -144,7 +178,7 @@ function main() {
     for (const name of readdirSync(d)) {
       const p = join(d, name);
       if (statSync(p).isDirectory()) walkApi(p, `${base}/${name}`);
-      else if (name === 'route.ts') apiRouteFiles.push(`${base}/`.replace(/\/$/, '') || '/');
+      else if (name === 'route.ts') apiRouteFiles.push(stripTrailingSlashes(`${base}/`) || '/');
     }
   }
   walkApi(apiRoutesDir);
@@ -153,7 +187,11 @@ function main() {
 
   const policySrc = read('src/lib/auth/edgeApiPolicy.ts');
   for (const routePath of apiRouteFiles) {
-    const sample = toApiPath(routePath).replace(/\[.*?\]/g, 'test');
+    // Next dynamic segments `[id]` → sample token (avoid reluctant-regex Sonar S8786).
+    const sample = toApiPath(routePath)
+      .split('/')
+      .map((seg) => (seg.startsWith('[') && seg.endsWith(']') ? 'test' : seg))
+      .join('/');
     if (
       !policySrc.includes('AUTH_PUBLIC_PREFIXES') &&
       !policySrc.includes('AUTH_SESSION_PREFIXES') &&
@@ -164,6 +202,7 @@ function main() {
     const covered =
       sample.startsWith('/api/health') ||
       sample.startsWith('/api/auth/login') ||
+      sample.startsWith('/api/auth/dev-enter') ||
       sample.startsWith('/api/auth/refresh') ||
       sample.startsWith('/api/auth/clear-cookies') ||
       sample.startsWith('/api/auth/exchange') ||

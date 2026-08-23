@@ -1,19 +1,60 @@
 import { NAV_ITEMS, MAIN_NAV_LANDING_PAGE } from '../constants';
 import type { Page, User, UserRole } from '../types';
-import { buildConsolidatedPermissionMap, canAccessPageWithPermissionMap } from './rolePermissionMatrix';
+import { buildConsolidatedPermissionMap, canAccessPageWithPermissionMap, isUserSuperAdmin } from './rolePermissionMatrix';
+import { canNavigateToPage, type UserDataScopeShape } from './pagePermissions';
+
+function scopesFromUser(user: User, allRoles: UserRole[]): UserDataScopeShape {
+  if (isUserSuperAdmin(user, allRoles)) {
+    return {
+      all: true,
+      archetypes: new Set(),
+      hus: new Set(),
+      archetypeIds: new Set(),
+      huIds: new Set(),
+    };
+  }
+  if (user.assignments?.some((a) => a.assignedScopes?.includes('All'))) {
+    return {
+      all: true,
+      archetypes: new Set(),
+      hus: new Set(),
+      archetypeIds: new Set(),
+      huIds: new Set(),
+    };
+  }
+  const archetypes = new Set<string>();
+  const hus = new Set<string>();
+  const archetypeIds = new Set<string>();
+  const huIds = new Set<string>();
+  for (const a of user.assignments ?? []) {
+    for (const scope of a.assignedScopes ?? []) {
+      if (!scope || scope === 'All') continue;
+      const key = String(scope);
+      if (key.startsWith('ARCH-')) archetypeIds.add(key);
+      else if (key.startsWith('HU-')) huIds.add(key);
+      else archetypes.add(key);
+    }
+  }
+  return { all: false, archetypes, hus, archetypeIds, huIds };
+}
 
 /**
- * Halaman setelah login: item pertama di sidebar (urutan `NAV_ITEMS`) yang
- * user punya minimal View (Role Management → Akses Screen / Navigasi).
+ * Halaman setelah login: item pertama di sidebar yang boleh dibuka
+ * (Akses Screen + data scope bila halaman membutuhkannya).
  */
 export async function resolvePostLoginLandingPage(
   user: User,
   allRoles: UserRole[],
 ): Promise<Page> {
   const permMap = buildConsolidatedPermissionMap(user, allRoles);
+  const scopes = scopesFromUser(user, allRoles);
 
   for (const item of NAV_ITEMS) {
-    if (!canAccessPageWithPermissionMap(permMap, item.label)) continue;
+    if (
+      !canNavigateToPage(item.label, canAccessPageWithPermissionMap(permMap, item.label), scopes)
+    ) {
+      continue;
+    }
     return item.label;
   }
 

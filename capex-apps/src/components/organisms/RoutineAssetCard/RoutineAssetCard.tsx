@@ -178,8 +178,8 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
                 </div>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Asset Name</label>
-                        <input type="text" value={assetName} onChange={e => setAssetName(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-asset-name">Asset Name</label>
+                        <input id="fld-asset-name" type="text" value={assetName} onChange={e => setAssetName(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
                         {onUseExistingAsset ? (
                             <DuplicateSuggestionPanel
                                 entityType="asset"
@@ -199,26 +199,26 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
                         ) : null}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Budget Category</label>
-                         <select value={selectedCategoryId} onChange={e => setSelectedCategoryId(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue">
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-budget-category">Budget Category</label>
+                         <select id="fld-budget-category" value={selectedCategoryId} onChange={e => setSelectedCategoryId(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue">
                             {activeCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                         </select>
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Budget Plan</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary">Budget Plan</p>
                         <CurrencyInput value={budgetPlan} onValueChange={setBudgetPlan} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Quantity (QTY)</label>
+                        <p className="block text-sm font-medium text-siloam-text-secondary">Quantity (QTY)</p>
                         <NumericInput value={qty} onValueChange={setQty} min={1} allowDecimal={false} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">End Target Date</label>
-                        <input type="date" value={endTargetDate} onChange={e => setEndTargetDate(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-end-target-date">End Target Date</label>
+                        <input id="fld-end-target-date" type="date" value={endTargetDate} onChange={e => setEndTargetDate(e.target.value)} className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Type</label>
-                        <select
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-type">Type</label>
+                        <select id="fld-type"
                             value={selectedAssetTypeId}
                             onChange={(e) => setSelectedAssetTypeId(e.target.value)}
                             className="mt-1 block w-full border border-siloam-border rounded-xl p-2 bg-siloam-surface focus:outline-none focus:ring-2 focus:ring-siloam-blue"
@@ -234,8 +234,8 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
                      {error && <p className="text-sm text-danger">{error}</p>}
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">Add Asset</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90 disabled:bg-gray-400">Add Asset</button>
                 </div>
             </div>
             <DuplicateCreateConfirmDialog
@@ -286,7 +286,7 @@ const EditBudgetModal: React.FC<{
                 <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
                     {activeCategories.map(cat => (
                         <div key={cat.id}>
-                            <label className="block text-sm font-medium text-siloam-text-secondary">{cat.name}</label>
+                            <p className="block text-sm font-medium text-siloam-text-secondary">{cat.name}</p>
                             <CurrencyInput
                                 value={budgets[cat.id] || 0}
                                 onValueChange={(val) => handleBudgetChange(cat.id, val)}
@@ -296,8 +296,8 @@ const EditBudgetModal: React.FC<{
                     ))}
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Budgets</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Budgets</button>
                 </div>
             </div>
         </div>
@@ -385,7 +385,7 @@ export const RoutineAssetCard: React.FC<RoutineAssetCardProps> = ({
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                     {isEditable && (
-                         <button 
+                         <button type="button" 
                             onClick={() => setEditBudgetModalOpen(true)}
                             className="bg-siloam-green text-white px-3 py-1.5 rounded-lg text-sm hover:bg-siloam-green/90 transition shadow-soft"
                         >
@@ -393,14 +393,14 @@ export const RoutineAssetCard: React.FC<RoutineAssetCardProps> = ({
                         </button>
                     )}
                     {isEditable && (
-                        <button 
+                        <button type="button" 
                             onClick={handleAddAssetClick}
                             className="bg-siloam-blue text-white px-3 py-1.5 rounded-lg text-sm hover:bg-siloam-blue/90 transition shadow-soft"
                         >
                            + Add Asset
                         </button>
                     )}
-                    <button 
+                    <button type="button" 
                         onClick={onManageAssets}
                         className="bg-siloam-sidebar text-siloam-text-primary px-3 py-1.5 rounded-lg text-sm hover:bg-siloam-border transition"
                     >

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { EnrichedAsset, User, WorkflowSet, ArchetypeConfig, HospitalUnitConfig, AssetTaskStatus, TaskCurrentStatus, Project, ProjectPriorityConfig, WorkflowStep, TaskLog, BudgetCategoryConfig, AssetTypeConfig, AssetTypeGroupConfig, Asset, MOM, Page, BudgetPeriod } from '../types';
+import { EnrichedAsset, User, UserRole, WorkflowSet, ArchetypeConfig, HospitalUnitConfig, AssetTaskStatus, TaskCurrentStatus, Project, ProjectPriorityConfig, WorkflowStep, TaskLog, BudgetCategoryConfig, AssetTypeConfig, AssetTypeGroupConfig, Asset, MOM, Page, BudgetPeriod } from '../types';
 import * as taskService from '../services/taskService';
 import { invalidateAssetTimelineCache } from '../lib/assetTimelineCache';
 import * as configService from '../services/configService';
@@ -57,7 +57,7 @@ import { clampTablePageSize } from '../lib/table/pageSizeOptions';
 import { logProjectListPipelineStage } from '../lib/projectListPipelineDebug';
 import { deleteSessionClientPool } from '../lib/capexProjectListSessionPool';
 import { userCanEditProjectPriority } from '../lib/projectPriorityPolicy';
-import { countActionableWorkflowTasks } from '../lib/workflowRolePolicy';
+import { countActionableWorkflowTasks, isWorkflowBypassRole } from '../lib/workflowRolePolicy';
 import {
   abbrevBudgetCategoryName,
   buildAssetFilterMaps,
@@ -107,6 +107,8 @@ const CapexProjectListDetailPanel = lazy(() =>
 
 interface CapexProjectListPageProps {
   currentUser: User | null;
+  /** Shell role matrix — source of truth for page access (do not rely on preload). */
+  allRoles: UserRole[];
   /** Budget period used for disk preload (global app selection). */
   periodName: string;
   /** All configured budget periods — source of truth for the page filter. */
@@ -129,6 +131,7 @@ const formatDate = formatListDate;
 
 const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
   currentUser,
+  allRoles: shellAllRoles,
   periodName,
   budgetPeriods,
   allPeriodNames,
@@ -177,6 +180,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     sortBy,
     setSortBy,
     appliedSearchTerm,
+    submitSearch,
     clearSearch,
     isSearchActive,
     isSearchStaging,
@@ -294,7 +298,10 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
   const [priorities, setPriorities] = useState<ProjectPriorityConfig[]>(
     () => activePreloadedProjectList?.priorities ?? [],
   );
-  const [allRoles, setAllRoles] = useState<any[]>(() => activePreloadedProjectList?.allRoles ?? []);
+  const [allRoles, setAllRoles] = useState<UserRole[]>(
+    () =>
+      (shellAllRoles.length ? shellAllRoles : activePreloadedProjectList?.allRoles) ?? [],
+  );
   const [allTasks, setAllTasks] = useState<any[]>(() => activePreloadedProjectList?.allTasks ?? []);
   const [masterData, setMasterData] = useState<{ archetypes: ArchetypeConfig[]; hus: HospitalUnitConfig[]; users: User[] }>(
     () => ({
@@ -310,8 +317,14 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     void reloadMasterConfig({ fresh: true });
   }, [reloadMasterConfig]);
 
-  const permissions = usePermissions(currentUser, allRoles);
+  // RBAC for this page MUST use shell role matrix (AppRoot). Never gate on
+  // preload/master allRoles — empty local roles used to false-deny while list API 200'd.
+  const permissions = usePermissions(currentUser, shellAllRoles);
   const canView = permissions.canOperateOnPage(Page.CapexProjectList, 'view');
+
+  useEffect(() => {
+    if (shellAllRoles.length) setAllRoles(shellAllRoles);
+  }, [shellAllRoles]);
 
   const listUserScopes = useMemo(
     (): UserScopesForCapex => ({
@@ -400,7 +413,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
       masterDataHydratedRef.current = true;
       setAllWorkflows(master.workflows);
       setMasterData({ archetypes: master.archetypes, hus: master.hus, users: master.users });
-      setAllRoles(master.allRoles);
+      if (master.allRoles?.length) setAllRoles(master.allRoles);
       setAllTasks(master.allTasks);
     }
     if (master.priorities?.length) {
@@ -408,7 +421,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     }
   }, []);
 
-  const masterQuery = useProjectListMaster(currentUser?.id, canView);
+  const masterQuery = useProjectListMaster(currentUser?.id, Boolean(currentUser?.id));
 
   useEffect(() => {
     if (masterQuery.data) {
@@ -423,7 +436,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
         masterDataHydratedRef.current = true;
         setAllWorkflows(source.workflows);
         setMasterData({ archetypes: source.archetypes, hus: source.hus, users: source.users });
-        setAllRoles(source.allRoles);
+        if (source.allRoles?.length) setAllRoles(source.allRoles);
         setAllTasks(source.allTasks);
       }
       if (source.priorities?.length) {
@@ -738,9 +751,15 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     });
   }, [availablePeriodOptions, resolvedBudgetPeriods]);
 
-  /** Single-period + warm pool + no server-only filters → client slice. Search always server-side. */
+  /** Single-period + warm pool + no server-only filters → client slice.
+   * Search also uses warm pool as instant preview while server confirms. */
+  const searchAwaitingServer =
+    isSearchActive && needsPanelServerFetch && Boolean(tableQuery.isFetching);
   const useClientFilteredDisplay = Boolean(
-    !isMultiPeriodView && clientFilterCanServe && clientFilteredPage && !needsPanelServerFetch,
+    !isMultiPeriodView &&
+      clientFilterCanServe &&
+      clientFilteredPage &&
+      (!needsPanelServerFetch || searchAwaitingServer),
   );
 
   const {
@@ -752,10 +771,14 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     clientFilteredPage,
     serverPageAssets,
     serverPageTotalCount,
-    deferTableRows: isFilterRefreshing,
+    deferTableRows: isFilterRefreshing && !isSearchActive && !searchAwaitingServer,
   });
 
   const isPageDataRefreshing = isFilterRefreshing || isBackgroundRefetch;
+  const isSearchBusy =
+    isSearchStaging ||
+    searchAwaitingServer ||
+    (isSearchActive && (showBlockingSkeleton || isPageDataRefreshing));
 
   /** Detail panel keyed by asset.id — resolve row from current page / cache only. */
   const selectedAsset = useMemo(() => {
@@ -1662,12 +1685,12 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     return Array.from(new Set(assetLastTaskMap.values())).sort();
   }, [assetLastTaskMap, clientPoolRevision, queryPeriodKey]);
 
-  const isSuperAdmin = !!currentUser?.assignments?.some((a) => a.roleName === 'Super Admin');
-  const canEditProjectMeta = permissions.isAllowed('Project', 'edit') || isSuperAdmin;
-  const canEditAssetMeta = permissions.isAllowed('Asset', 'edit') || isSuperAdmin;
+  const isPrivilegedOps = isWorkflowBypassRole(currentUser);
+  const canEditProjectMeta = permissions.isAllowed('Project', 'edit') || isPrivilegedOps;
+  const canEditAssetMeta = permissions.isAllowed('Asset', 'edit') || isPrivilegedOps;
   const canEditPriorityOnProject = userCanEditProjectPriority(currentUser);
   const canShowActionMenu = canEditProjectMeta || canEditAssetMeta || canEditPriorityOnProject;
-  const canManageAssetTasks = canEditProjectMeta || canEditAssetMeta || isSuperAdmin;
+  const canManageAssetTasks = canEditProjectMeta || canEditAssetMeta || isPrivilegedOps;
 
   const tourReady =
     !!currentUser &&
@@ -1787,11 +1810,8 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
   const handleCloseProjectEditor = useCallback(() => setIsProjectEditorOpen(false), []);
   const handleCloseAssetEditor = useCallback(() => setIsAssetEditorOpen(false), []);
 
-  if (!canView) {
-    return (
-      <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>
-    );
-  }
+  // View access is enforced once in AppRouteRenderer (shell allRoles). Do not re-deny here
+  // with a second role source — that caused false "no permission" with a healthy list API.
 
   return (
     <div className="md:flex h-full bg-siloam-surface rounded-xl shadow-soft overflow-hidden">
@@ -1834,6 +1854,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           <AssetFilterPanel
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
+            onSearchSubmit={submitSearch}
             onSearchReset={handleSearchReset}
             onFilterPanelOpen={refreshMasterConfig}
             toolbarLeading={
@@ -1885,11 +1906,22 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           selectedAssetId={selectedAssetId}
           onRowClick={handleRowClick}
           onRowHover={handleRowHover}
-          showBlockingSkeleton={showInitialTableLoading}
-          isTableLoading={isPageDataRefreshing}
-          isSearchPending={isSearchStaging}
-          isBackgroundRefetch={isBackgroundRefetch}
+          showBlockingSkeleton={showInitialTableLoading && !searchAwaitingServer}
+          isTableLoading={isPageDataRefreshing && !isSearchBusy}
+          isSearchPending={isSearchBusy}
+          isBackgroundRefetch={isBackgroundRefetch && !isSearchBusy}
           hasActiveFilters={hasMobileActiveFilters}
+          searchEmptyHint={
+            isSearchActive &&
+            footerTotalCount === 0 &&
+            !showInitialTableLoading &&
+            !isPageDataRefreshing &&
+            !isSearchStaging
+              ? Boolean(tableQuery.data?._debug?.searchOutsideScope)
+                ? `Tidak ada hasil untuk “${appliedSearchTerm}” di scope akses Anda. Ada data cocok di HU/archetype lain — minta admin menambah assignment.`
+                : `Tidak ada hasil untuk “${appliedSearchTerm}” pada periode & filter saat ini (hasil dibatasi scope akses Anda).`
+              : null
+          }
           footerTotalCount={footerTotalCount}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}

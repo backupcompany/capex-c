@@ -904,7 +904,7 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
   }, [useWindow, windowQuery.hasNextWindow, windowQuery.isFetchingNextWindow, windowQuery.fetchNextWindow]);
 
   if (!canView) {
-    return <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>;
+    return <div className="text-center p-8 text-danger">Anda tidak memiliki izin untuk melihat halaman ini.</div>;
   }
 
   return (
@@ -927,13 +927,13 @@ export const POUpdatePage: React.FC<POUpdatePageProps> = memo(function POUpdateP
         </div>
         {isDirty && canEdit && (
           <div className="flex items-center space-x-2">
-            <button
+            <button type="button"
               onClick={handleCancel}
               className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg"
             >
               Cancel
             </button>
-            <button
+            <button type="button"
               onClick={handleSave}
               className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90"
             >

@@ -46,22 +46,19 @@ export function readCachedAuthUser(): User | null {
   }
 }
 
+/**
+ * Persist shell identity. Assignments are written as given — never revive a
+ * previous role from disk (that caused Super Admin → sticky PMO).
+ */
 export function writeCachedAuthUser(user: User): void {
   if (typeof window === 'undefined') return;
   try {
-    let assignments = user.assignments ?? [];
-    if (assignments.length === 0) {
-      const existing = readCachedAuthUser();
-      if (existing?.id === user.id && (existing.assignments?.length ?? 0) > 0) {
-        assignments = existing.assignments;
-      }
-    }
     const existing = readCachedAuthUser();
     const snapshot: AuthUserCacheSnapshot = {
       id: user.id,
       publicId: user.publicId?.trim() || (existing?.id === user.id ? existing.publicId : undefined),
       username: user.username,
-      assignments,
+      assignments: user.assignments ?? [],
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {

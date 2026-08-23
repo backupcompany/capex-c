@@ -15,6 +15,11 @@ const REQUIRED = [
   { service: 'user-admin/user-admin.service.ts', pattern: 'authZ' },
   { service: 'fs-update/fs-update.service.ts', pattern: 'assertHierarchyPermission' },
   { service: 'configuration/configuration.service.ts', pattern: 'assertConfigurationAccess' },
+  // pack/read must use View Only; save/delete keep default update
+  {
+    service: 'configuration/configuration.service.ts',
+    pattern: "assertConfigAccess(accessToken, userId, 'view')",
+  },
 ];
 
 const failures = [];

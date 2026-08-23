@@ -21,15 +21,23 @@ function lifecycleToSelectValue(status: string | null | undefined): '' | 'cancel
     return '';
 }
 
-const FormField: React.FC<{ label: string; icon: React.ReactNode; children: React.ReactNode; }> = ({ label, icon, children }) => (
+const FormField: React.FC<{ label: string; icon: React.ReactNode; children: React.ReactNode; }> = ({ label, icon, children }) => {
+    const id = 'fld-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    const control = React.Children.toArray(children).map((child, i) =>
+        i === 0 && React.isValidElement(child)
+            ? React.cloneElement(child as React.ReactElement<{ id?: string }>, { id: (child.props as { id?: string }).id ?? id })
+            : child
+    );
+    return (
     <div>
-        <label className="flex items-center text-sm font-medium text-siloam-text-secondary mb-1">
+        <label htmlFor={id} className="flex items-center text-sm font-medium text-siloam-text-secondary mb-1">
             {icon}
             <span className="ml-2">{label}</span>
         </label>
-        {children}
+        {control}
     </div>
-);
+    );
+};
 
 interface AssetDetailEditorModalProps {
     isOpen: boolean;

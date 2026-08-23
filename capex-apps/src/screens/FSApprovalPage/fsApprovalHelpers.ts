@@ -46,7 +46,7 @@ function matchesSearch(fs: EnrichedFS, q: string): boolean {
   const compactTerm = compactSearchText(q);
   const numericOnly = /^\d+$/.test(term);
   if (numericOnly) {
-    const num = parseInt(term, 10);
+    const num = Number.parseInt(term, 10);
     if (parsePayback(fs.paybackPeriod) === num) return true;
     if (fs.amount === num) return true;
     if (fs.npv === num) return true;

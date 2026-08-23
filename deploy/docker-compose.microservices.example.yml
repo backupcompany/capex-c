@@ -1,2 +1,0 @@
-# Deprecated — use docker-compose.microservices.yml (full 16-leaf stack).
-# See deploy/docker-compose.microservices.yml and make compose-up

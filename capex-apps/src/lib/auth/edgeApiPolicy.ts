@@ -8,6 +8,7 @@ export const HEALTH_PUBLIC_PREFIXES = ['/api/health'] as const;
 /** Unauthenticated auth endpoints (rate-limited separately). */
 export const AUTH_PUBLIC_PREFIXES = [
   '/api/auth/login',
+  '/api/auth/dev-enter',
   '/api/auth/refresh',
   '/api/auth/clear-cookies',
   '/api/auth/exchange',

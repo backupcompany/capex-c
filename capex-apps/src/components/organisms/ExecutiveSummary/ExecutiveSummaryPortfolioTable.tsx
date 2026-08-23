@@ -159,8 +159,8 @@ export const ExecutiveSummaryPortfolioTable = memo(function ExecutiveSummaryPort
           <table className="w-full text-left border-collapse table-fixed min-w-[1200px] text-xs">
             <tbody>
               {paddingTop > 0 && (
-                <tr aria-hidden style={{ height: paddingTop }}>
-                  <td colSpan={HEADERS.length} />
+                <tr style={{ height: paddingTop }}>
+                  <td colSpan={HEADERS.length} aria-hidden="true" />
                 </tr>
               )}
               {visibleRows.map((row) => (
@@ -183,8 +183,8 @@ export const ExecutiveSummaryPortfolioTable = memo(function ExecutiveSummaryPort
                 </tr>
               ))}
               {paddingBottom > 0 && (
-                <tr aria-hidden style={{ height: paddingBottom }}>
-                  <td colSpan={HEADERS.length} />
+                <tr style={{ height: paddingBottom }}>
+                  <td colSpan={HEADERS.length} aria-hidden="true" />
                 </tr>
               )}
             </tbody>
@@ -196,6 +196,15 @@ export const ExecutiveSummaryPortfolioTable = memo(function ExecutiveSummaryPort
       </div>
 
       <table className="w-full text-left border-collapse table-fixed min-w-[1200px]">
+        <thead className="sr-only">
+          <tr>
+            {HEADERS.map((h) => (
+              <th key={h} scope="col">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
         <tfoot>
           <tr className="text-white font-bold text-xs" style={{ backgroundColor: EXECUTIVE_SUMMARY_COLORS.header }}>
             <td className="px-4 py-3">{distinctHuCount} HUs</td>

@@ -17,7 +17,8 @@ export function useViewportTablePageSize(containerRef: RefObject<HTMLElement | n
     const overscan = SPREADSHEET_VIRTUAL_DEFAULTS.overscan;
 
     const measure = () => {
-      const h = Math.max(160, el.clientHeight);
+      // Floor so first paint / zero-height host doesn't lock Auto page size to ~2 rows.
+      const h = Math.max(480, el.clientHeight);
       const bodyPx = Math.max(rowPx, h - TABLE_HEAD_PX);
       const visibleRows = Math.floor(bodyPx / rowPx);
       setPageSize(clampTablePageSize(visibleRows + overscan));

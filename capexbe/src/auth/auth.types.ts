@@ -33,6 +33,7 @@ export type AuthSessionMetaDto = {
 
 export type AuthMeAssignmentDto = {
   roleName: string;
+  roleId?: number;
   assignedScopes: string[];
 };
 

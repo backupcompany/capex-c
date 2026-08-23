@@ -38,7 +38,7 @@ export function isShellCachePatchGuarded(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const raw = window.localStorage.getItem(PATCH_GUARD_KEY);
-    const at = raw ? parseInt(raw, 10) : 0;
+    const at = raw ? Number.parseInt(raw, 10) : 0;
     return Number.isFinite(at) && Date.now() - at < SHELL_PATCH_GUARD_MS;
   } catch {
     return false;
@@ -60,7 +60,7 @@ function resolveActorId(currentUser?: User | null): number | null {
   const cached = readCachedAuthUser()?.id;
   if (cached != null && Number.isFinite(cached)) return cached;
   if (typeof window === 'undefined') return null;
-  const fromSession = parseInt(sessionStorage.getItem('currentUserId') || '', 10);
+  const fromSession = Number.parseInt(sessionStorage.getItem('currentUserId') || '', 10);
   return Number.isFinite(fromSession) ? fromSession : null;
 }
 
@@ -123,10 +123,17 @@ export function syncAppShellCaches(
       /* private mode */
     }
   } else if (users.length && actorId != null) {
-    const self = users.find((u) => u.id === actorId);
-    if (self) {
-      resolvedCurrent = self;
-      writeCachedAuthUser(self);
+    // Directory row is not identity source — never overwrite live session cache
+    // (stale PMO in users pack used to sticky-overwrite Super Admin).
+    const cached = readCachedAuthUser();
+    if (cached?.id === actorId && (cached.assignments?.length ?? 0) > 0) {
+      resolvedCurrent = cached;
+    } else {
+      const self = users.find((u) => u.id === actorId);
+      if (self) {
+        resolvedCurrent = self;
+        writeCachedAuthUser(self);
+      }
     }
   }
 

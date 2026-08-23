@@ -200,8 +200,8 @@ export const WorkflowEditorModal: React.FC<{
                 <h3 className="text-lg font-bold mb-2">{workflow.id ? 'Edit Workflow' : 'Create New Workflow'}</h3>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-medium text-siloam-text-secondary">Workflow Name</label>
-                        <input
+                        <label className="block text-sm font-medium text-siloam-text-secondary" htmlFor="fld-workflow-name">Workflow Name</label>
+                        <input id="fld-workflow-name"
                             type="text"
                             value={workflow.name}
                             onChange={(e) => setWorkflow({ ...workflow, name: e.target.value })}
@@ -233,23 +233,23 @@ export const WorkflowEditorModal: React.FC<{
                                     >
                                         <div className="flex items-center justify-between">
                                             <p className="font-medium">{taskNameById.get(step.taskId) || 'Unknown Task'}</p>
-                                            <button onClick={() => handleRemoveTask(step.taskId)} className="text-danger text-sm">Remove</button>
+                                            <button type="button" onClick={() => handleRemoveTask(step.taskId)} className="text-danger text-sm">Remove</button>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4 mt-2">
-                                            <label className="text-xs flex items-center gap-2">SLA (days):
-                                                <NumericInput min={0} value={step.slaToComplete} onClick={(e) => e.stopPropagation()}
+                                            <label className="text-xs flex items-center gap-2" htmlFor={`wf-sla-${step.taskId}`}>SLA (days):
+                                                <NumericInput id={`wf-sla-${step.taskId}`} min={0} value={step.slaToComplete} onClick={(e) => e.stopPropagation()}
                                                     onValueChange={(val) => updateStep(step.taskId, { slaToComplete: val })}
                                                     allowDecimal={false} align="left"
                                                     className="w-16 text-xs p-1 rounded border border-siloam-border bg-white" />
                                             </label>
-                                            <label className="text-xs flex items-center gap-2">Task Score (%):
-                                                <NumericInput min={0} max={100} value={step.taskScore} onClick={(e) => e.stopPropagation()}
+                                            <label className="text-xs flex items-center gap-2" htmlFor={`wf-task-score-${step.taskId}`}>Task Score (%):
+                                                <NumericInput id={`wf-task-score-${step.taskId}`} min={0} max={100} value={step.taskScore} onClick={(e) => e.stopPropagation()}
                                                     onValueChange={(val) => updateStep(step.taskId, { taskScore: val })}
                                                     allowDecimal={false} align="left"
                                                     className="w-16 text-xs p-1 rounded border border-siloam-border bg-white" />
                                             </label>
                                         </div>
-                                         <div className="mt-2 border-t pt-2 border-siloam-border/50" onClick={(e) => e.stopPropagation()}>
+                                         <div className="mt-2 border-t pt-2 border-siloam-border/50" onMouseDown={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-4">
                                                 <label className="text-xs flex items-center gap-2 font-medium cursor-pointer">
                                                     <input type="checkbox" checked={step.milestoneScore !== undefined && step.milestoneScore !== null}
@@ -258,8 +258,8 @@ export const WorkflowEditorModal: React.FC<{
                                                     Is Milestone?
                                                 </label>
                                                 {(step.milestoneScore !== undefined && step.milestoneScore !== null) && (
-                                                    <label className="text-xs flex items-center gap-2">Milestone Score (%):
-                                                        <NumericInput min={0} max={100} value={step.milestoneScore ?? 0}
+                                                    <label className="text-xs flex items-center gap-2" htmlFor={`wf-ms-score-${step.taskId}`}>Milestone Score (%):
+                                                        <NumericInput id={`wf-ms-score-${step.taskId}`} min={0} max={100} value={step.milestoneScore ?? 0}
                                                             onValueChange={(val) => updateStep(step.taskId, { milestoneScore: val })}
                                                             allowDecimal={false} align="left"
                                                             className="w-16 text-xs p-1 rounded border border-siloam-border bg-white" />
@@ -274,11 +274,11 @@ export const WorkflowEditorModal: React.FC<{
                                                     return (
                                                         <span key={roleId} className="bg-siloam-blue/10 text-siloam-blue text-xs font-semibold px-2 py-1 rounded-full flex items-center">
                                                             {roleNameById.get(roleId) || 'Unknown Role'}
-                                                            <button onClick={() => handleRemoveRole(step.taskId, roleId)} className="ml-1.5 text-siloam-blue hover:text-danger font-bold">&times;</button>
+                                                            <button type="button" onClick={() => handleRemoveRole(step.taskId, roleId)} className="ml-1.5 text-siloam-blue hover:text-danger font-bold">&times;</button>
                                                         </span>
                                                     );
                                                 })}
-                                                <select onChange={(e) => handleAddRole(step.taskId, parseInt(e.target.value, 10))} value="" className="text-xs p-1 rounded border border-siloam-border bg-siloam-sidebar" onClick={(e) => e.stopPropagation()}>
+                                                <select onChange={(e) => handleAddRole(step.taskId, Number.parseInt(e.target.value, 10))} value="" className="text-xs p-1 rounded border border-siloam-border bg-siloam-sidebar" onClick={(e) => e.stopPropagation()}>
                                                     <option value="" disabled>+ Add Role</option>
                                                     {availableRolesForStep(step).map(role => (
                                                         <option key={role.id} value={role.id}>{role.roleName}</option>
@@ -301,7 +301,7 @@ export const WorkflowEditorModal: React.FC<{
                                                     return (
                                                         <span key={triggerId} className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full flex items-center">
                                                             {taskNameById.get(triggerId) || 'Unknown Task'}
-                                                            <button onClick={() => handleRemoveTrigger(step.taskId, triggerId)} className="ml-1.5 text-green-800 hover:text-danger font-bold">&times;</button>
+                                                            <button type="button" onClick={() => handleRemoveTrigger(step.taskId, triggerId)} className="ml-1.5 text-green-800 hover:text-danger font-bold">&times;</button>
                                                         </span>
                                                     );
                                                 })}
@@ -332,15 +332,15 @@ export const WorkflowEditorModal: React.FC<{
                             {availableTasks.map(task => (
                                 <li key={task.id} className="bg-siloam-surface p-2 rounded-lg border border-siloam-border flex items-center justify-between">
                                     <p className="font-medium">{task.name}</p>
-                                    <button onClick={() => handleAddTask(task.id)} className="text-siloam-blue ml-2">Add</button>
+                                    <button type="button" onClick={() => handleAddTask(task.id)} className="text-siloam-blue ml-2">Add</button>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Workflow</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Workflow</button>
                 </div>
             </div>
         </div>

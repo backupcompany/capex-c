@@ -54,7 +54,7 @@ export function parseGroupedNumericInput(value: string): number {
   if (!value) return 0;
   const digitsOnly = value.replace(/[^\d-]/g, '');
   if (!digitsOnly || digitsOnly === '-') return 0;
-  const parsed = parseInt(digitsOnly, 10);
+  const parsed = Number.parseInt(digitsOnly, 10);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

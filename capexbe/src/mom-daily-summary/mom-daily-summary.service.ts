@@ -73,7 +73,7 @@ export class MomDailySummaryService {
   ) {}
 
   private localDayBoundsIso(yyyyMmDd: string): { startIso: string; endIso: string } {
-    const parts = yyyyMmDd.split('-').map((p) => parseInt(p, 10));
+    const parts = yyyyMmDd.split('-').map((p) => Number.parseInt(p, 10));
     const y = parts[0];
     const m = parts[1];
     const d = parts[2];
@@ -130,7 +130,6 @@ export class MomDailySummaryService {
     userId: number,
     periodName: string,
     summaryDate: string,
-    scopeAllOverride?: boolean,
   ): Promise<{ rows: MomRow[] }> {
     const { startIso, endIso } = this.localDayBoundsIso(summaryDate);
     const { data: moms, error } = await client
@@ -165,7 +164,8 @@ export class MomDailySummaryService {
       archetypes,
       hus,
     });
-    const scopeAll = serverScope.scopeAll || scopeAllOverride === true;
+    // Server scope only — ignore client scopeAll (same belt as project-list).
+    const scopeAll = serverScope.scopeAll;
     const scopeHus = new Set(serverScope.scopeHuNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
     const scopeArchetypes = new Set(
       serverScope.scopeArchetypeNames.map((n) => n.trim().toLowerCase()).filter(Boolean),
@@ -204,7 +204,6 @@ export class MomDailySummaryService {
       userId?: number;
       periodName?: string;
       summaryDate?: string;
-      scopeAll?: boolean;
       skipCache?: boolean;
     };
     const userId = resolveBodyActorUserId(b);
@@ -227,13 +226,7 @@ export class MomDailySummaryService {
     }
 
     const { client } = await this.authContext.getRlsClient(accessToken, userId);
-    const payload = await this.loadSummaryUncached(
-      client,
-      userId,
-      periodName,
-      summaryDate,
-      b.scopeAll === true,
-    );
+    const payload = await this.loadSummaryUncached(client, userId, periodName, summaryDate);
     await perfCacheSet(cacheKey, payload, CACHE_TTL_MS.TABLE);
     return payload;
   }

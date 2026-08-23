@@ -230,7 +230,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                 <div className="flex flex-grow min-w-[200px] items-center gap-2">
                     <input
                         type="text"
-                        placeholder="Search assets, projects, HU..."
+                        placeholder="Cari asset, project, HU… (otomatis 0,4 dtk / Enter / Cari)"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyDown={(e) => {
@@ -251,7 +251,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                     <SearchIcon />
                     <span>Cari</span>
                 </button>
-                <button
+                <button type="button"
                     onClick={() => {
                       const next = !isFilterVisible;
                       if (next) onFilterPanelOpen?.();
@@ -358,8 +358,8 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
 
                         {setSelectedBudgetFilter && (
                             <div className="bg-white border border-siloam-border rounded-lg p-3">
-                                <p className="text-xs font-bold text-siloam-text-secondary uppercase mb-2">Budget Project</p>
-                                <select
+                                <label className="text-xs font-bold text-siloam-text-secondary uppercase mb-2" htmlFor="fld-budget-project">Budget Project</label>
+                                <select id="fld-budget-project"
                                     value={selectedBudgetFilter || ''}
                                     onChange={(e) => setSelectedBudgetFilter(e.target.value || null)}
                                     className="w-full px-2 py-1.5 border border-siloam-border rounded-md bg-siloam-bg focus:ring-1 focus:ring-siloam-blue focus:outline-none text-sm"
@@ -399,7 +399,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                         </div>
                     </div>
                     <div className="mt-4 flex justify-end">
-                        <button onClick={resetFilters} className="text-sm font-semibold text-siloam-blue hover:text-siloam-blue/80 hover:underline transition-colors">
+                        <button type="button" onClick={resetFilters} className="text-sm font-semibold text-siloam-blue hover:text-siloam-blue/80 hover:underline transition-colors">
                             Clear All Filters
                         </button>
                     </div>

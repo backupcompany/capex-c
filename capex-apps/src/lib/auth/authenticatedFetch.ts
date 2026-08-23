@@ -4,8 +4,8 @@ import { coordinatedRefreshSession } from './authRefreshCoordinator';
 import { authDebug } from './authDebug';
 import { isAuthProbeComplete } from './authProbeGate';
 import { isBackendSessionValid } from './sessionValidity';
-import { hasSessionCookieHint } from './sessionCookieHint';
 import { withCsrfHeadersAsync } from './csrfToken';
+import { secureInt } from '../secureId';
 
 export type AuthenticatedFetchOptions = RequestInit & {
   /** Retry once after refresh on 401. Default true when backend session is enabled. */
@@ -32,13 +32,17 @@ export async function authenticatedFetch(
   init?: AuthenticatedFetchOptions,
 ): Promise<Response> {
   const { retryOn401 = useBackendSession(), ...fetchInit } = init ?? {};
+  const method = String(fetchInit.method ?? 'GET').toUpperCase();
+  // GET/HEAD never need CSRF — bootstrapping via /api/auth/session here nested another
+  // session fetch and Safari logged abort/HMR failures as "access control checks".
+  const needsCsrf = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
 
   let attempt401 = 0;
   let attempt503 = 0;
   let lastRes: Response | null = null;
 
   while (true) {
-    const mergedInit = await withCsrfHeadersAsync(fetchInit);
+    const mergedInit = needsCsrf ? await withCsrfHeadersAsync(fetchInit) : fetchInit;
     let body = mergedInit.body;
     if (typeof body === 'string') {
       body = redactOutgoingUserIdJson(body);
@@ -56,7 +60,7 @@ export async function authenticatedFetch(
         url: typeof input === 'string' ? input : input.toString(),
         attempt: attempt503,
       });
-      await delay(RETRY_503_DELAY_MS * attempt503 + Math.floor(Math.random() * RETRY_503_JITTER_MS));
+      await delay(RETRY_503_DELAY_MS * attempt503 + secureInt(RETRY_503_JITTER_MS));
       continue;
     }
 
@@ -72,24 +76,26 @@ export async function authenticatedFetch(
     const refreshed = await coordinatedRefreshSession();
     if (!refreshed) {
       const stillValid = await isBackendSessionValid();
-      if (!stillValid && hasSessionCookieHint()) {
-        if (!isAuthProbeComplete()) {
-          authDebug('fetch 401: auth probe pending — skip logout');
-          return res;
-        }
-        authDebug('fetch 401: session invalid — cleanup');
-        const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
-          await import('./authApi');
-        invalidateStaleAuthCookies();
-        invalidateAuthProbeCache();
-        void clearServerAuthCookies();
-        const { useAuthStore } = await import('../../stores/authStore');
-        if (useAuthStore.getState().status === 'authenticated') {
-          const { notifyAuthFailure } = await import('./authFailureHandler');
-          notifyAuthFailure();
-        }
-      } else {
+      // Cookie hint must NOT gate logout: refresh 401 often clears cookies first, then
+      // hasSessionCookieHint() is false while Zustand is still authenticated → poll spam.
+      if (stillValid) {
         authDebug('fetch 401: refresh failed but session still valid — keep session');
+        return res;
+      }
+      if (!isAuthProbeComplete()) {
+        authDebug('fetch 401: auth probe pending — skip logout');
+        return res;
+      }
+      authDebug('fetch 401: session invalid — cleanup');
+      const { invalidateStaleAuthCookies, invalidateAuthProbeCache, clearServerAuthCookies } =
+        await import('./authApi');
+      invalidateStaleAuthCookies();
+      invalidateAuthProbeCache();
+      void clearServerAuthCookies();
+      const { useAuthStore } = await import('../../stores/authStore');
+      if (useAuthStore.getState().status === 'authenticated') {
+        const { notifyAuthFailure } = await import('./authFailureHandler');
+        notifyAuthFailure();
       }
       return res;
     }

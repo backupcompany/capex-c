@@ -15,6 +15,7 @@ import {
     BudgetCategoryConfig, ProjectPriorityConfig, AssetTypeConfig, MOM, FeasibilityStudy, EnrichedAsset
 } from '../types';
 import { LEGACY_NETWORK_HEADER_TO_FIELD_KEY } from '../lib/terminology';
+import { secureId } from '../lib/secureId';
 import * as XLSX from 'xlsx';
 
 // --- Types ---
@@ -949,18 +950,18 @@ export const parseMigrationNumberValue = (value: unknown): number => {
 
     // Indonesia: 1.234.567,89 atau 1.234.567
     if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) {
-        return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+        return Number.parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
     }
     // US: 1,234,567.89
     if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
-        return parseFloat(s.replace(/,/g, '')) || 0;
+        return Number.parseFloat(s.replace(/,/g, '')) || 0;
     }
 
     const cleaned = s.replace(/[^0-9,-]+/g, '').replace(/,(?=.*,)/g, '');
     const normalized = cleaned.includes(',') && !cleaned.includes('.')
         ? cleaned.replace(',', '.')
         : cleaned;
-    return parseFloat(normalized) || 0;
+    return Number.parseFloat(normalized) || 0;
 };
 
 export const applyMigrationFieldTransform = (
@@ -1143,7 +1144,7 @@ export const createEmptyMigrationSpreadsheetRow = (
     rowId?: string,
 ): Record<string, string> => {
     const row: Record<string, string> = {
-        id: rowId ?? `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        id: rowId ?? secureId('row-'),
     };
     schema.forEach((field) => {
         row[field.key] = '';
@@ -1301,10 +1302,7 @@ type BackendMigrationProgressDto = {
 };
 
 function createMigrationJobId(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-    return `mig-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return secureId('mig-');
 }
 
 function mapBackendMigrationProgress(dto: BackendMigrationProgressDto | null): MigrationProgress | null {

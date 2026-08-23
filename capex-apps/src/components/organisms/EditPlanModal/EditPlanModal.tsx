@@ -42,7 +42,7 @@ export const EditPlanModal: React.FC<EditPlanModalProps> = ({ isOpen, onClose, o
                 <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
                     {activeCategories.map(cat => (
                         <div key={cat.id}>
-                            <label className="block text-sm font-medium text-siloam-text-secondary">{cat.name}</label>
+                            <p className="block text-sm font-medium text-siloam-text-secondary">{cat.name}</p>
                             <CurrencyInput
                                 value={budgets[cat.id] || 0}
                                 onValueChange={(val) => handleBudgetChange(cat.id, val)}
@@ -52,8 +52,8 @@ export const EditPlanModal: React.FC<EditPlanModalProps> = ({ isOpen, onClose, o
                     ))}
                 </div>
                 <div className="mt-6 flex justify-end space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Budgets</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-siloam-border hover:bg-siloam-bg">Cancel</button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 rounded-xl bg-siloam-blue text-white hover:bg-siloam-blue/90">Save Budgets</button>
                 </div>
             </div>
         </div>

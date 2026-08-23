@@ -40,7 +40,7 @@ async function resolveBootstrapUserId(queryClient?: QueryClient): Promise<number
   if (typeof window === 'undefined') return null;
   const fromSession = sessionStorage.getItem('currentUserId');
   if (fromSession) {
-    const uid = parseInt(fromSession, 10);
+    const uid = Number.parseInt(fromSession, 10);
     if (Number.isFinite(uid)) return uid;
   }
   const bootstrap = queryClient?.getQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap]);
@@ -179,7 +179,7 @@ export async function fetchMultiYearPeriodBudgets(
 ): Promise<{ periods: BudgetPeriod[]; categories: BudgetCategoryConfig[] }> {
   const uid =
     userId ??
-    (typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('currentUserId') || '', 10) : NaN);
+    (typeof window !== 'undefined' ? Number.parseInt(sessionStorage.getItem('currentUserId') || '', 10) : Number.NaN);
   const name = multiYearName.trim();
   const cacheKey =
     Number.isFinite(uid) && name

@@ -15,6 +15,7 @@ export type CapexProjectListMobileAssetListProps = {
   onRowClick: (asset: EnrichedAsset) => void;
   onRowHover: (asset: EnrichedAsset) => void;
   hasActiveFilters: boolean;
+  emptyHint?: string | null;
 };
 
 function CapexProjectListMobileAssetListInner({
@@ -23,6 +24,7 @@ function CapexProjectListMobileAssetListInner({
   onRowClick,
   onRowHover,
   hasActiveFilters,
+  emptyHint = null,
 }: CapexProjectListMobileAssetListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const useVirtualization = assets.length >= VIRTUALIZE_THRESHOLD;
@@ -41,7 +43,11 @@ function CapexProjectListMobileAssetListInner({
   if (assets.length === 0) {
     return (
       <div className="text-center py-12 text-siloam-text-secondary">
-        {hasActiveFilters ? 'No assets found matching the filters.' : 'No assets found.'}
+        {emptyHint
+          ? emptyHint
+          : hasActiveFilters
+            ? 'No assets found matching the filters.'
+            : 'No assets found.'}
       </div>
     );
   }

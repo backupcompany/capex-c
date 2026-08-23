@@ -214,7 +214,7 @@ export const MomDailySummaryPage: React.FC<MomDailySummaryPageProps> = ({
 
   if (!canView) {
     return (
-      <div className="text-center p-8 text-danger">You do not have permission to view this page.</div>
+      <div className="text-center p-8 text-danger">Anda tidak memiliki izin untuk melihat halaman ini.</div>
     );
   }
 

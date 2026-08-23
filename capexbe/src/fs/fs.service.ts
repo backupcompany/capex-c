@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { fetchAllRecords, toCamelCase } from '../project-list/supabase-helpers';
 import { AuthZService } from '../auth/auth-z.service';
 import { CacheAsideService } from '../shared/cache-aside.service';
@@ -44,7 +45,7 @@ export class FsService {
   async createFeasibilityStudy(accessToken: string, userId: number, payload: FsCreatePayload) {
     await this.authZ.assertHierarchyPermission(accessToken, userId, 'FS Update', 'create');
     const { client } = await this.fsAuth.getAuthenticatedRlsClient(accessToken, userId);
-    const id = payload.id || `FS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = payload.id || `FS-${randomUUID()}`;
     const now = new Date().toISOString();
     const row = {
       id,
@@ -140,7 +141,7 @@ export class FsService {
   async saveRealization(accessToken: string, userId: number, payload: FsRealizationPayload) {
     await this.authZ.assertHierarchyPermission(accessToken, userId, 'FS Realization', 'update');
     const { client } = await this.fsAuth.getAuthenticatedRlsClient(accessToken, userId);
-    const id = payload.id || `FSR-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = payload.id || `FSR-${randomUUID()}`;
     const now = new Date().toISOString();
     const row = {
       id,

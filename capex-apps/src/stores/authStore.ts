@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: null,
       roles: [],
       idleTimeoutMs: IDLE_TIMEOUT_MS,
-      authProbeComplete: false,
+      // Keep authProbeComplete — guest/logout still finished the session probe.
       sessionReady: false,
     }),
   setStatus: (status) => set({ status }),

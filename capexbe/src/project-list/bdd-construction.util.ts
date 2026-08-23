@@ -31,6 +31,17 @@ export function isUnassignedBddPriority(priority: unknown): boolean {
   return !p || p === 'unassigned';
 }
 
+/**
+ * Who may see/edit unassigned BDD rows — must match FE `bddRolePolicy.ts`.
+ * Do not trust client `hideUnassignedBdd`; server derives it from assignment role names.
+ */
+export function assignmentRolesCanSeeUnassignedBdd(
+  roleNames: Array<string | null | undefined>,
+): boolean {
+  const allowed = new Set(['super admin', 'superadmin', 'superadministrator', 'pmo', 'bdd']);
+  return roleNames.some((n) => allowed.has(normalizeBdd(n)));
+}
+
 /** Asset type ids whose group is Infrastructure or Construction (SQL prefilter). */
 export function resolveBddConstructionAssetTypeIds(groupNameByTypeId: Map<string, string>): string[] {
   const ids: string[] = [];

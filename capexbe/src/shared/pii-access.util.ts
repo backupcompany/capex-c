@@ -50,3 +50,17 @@ export async function viewerCanSeeVendorTaxId(
     return false;
   }
 }
+
+/** Full role permission matrix — Configuration write (View & Update), not view-only. */
+export async function viewerCanSeeRolePermissionMatrix(
+  authZ: AuthZService,
+  accessToken: string,
+  viewerUserId: number,
+): Promise<boolean> {
+  try {
+    await authZ.assertConfigurationAccess(accessToken, viewerUserId, 'update');
+    return true;
+  } catch {
+    return false;
+  }
+}
