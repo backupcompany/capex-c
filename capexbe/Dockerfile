@@ -7,14 +7,13 @@ WORKDIR /w
 
 # Explicit paths only (sonar docker:S6470 — no COPY . .)
 COPY package.json package-lock.json ./
-COPY scripts ./scripts
 
-# Lockfile + ci (docker:S8543); no lifecycle scripts (docker:S6505); patch matches postinstall / CI
-RUN npm ci --ignore-scripts --legacy-peer-deps \
-  && node scripts/patch-nest-typescript6.mjs
+# Lockfile + ci (docker:S8543); no lifecycle scripts (docker:S6505)
+RUN npm ci --ignore-scripts --legacy-peer-deps
 
 COPY src ./src
 COPY nest-cli.json tsconfig.json tsconfig.build.json tsconfig.shared.json .swcrc ./
+COPY scripts ./scripts
 
 RUN npm run build
 

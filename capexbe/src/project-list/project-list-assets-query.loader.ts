@@ -54,6 +54,10 @@ export type ProjectListQueryDebugCounts = {
   cacheLayer: 'none' | 'memory' | 'redis';
   usedProgressFilter: boolean;
   defaultQuery: boolean;
+  /** Server resolved scope is unrestricted (Head Office / All). */
+  scopeAll?: boolean;
+  /** Search matched rows outside the caller's HU/archetype scope. */
+  searchOutsideScope?: boolean;
 };
 
 const ID_BATCH = 400;
