@@ -6,21 +6,30 @@ import { invalidateRequestCache } from '@/lib/requestCache';
 
 export type { BudgetHuConfigBundle };
 
-/** Asset types & workflows selalu dari Supabase — backend cache bisa tertinggal 30 menit. */
+/** Optional refresh of asset types / workflows; never block categories/priorities from Nest. */
 async function overlayFreshHuMasterSlices(bundle: BudgetHuConfigBundle): Promise<BudgetHuConfigBundle> {
-  invalidateRequestCache('cfg:asset_type');
-  invalidateRequestCache('cfg:workflow');
-  const [assetTypes, workflows] = await Promise.all([
-    configService.getAllAssetTypeConfigs(),
-    configService.getAllWorkflowSets(),
-  ]);
-  return { ...bundle, assetTypes, workflows };
+  try {
+    invalidateRequestCache('cfg:asset_type');
+    invalidateRequestCache('cfg:workflow');
+    const [assetTypes, workflows] = await Promise.all([
+      configService.getAllAssetTypeConfigs(),
+      configService.getAllWorkflowSets(),
+    ]);
+    return {
+      ...bundle,
+      assetTypes: assetTypes.length ? assetTypes : bundle.assetTypes,
+      workflows: workflows.length ? workflows : bundle.workflows,
+    };
+  } catch {
+    return bundle;
+  }
 }
 
-/** Master data for HU forms — backend untuk slice berat; master form overlay dari Supabase. */
+/** Master data for HU forms — Nest config-bundle first (categories/priorities). */
 export async function fetchBudgetHuConfigBundle(userId: number): Promise<BudgetHuConfigBundle> {
   const cached = await fetchBudgetHuConfigFromBackend(userId);
   if (cached) {
+    // Return Nest payload immediately-usable; overlay only enriches asset types/workflows.
     const result = await overlayFreshHuMasterSlices(cached);
     writeBudgetHuConfigCache(userId, result);
     return result;
@@ -52,16 +61,20 @@ export async function overlayFreshHuMasterOnPageBundle<
     priorities?: ProjectPriorityConfig[];
   },
 >(bundle: T): Promise<T> {
-  const fresh = await overlayFreshHuMasterSlices({
-    routineAssetMaxBudget: 0,
-    categories: bundle.categories ?? [],
-    priorities: bundle.priorities ?? [],
-    workflows: bundle.workflows,
-    assetTypes: bundle.assetTypes,
-  });
-  return {
-    ...bundle,
-    assetTypes: fresh.assetTypes,
-    workflows: fresh.workflows,
-  };
+  try {
+    const fresh = await overlayFreshHuMasterSlices({
+      routineAssetMaxBudget: 0,
+      categories: bundle.categories ?? [],
+      priorities: bundle.priorities ?? [],
+      workflows: bundle.workflows,
+      assetTypes: bundle.assetTypes,
+    });
+    return {
+      ...bundle,
+      assetTypes: fresh.assetTypes,
+      workflows: fresh.workflows,
+    };
+  } catch {
+    return bundle;
+  }
 }

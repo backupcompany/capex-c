@@ -415,13 +415,15 @@ export function useBudgetHuPagePipeline({
     if (editedData && !isAppBudgetPeriodStructureShell(editedData, periodName)) {
       return editedData;
     }
+    // Prefer fresh Nest page-bundle over disk/App shell — stale localStorage after DB
+    // restore kept HU.budget empty → Total Overall Budget Rp 0 while table still loaded.
+    if (remoteBundle?.budgetPeriod) return remoteBundle.budgetPeriod;
     const resolved = resolveFullBudgetPeriodForDisplay(
       periodName,
       userId,
       currentBudgetPeriod,
     );
     if (resolved) return resolved;
-    if (remoteBundle?.budgetPeriod) return remoteBundle.budgetPeriod;
     if (diskPageSeed?.budgetPeriod) return diskPageSeed.budgetPeriod;
     return null;
   }, [
