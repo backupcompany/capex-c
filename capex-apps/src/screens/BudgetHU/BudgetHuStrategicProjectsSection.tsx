@@ -151,6 +151,9 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
   );
 
   const showTableBusy = isTableLoading || isSearchPending;
+  /** Empty copy only after load finished — never while first fetch still running. */
+  const showEmptyState = !showTableBusy && tableProjects.length === 0;
+  const showInitialLoading = showTableBusy && tableProjects.length === 0;
   const rangeStart = filteredCount > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
   const rangeEnd = Math.min(currentPage * itemsPerPage, filteredCount);
 
@@ -235,7 +238,18 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
         className="relative h-[min(70vh,36rem)]"
         aria-busy={showTableBusy}
       >
-        {showTableBusy ? (
+        {showInitialLoading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 px-4 text-center">
+            <Spinner size={28} className="text-siloam-blue" />
+            <p className="text-sm font-medium text-siloam-text-primary">
+              {isSearchPending && !isTableLoading ? 'Mencari project…' : 'Memuat strategic project…'}
+            </p>
+            <p className="text-sm text-siloam-text-secondary max-w-md">
+              Mohon tunggu, data unit ini sedang diambil dari server.
+            </p>
+          </div>
+        ) : null}
+        {!showInitialLoading && showTableBusy ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-siloam-surface/70 backdrop-blur-[1px]">
             <div className="flex items-center gap-2 rounded-lg border border-siloam-border bg-siloam-surface px-4 py-2 text-sm text-siloam-text-secondary shadow-soft">
               <Spinner size={18} className="text-siloam-blue" />
@@ -243,7 +257,7 @@ export const BudgetHuStrategicProjectsSection = memo(function BudgetHuStrategicP
             </div>
           </div>
         ) : null}
-        {!showTableBusy && tableProjects.length === 0 ? (
+        {showEmptyState ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <p className="text-sm font-medium text-siloam-text-primary">
               {searchTerm.trim()

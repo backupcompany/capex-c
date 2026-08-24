@@ -1901,7 +1901,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
             onShowAllColumns={showAllTableColumns}
             onExportExcel={() => void handleExportExcel()}
             isExporting={isExporting}
-            isTableLoading={isTableFetching}
+            isTableLoading={isTableFetching || projectsPage.isLoading}
             isSearchPending={isSearchPending}
           />
         </div>
