@@ -633,6 +633,7 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
           archetypes: [],
         };
         setEditedPeriods((prev) => [...prev, optimistic]);
+        serverPeriodsRef.current = [...serverPeriodsRef.current, cloneDeep(optimistic)];
         void queryClient.invalidateQueries({
           queryKey: queryKeys.budgetMultiYear.periodBudgets(selectedMultiYearForPeriod.name),
         });
@@ -652,7 +653,8 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
       const originalMyMap = new Map(serverMultiYearsRef.current.map((my) => [my.name, my]));
       const changedMultiYears = editedData.filter((my) => {
         const orig = originalMyMap.get(my.name);
-        return orig && orig.budget.budgetPlan !== my.budget.budgetPlan;
+        if (!orig) return (my.budget?.budgetPlan ?? 0) !== 0;
+        return orig.budget.budgetPlan !== my.budget.budgetPlan;
       });
 
       await Promise.all(changedMultiYears.map((my) => budgetService.saveMultiYear(my, currentUser.id)));
@@ -660,7 +662,10 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
       const originalPeriodsMap = new Map(serverPeriodsRef.current.map((p) => [p.periodName, p]));
       const modifiedPeriods = editedPeriods.filter((ep) => {
         const original = originalPeriodsMap.get(ep.periodName);
-        if (!original) return false;
+        // New period not yet in server ref — still persist if any category plan was set.
+        if (!original) {
+          return categoryIds.some((id) => (ep.budget?.[id]?.budgetPlan ?? 0) !== 0);
+        }
         return isPeriodBudgetPlanDirty(original, ep, categoryIds);
       });
 

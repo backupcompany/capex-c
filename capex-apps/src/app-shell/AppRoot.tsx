@@ -336,19 +336,31 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
       const cached = queryClient.getQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap]);
       if (cached?.allPeriods?.length) {
         summaries = cached.allPeriods;
-        multiYears = cached.multiYears ?? [];
+      }
+      if (!multiYears.length && cached?.multiYears?.length) {
+        multiYears = cached.multiYears;
       }
     }
 
-    if (!summaries.length) {
+    // Always apply multi-years from Nest even when no periods yet (new MY create).
+    if (!multiYears.length && !summaries.length) {
       return;
     }
 
-    setAllPeriods(summaries);
-    syncPeriodSelectionFromLists(multiYears, summaries);
-    queryClient.setQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap], (old) =>
-      old ? { ...old, multiYears, allPeriods: summaries } : old,
-    );
+    if (summaries.length) {
+      setAllPeriods(summaries);
+      syncPeriodSelectionFromLists(multiYears, summaries);
+    }
+    queryClient.setQueryData<AppBootstrapPayload>([...queryKeys.app.bootstrap], (old) => {
+      if (!old) return old;
+      const next = {
+        ...old,
+        multiYears: multiYears.length ? multiYears : old.multiYears,
+        allPeriods: summaries.length ? summaries : old.allPeriods,
+      };
+      writeCachedBootstrap(next);
+      return next;
+    });
   }, [queryClient, syncPeriodSelectionFromLists, currentUser?.id]);
 
   const handleBudgetPageDataChange = useCallback(() => {

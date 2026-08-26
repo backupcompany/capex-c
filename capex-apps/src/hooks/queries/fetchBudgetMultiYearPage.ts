@@ -8,7 +8,7 @@ import { useBackendSession } from '@/lib/auth/authConstants';
 import { isCapexBeConfigured } from '@/lib/capexBeClient';
 import { fetchConfigurationSlicesFromBackend } from '@/services/configurationApi';
 import { getAccessTokenForBackend } from '@/lib/authSession';
-import { withRequestCache } from '@/lib/requestCache';
+import { withRequestCache, invalidateRequestCache } from '@/lib/requestCache';
 import {
   fetchBudgetMultiYearPageBundleFromBackend,
   fetchMultiYearPeriodBudgetsFromBackend,
@@ -22,12 +22,13 @@ export type BudgetMultiYearPageBundle = {
 
 const PAGE_STALE_MS = 120_000;
 
-/** Bootstrap shell: metadata only — usage metrics always zero until page-bundle succeeds. */
+/** True when rows look like bootstrap placeholders (no plan + no usage), not Nest page-bundle. */
 export function isMultiYearBootstrapShell(multiYears: BudgetMultiYear[]): boolean {
   if (!multiYears.length) return false;
   return multiYears.every((my) => {
     const b = my.budget ?? {};
     return (
+      (b.budgetPlan ?? 0) === 0 &&
       (b.budgetCarryForward ?? 0) === 0 &&
       (b.budgetAllocated ?? 0) === 0 &&
       (b.approvedBudget ?? 0) === 0 &&
@@ -111,11 +112,9 @@ async function fetchPageBundleFromNetwork(
 
   if (userId != null && isCapexBeConfigured()) {
     const fromBe = await fetchBudgetMultiYearPageBundleFromBackend(userId);
-    if (
-      fromBe &&
-      fromBe.multiYears.length > 0 &&
-      !isMultiYearBootstrapShell(fromBe.multiYears)
-    ) {
+    // Always trust Nest page-bundle when it returns rows — planning-only data
+    // (pagu set, usage still 0) used to be misclassified as bootstrap shell and discarded.
+    if (fromBe && fromBe.multiYears.length > 0) {
       const categories = fromBe.categories.length
         ? fromBe.categories.filter((c) => c.isActive)
         : await loadActiveCategories(queryClient, userId);
@@ -125,7 +124,6 @@ async function fetchPageBundleFromNetwork(
         periodSummaries: fromBe.periodSummaries.length ? fromBe.periodSummaries : cachedPeriodSummaries,
       };
     }
-    // BE configured — jangan fallback ke bootstrap shell (metadata + Rp 0)
     return null;
   }
 
@@ -164,8 +162,10 @@ export async function fetchBudgetMultiYearPageBundle(
       ? `budget-multi-year:page:${resolvedUserId}`
       : 'budget-multi-year:page:anon';
   const network = await fetchPageBundleFromNetwork(queryClient, resolvedUserId);
-  if (network?.multiYears.length && !isMultiYearBootstrapShell(network.multiYears)) {
-    return withRequestCache(cacheKey, () => Promise.resolve(network), PAGE_STALE_MS);
+  if (network?.multiYears.length) {
+    // Drop stale TTL entry so fresh Nest payload is what we keep/return.
+    invalidateRequestCache(cacheKey);
+    return withRequestCache(cacheKey, async () => network, PAGE_STALE_MS);
   }
   // Keep bootstrap rows visible — never replace painted data with empty/network miss
   if (seed.multiYears.length) return seed;

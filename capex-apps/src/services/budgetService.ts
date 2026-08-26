@@ -101,6 +101,7 @@ export const saveMultiYear = async (multiYear: BudgetMultiYear, currentUserId?: 
         const saved = await saveMultiYearViaBackend(uid, multiYear);
         if (saved) {
             invalidateRequestCache('budget:');
+            invalidateRequestCache('budget-multi-year:');
             return;
         }
         if (useBackendSession()) {
@@ -128,6 +129,7 @@ export const createMultiYear = async (name: string, startYear: number, endYear: 
         const saved = await saveMultiYearViaBackend(uid, { name, startYear, endYear, budget: emptyBudgetItem });
         if (saved) {
             invalidateRequestCache('budget:');
+            invalidateRequestCache('budget-multi-year:');
             return { success: true, message: 'Multi-year budget created successfully.' };
         }
         if (useBackendSession()) {
@@ -555,6 +557,7 @@ export const savePeriodCategoryPlans = async (
         const saved = await savePeriodCategoryPlansViaBackend(uid, period, categoryIds);
         if (saved) {
             invalidateRequestCache('budget:');
+            invalidateRequestCache('budget-multi-year:');
             return;
         }
     }
@@ -630,6 +633,7 @@ export const createBudgetPeriod = async (periodName: string, startDate: string, 
         const created = await createBudgetPeriodViaBackend(uid, periodName, startDate, endDate, multiYearName);
         if (created) {
             invalidateRequestCache('budget:');
+            invalidateRequestCache('budget-multi-year:');
             return { success: true, message: 'Budget period created successfully.' };
         }
     }
