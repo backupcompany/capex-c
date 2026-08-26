@@ -631,13 +631,27 @@ export const saveHuBudgetPlans = async (
 export const createBudgetPeriod = async (periodName: string, startDate: string, endDate: string, multiYearName: string): Promise<{ success: boolean; message: string }> => {
     const uid =
         typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN;
-    if (Number.isFinite(uid)) {
+    if (!Number.isFinite(uid)) {
+        return {
+            success: false,
+            message: 'Gagal membuat budget period via backend (capexbe). Pastikan backend berjalan.',
+        };
+    }
+    try {
         const created = await createBudgetPeriodViaBackend(uid, periodName, startDate, endDate, multiYearName);
         if (created) {
             invalidateRequestCache('budget:');
             invalidateRequestCache('budget-multi-year:');
             return { success: true, message: 'Budget period created successfully.' };
         }
+    } catch (err) {
+        return {
+            success: false,
+            message:
+                err instanceof Error && err.message.trim()
+                    ? err.message
+                    : 'Gagal membuat budget period via backend (capexbe). Pastikan backend berjalan.',
+        };
     }
     return {
         success: false,

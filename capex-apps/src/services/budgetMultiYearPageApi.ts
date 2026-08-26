@@ -124,13 +124,24 @@ export async function saveMultiYearViaBackend(
   multiYear: BudgetMultiYear,
 ): Promise<boolean> {
   const uid = Number(userId);
-  if (!Number.isFinite(uid)) return false;
-  const result = await postBudgetMultiYear<{ ok?: boolean }>(
-    '/budget-multi-year/save-multi-year',
-    { userId: uid, multiYear },
-    'budgetMultiYear.saveMultiYear',
-  );
-  return result?.ok === true;
+  if (!Number.isFinite(uid)) {
+    throw new Error('Gagal menyimpan multi-year via backend (capexbe). User tidak valid.');
+  }
+  try {
+    const result = await postBudgetMultiYear<{ ok?: boolean }>(
+      '/budget-multi-year/save-multi-year',
+      { userId: uid, multiYear },
+      'budgetMultiYear.saveMultiYear',
+    );
+    if (result?.ok === true) return true;
+    throw new Error('Gagal menyimpan multi-year via backend (capexbe). Response tidak ok.');
+  } catch (err) {
+    const msg =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Gagal menyimpan multi-year via backend (capexbe).';
+    throw new Error(msg);
+  }
 }
 
 export async function createBudgetPeriodViaBackend(
@@ -141,19 +152,30 @@ export async function createBudgetPeriodViaBackend(
   multiYearName: string,
 ): Promise<boolean> {
   const uid = Number(userId);
-  if (!Number.isFinite(uid)) return false;
-  const result = await postBudgetMultiYear<{ ok?: boolean }>(
-    '/budget-multi-year/create-period',
-    {
-      userId: uid,
-      periodName: periodName.trim(),
-      startDate,
-      endDate,
-      multiYearName: multiYearName.trim(),
-    },
-    'budgetMultiYear.createPeriod',
-  );
-  return result?.ok === true;
+  if (!Number.isFinite(uid)) {
+    throw new Error('Gagal membuat budget period via backend (capexbe). User tidak valid.');
+  }
+  try {
+    const result = await postBudgetMultiYear<{ ok?: boolean }>(
+      '/budget-multi-year/create-period',
+      {
+        userId: uid,
+        periodName: periodName.trim(),
+        startDate,
+        endDate,
+        multiYearName: multiYearName.trim(),
+      },
+      'budgetMultiYear.createPeriod',
+    );
+    if (result?.ok === true) return true;
+    throw new Error('Gagal membuat budget period via backend (capexbe). Response tidak ok.');
+  } catch (err) {
+    const msg =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Gagal membuat budget period via backend (capexbe).';
+    throw new Error(msg);
+  }
 }
 
 export async function savePeriodCategoryPlansViaBackend(
@@ -201,13 +223,24 @@ export async function saveArchetypeBudgetPlansViaBackend(
 ): Promise<boolean> {
   const uid = Number(userId);
   const pn = periodName.trim();
-  if (!Number.isFinite(uid) || !pn || !rows.length) return false;
-  const result = await postBudgetMultiYear<{ ok?: boolean }>(
-    '/budget-multi-year/save-archetype-plans',
-    { userId: uid, periodName: pn, rows },
-    'budgetMultiYear.saveArchetypePlans',
-  );
-  return result?.ok === true;
+  if (!Number.isFinite(uid) || !pn || !rows.length) {
+    throw new Error('Gagal menyimpan rencana budget network via backend (capexbe). Payload tidak valid.');
+  }
+  try {
+    const result = await postBudgetMultiYear<{ ok?: boolean }>(
+      '/budget-multi-year/save-archetype-plans',
+      { userId: uid, periodName: pn, rows },
+      'budgetMultiYear.saveArchetypePlans',
+    );
+    if (result?.ok === true) return true;
+    throw new Error('Gagal menyimpan rencana budget network via backend (capexbe). Response tidak ok.');
+  } catch (err) {
+    const msg =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Gagal menyimpan rencana budget network via backend (capexbe).';
+    throw new Error(msg);
+  }
 }
 
 export type HuBudgetPlanRow = {
@@ -223,11 +256,22 @@ export async function saveHuBudgetPlansViaBackend(
 ): Promise<boolean> {
   const uid = Number(userId);
   const pn = periodName.trim();
-  if (!Number.isFinite(uid) || !pn || !rows.length) return false;
-  const result = await postBudgetMultiYear<{ ok?: boolean }>(
-    '/budget-multi-year/save-hu-plans',
-    { userId: uid, periodName: pn, rows },
-    'budgetMultiYear.saveHuPlans',
-  );
-  return result?.ok === true;
+  if (!Number.isFinite(uid) || !pn || !rows.length) {
+    throw new Error('Gagal menyimpan rencana budget HU via backend (capexbe). Payload tidak valid.');
+  }
+  try {
+    const result = await postBudgetMultiYear<{ ok?: boolean }>(
+      '/budget-multi-year/save-hu-plans',
+      { userId: uid, periodName: pn, rows },
+      'budgetMultiYear.saveHuPlans',
+    );
+    if (result?.ok === true) return true;
+    throw new Error('Gagal menyimpan rencana budget HU via backend (capexbe). Response tidak ok.');
+  } catch (err) {
+    const msg =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Gagal menyimpan rencana budget HU via backend (capexbe).';
+    throw new Error(msg);
+  }
 }

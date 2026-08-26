@@ -270,9 +270,8 @@ export class BudgetMultiYearService {
     if (periodError) throw new BadRequestException(periodError.message);
 
     if (budgetRows.length) {
-      const { error: budgetError } = await client.from('budget_period_category_budgets').upsert(budgetRows, {
-        onConflict: 'period_name,budget_category_id',
-      });
+      // Plain insert — new period has no rows yet. Avoid upsert serial-PK quirks after dump.
+      const { error: budgetError } = await client.from('budget_period_category_budgets').insert(budgetRows);
       if (budgetError) throw new BadRequestException(budgetError.message);
     }
 
@@ -430,10 +429,39 @@ export class BudgetMultiYearService {
     }
 
     if (upserts.length) {
-      const { error } = await client.from('budget_period_archetype_budgets').upsert(upserts, {
-        onConflict: 'period_name,archetype_id,budget_category_id',
-      });
-      if (error) throw new BadRequestException(error.message);
+      const { data: existingRows, error: readError } = await client
+        .from('budget_period_archetype_budgets')
+        .select('period_name, archetype_id, budget_category_id')
+        .eq('period_name', pn);
+      if (readError) throw new BadRequestException(readError.message);
+      const existingKeys = new Set(
+        (existingRows ?? []).map(
+          (r) => `${String(r.archetype_id)}\0${String(r.budget_category_id)}`,
+        ),
+      );
+      for (const row of upserts) {
+        const key = `${row.archetype_id}\0${row.budget_category_id}`;
+        if (existingKeys.has(key)) {
+          const { error } = await client
+            .from('budget_period_archetype_budgets')
+            .update({ budget_plan: row.budget_plan, updated_at: new Date().toISOString() })
+            .eq('period_name', pn)
+            .eq('archetype_id', row.archetype_id)
+            .eq('budget_category_id', row.budget_category_id);
+          if (error) {
+            throw new BadRequestException(
+              `Gagal update plan archetype ${row.archetype_id}/${row.budget_category_id}: ${error.message}`,
+            );
+          }
+        } else {
+          const { error } = await client.from('budget_period_archetype_budgets').insert(row);
+          if (error) {
+            throw new BadRequestException(
+              `Gagal insert plan archetype ${row.archetype_id}/${row.budget_category_id}: ${error.message}`,
+            );
+          }
+        }
+      }
     }
 
     for (const del of deletes) {
@@ -495,10 +523,39 @@ export class BudgetMultiYearService {
     }
 
     if (upserts.length) {
-      const { error } = await client.from('budget_period_hospital_unit_budgets').upsert(upserts, {
-        onConflict: 'period_name,hospital_unit_id,budget_category_id',
-      });
-      if (error) throw new BadRequestException(error.message);
+      const { data: existingRows, error: readError } = await client
+        .from('budget_period_hospital_unit_budgets')
+        .select('period_name, hospital_unit_id, budget_category_id')
+        .eq('period_name', pn);
+      if (readError) throw new BadRequestException(readError.message);
+      const existingKeys = new Set(
+        (existingRows ?? []).map(
+          (r) => `${String(r.hospital_unit_id)}\0${String(r.budget_category_id)}`,
+        ),
+      );
+      for (const row of upserts) {
+        const key = `${row.hospital_unit_id}\0${row.budget_category_id}`;
+        if (existingKeys.has(key)) {
+          const { error } = await client
+            .from('budget_period_hospital_unit_budgets')
+            .update({ budget_plan: row.budget_plan, updated_at: new Date().toISOString() })
+            .eq('period_name', pn)
+            .eq('hospital_unit_id', row.hospital_unit_id)
+            .eq('budget_category_id', row.budget_category_id);
+          if (error) {
+            throw new BadRequestException(
+              `Gagal update plan HU ${row.hospital_unit_id}/${row.budget_category_id}: ${error.message}`,
+            );
+          }
+        } else {
+          const { error } = await client.from('budget_period_hospital_unit_budgets').insert(row);
+          if (error) {
+            throw new BadRequestException(
+              `Gagal insert plan HU ${row.hospital_unit_id}/${row.budget_category_id}: ${error.message}`,
+            );
+          }
+        }
+      }
     }
 
     for (const del of deletes) {
