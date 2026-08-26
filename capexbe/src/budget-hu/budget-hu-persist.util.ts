@@ -210,10 +210,29 @@ export async function persistProjectRow(
       budget_category_id: categoryId,
       budget_plan: budgetPlan,
     }));
-    const { error: catErr } = await client
+    const { data: existingRows, error: readErr } = await client
       .from('project_category_budgets')
-      .upsert(categoryBudgets, { onConflict: 'project_id,budget_category_id' });
-    if (catErr) throw new BadRequestException(`saveProject category budgets: ${catErr.message}`);
+      .select('budget_category_id')
+      .eq('project_id', savedId);
+    if (readErr) throw new BadRequestException(`saveProject category budgets read: ${readErr.message}`);
+    const existingCats = new Set((existingRows ?? []).map((r) => String(r.budget_category_id)));
+    // Prefer update/insert over upsert — avoids serial-PK quirks after dump restore.
+    for (const row of categoryBudgets) {
+      if (existingCats.has(row.budget_category_id)) {
+        const { error: catErr } = await client
+          .from('project_category_budgets')
+          .update({
+            budget_plan: row.budget_plan,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('project_id', savedId)
+          .eq('budget_category_id', row.budget_category_id);
+        if (catErr) throw new BadRequestException(`saveProject category budgets update: ${catErr.message}`);
+      } else {
+        const { error: catErr } = await client.from('project_category_budgets').insert(row);
+        if (catErr) throw new BadRequestException(`saveProject category budgets insert: ${catErr.message}`);
+      }
+    }
   }
 
   return {

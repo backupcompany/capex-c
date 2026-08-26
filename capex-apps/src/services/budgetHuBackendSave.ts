@@ -76,8 +76,6 @@ export async function persistBudgetHuChangesViaBackend(
       partial: true,
       projectsOnly: touchedAssetIdList.length === 0,
     });
-
-    if (!lastSaved) return null;
   }
 
   return lastSaved;

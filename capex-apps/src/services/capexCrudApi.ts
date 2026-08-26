@@ -51,7 +51,7 @@ export async function saveBudgetHuViaBackend(
   periodName: string,
   budgetPeriod: BudgetPeriod,
   options?: SaveBudgetHuBackendOptions,
-): Promise<BudgetPeriod | null> {
+): Promise<BudgetPeriod> {
   const result = await postCrudToBackend<{ budgetPeriod?: BudgetPeriod }>(
     ['/budget-hu/save', '/budget-hu/save-period'],
     {
@@ -66,7 +66,10 @@ export async function saveBudgetHuViaBackend(
       projectsOnly: options?.projectsOnly,
     },
   );
-  return result?.budgetPeriod ?? null;
+  if (result?.budgetPeriod) return result.budgetPeriod;
+  throw new Error(
+    'Gagal menyimpan via backend (capexbe). Response tidak berisi budgetPeriod.',
+  );
 }
 
 export async function allocateProjectCodeViaBackend(input: {
