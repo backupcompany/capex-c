@@ -74,6 +74,10 @@ async function postBudgetMultiYear<T>(
       reason: 'http_error',
       ...(Number.isFinite(status) ? { httpStatus: status } : {}),
     });
+    // Writes must surface the real Nest/PostgREST message (not a silent null).
+    if (path.includes('save-') || path.includes('create-')) {
+      throw err;
+    }
     return null;
   }
 }
@@ -159,12 +163,29 @@ export async function savePeriodCategoryPlansViaBackend(
 ): Promise<boolean> {
   const uid = Number(userId);
   if (!Number.isFinite(uid)) return false;
-  const result = await postBudgetMultiYear<{ ok?: boolean }>(
-    '/budget-multi-year/save-period-plans',
-    { userId: uid, period, ...(categoryIds?.length ? { categoryIds } : {}) },
-    'budgetMultiYear.savePeriodPlans',
-  );
-  return result?.ok === true;
+  // Slim payload — only what Nest persists (avoid shipping archetypes/projects).
+  const slimPeriod = {
+    periodName: period.periodName,
+    multiYearName: period.multiYearName,
+    budget: period.budget ?? {},
+  };
+  try {
+    const result = await postBudgetMultiYear<{ ok?: boolean }>(
+      '/budget-multi-year/save-period-plans',
+      { userId: uid, period: slimPeriod, ...(categoryIds?.length ? { categoryIds } : {}) },
+      'budgetMultiYear.savePeriodPlans',
+    );
+    if (result?.ok === true) return true;
+    throw new Error(
+      'Gagal menyimpan rencana budget periode via backend (capexbe). Response tidak ok.',
+    );
+  } catch (err) {
+    const msg =
+      err instanceof Error && err.message.trim()
+        ? err.message
+        : 'Gagal menyimpan rencana budget periode via backend (capexbe).';
+    throw new Error(msg);
+  }
 }
 
 export type ArchetypeBudgetPlanRow = {

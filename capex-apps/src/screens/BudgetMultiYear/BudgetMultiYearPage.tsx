@@ -695,7 +695,11 @@ export const BudgetMultiYearPage = memo(function BudgetMultiYearPage({
       void pageQuery.refetch();
     } catch (error) {
       console.error(error);
-      showToast('Failed to save changes.', 'error');
+      const msg =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Failed to save changes.';
+      showToast(msg, 'error');
     } finally {
       setIsSaving(false);
     }

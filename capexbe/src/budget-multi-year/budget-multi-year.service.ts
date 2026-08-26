@@ -300,11 +300,27 @@ export class BudgetMultiYearService {
       throw new BadRequestException('Invalid period budget payload');
     }
 
+    const { data: periodRow, error: periodLookupError } = await client
+      .from('budget_periods')
+      .select('period_name')
+      .eq('period_name', periodName)
+      .maybeSingle();
+    if (periodLookupError) throw new BadRequestException(periodLookupError.message);
+    if (!periodRow) {
+      throw new BadRequestException(
+        `Period "${periodName}" belum ada di database. Buat period dulu, lalu simpan rencana kategori.`,
+      );
+    }
+
     const allowedIds = categoryIds?.length ? new Set(categoryIds.map(String)) : null;
     const entries = Object.entries(budget as Record<string, unknown>).filter(([categoryId]) =>
       allowedIds ? allowedIds.has(categoryId) : true,
     );
-    if (!entries.length) return { ok: true };
+    if (!entries.length) {
+      throw new BadRequestException(
+        'Tidak ada kategori budget yang dikirim untuk disimpan. Pastikan master kategori aktif sudah termuat.',
+      );
+    }
 
     const { data: existingRows, error: readError } = await client
       .from('budget_period_category_budgets')
@@ -334,12 +350,40 @@ export class BudgetMultiYearService {
       };
     });
 
-    const { error } = await client.from('budget_period_category_budgets').upsert(rows, {
-      onConflict: 'period_name,budget_category_id',
-    });
-    if (error) throw new BadRequestException(error.message);
+    // Prefer update/insert over upsert — avoids serial-PK / onConflict quirks after dump restore.
+    for (const row of rows) {
+      if (existingByCategory.has(row.budget_category_id)) {
+        const { error: updateError } = await client
+          .from('budget_period_category_budgets')
+          .update({
+            budget_plan: row.budget_plan,
+            budget_carry_forward: row.budget_carry_forward,
+            budget_allocated: row.budget_allocated,
+            approved_budget: row.approved_budget,
+            consumed_budget: row.consumed_budget,
+            asset_count: row.asset_count,
+            no_budget_asset_count: row.no_budget_asset_count,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('period_name', row.period_name)
+          .eq('budget_category_id', row.budget_category_id);
+        if (updateError) {
+          throw new BadRequestException(
+            `Gagal update plan ${row.budget_category_id} @ ${row.period_name}: ${updateError.message}`,
+          );
+        }
+      } else {
+        const { error: insertError } = await client.from('budget_period_category_budgets').insert(row);
+        if (insertError) {
+          throw new BadRequestException(
+            `Gagal insert plan ${row.budget_category_id} @ ${row.period_name}: ${insertError.message}`,
+          );
+        }
+      }
+    }
 
     await this.invalidateUserCaches(userId);
+    await this.invalidateHuPeriodCaches(userId, periodName);
     return { ok: true };
   }
 

@@ -553,15 +553,17 @@ export const savePeriodCategoryPlans = async (
     const uid =
         currentUserId ??
         (typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN);
-    if (Number.isFinite(uid)) {
-        const saved = await savePeriodCategoryPlansViaBackend(uid, period, categoryIds);
-        if (saved) {
-            invalidateRequestCache('budget:');
-            invalidateRequestCache('budget-multi-year:');
-            return;
-        }
+    if (!Number.isFinite(uid)) {
+        throw new Error(
+            'Gagal menyimpan rencana budget periode via backend (capexbe). Pastikan backend berjalan dan sesi masih aktif.',
+        );
     }
-
+    const saved = await savePeriodCategoryPlansViaBackend(uid, period, categoryIds);
+    if (saved) {
+        invalidateRequestCache('budget:');
+        invalidateRequestCache('budget-multi-year:');
+        return;
+    }
     throw new Error(
         'Gagal menyimpan rencana budget periode via backend (capexbe). Pastikan backend berjalan dan sesi masih aktif.',
     );
