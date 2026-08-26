@@ -18,6 +18,12 @@ fi
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# Scripts-only DB URL (Nest uses PostgREST via SUPABASE_URL — not DATABASE_URL).
+SSH_ENV="${ROOT}/deploy/postgres/postgres-ssh.local.env"
+if [[ -f "$SSH_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$SSH_ENV"
+fi
 set +a
 
 if [[ "${USE_VPS_POSTGRES:-}" != "1" && "${USE_VPS_POSTGRES:-}" != "true" ]]; then

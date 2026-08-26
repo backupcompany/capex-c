@@ -16,10 +16,24 @@ fi
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+SSH_ENV="${ROOT}/deploy/postgres/postgres-ssh.local.env"
+if [[ -f "$SSH_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$SSH_ENV"
+fi
 set +a
 
+if [[ -z "${DATABASE_URL:-}" && -n "${PGPASSWORD:-}" ]]; then
+  PGHOST="${PGHOST:-127.0.0.1}"
+  PGPORT="${PGPORT:-5433}"
+  PGUSER="${PGUSER:-capex_app}"
+  PGDATABASE="${PGDATABASE:-capex}"
+  DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+  export DATABASE_URL
+fi
+
 if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "ERROR: DATABASE_URL not set" >&2
+  echo "ERROR: DATABASE_URL not set — copy deploy/postgres/postgres-ssh.env.example to postgres-ssh.local.env" >&2
   exit 1
 fi
 

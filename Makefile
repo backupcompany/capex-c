@@ -70,7 +70,6 @@ check-env:
 	@echo "==> Testing API health..."
 	@cd $(BE_DIR) && node -e "require('dotenv').config(); \
 	  const vps=process.env.USE_VPS_POSTGRES==='1'||process.env.USE_VPS_POSTGRES==='true'; \
-	  if(vps && !process.env.DATABASE_URL){ console.error('FAIL: USE_VPS_POSTGRES=1 but DATABASE_URL missing'); process.exit(1); } \
 	  fetch(process.env.SUPABASE_URL+'/auth/v1/health',{headers:{apikey:process.env.SUPABASE_ANON_KEY}}) \
 	    .then(r=>console.log(r.status===200?(vps?'OK  VPS PostgREST':'OK  Supabase Auth health'):'WARN API health', r.status)) \
 	    .catch(e=>{ console.error('FAIL API health', e.message, vps?'— tunnel/PostgREST? make ensure-vps-dev':''); process.exit(1); });"
