@@ -7,6 +7,7 @@ import {
   remapAssetCodePrefix,
   resolveAssetCodePrefix,
 } from './budget-hu-code-alloc.util';
+import { notifyAssetCreatedToPowerAutomate } from './power-automate-asset.util';
 
 export { allocateNextAssetCode, allocateNextProjectCode, remapAssetCodePrefix, resolveAssetCodePrefix };
 
@@ -335,8 +336,9 @@ export async function persistAssetRow(
     .maybeSingle();
 
   let assetId = String(asset.id);
+  const isNewAsset = !existingById?.id;
 
-  if (!existingById?.id) {
+  if (isNewAsset) {
     // New asset — always reserve unique sequence (ignore client preferred to avoid browser races).
     if (projectCode) {
       requestedCode = await allocateNextAssetCode(client, projectCode, null, null, {
@@ -387,6 +389,13 @@ export async function persistAssetRow(
     if (!error) {
       const original = asset.assetCode == null ? null : String(asset.assetCode);
       const finalCode = assetData.asset_code == null ? null : String(assetData.asset_code);
+      if (isNewAsset) {
+        notifyAssetCreatedToPowerAutomate(client, {
+          assetCode: finalCode,
+          assetName: String(assetData.asset_name ?? ''),
+          projectId,
+        });
+      }
       return {
         id: String(assetData.id),
         assetCode: finalCode,

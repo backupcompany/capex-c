@@ -1,5 +1,6 @@
--- Asset INSERT → Power Automate (production webhook).
--- Safe on Siloam PG16 without pg_net: skip webhook, never block INSERT.
+-- Asset INSERT → Power Automate (production webhook) via pg_net when available.
+-- Siloam without pg_net: this trigger no-ops. Canonical sender = Nest
+-- (POWER_AUTOMATE_ASSET_WEBHOOK_URL after persistAssetRow INSERT).
 --
 -- Apply (VM):
 --   docker exec -i capex-postgres psql -U capex_app -d capex -v ON_ERROR_STOP=1 \
