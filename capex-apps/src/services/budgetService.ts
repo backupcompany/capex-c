@@ -118,29 +118,38 @@ export const createMultiYear = async (name: string, startYear: number, endYear: 
     const uid =
         typeof window !== 'undefined' ? Number(sessionStorage.getItem('currentUserId')) : Number.NaN;
 
-    if (Number.isFinite(uid)) {
-        const emptyBudgetItem: BudgetItem = {
-            budgetPlan: 0,
-            budgetCarryForward: 0,
-            budgetAllocated: 0,
-            approvedBudget: 0,
-            consumedBudget: 0,
-        };
+    if (!Number.isFinite(uid)) {
+        return { success: false, message: 'Gagal membuat multi-year budget via backend (capexbe).' };
+    }
+
+    const emptyBudgetItem: BudgetItem = {
+        budgetPlan: 0,
+        budgetCarryForward: 0,
+        budgetAllocated: 0,
+        approvedBudget: 0,
+        consumedBudget: 0,
+    };
+    try {
         const saved = await saveMultiYearViaBackend(uid, { name, startYear, endYear, budget: emptyBudgetItem });
         if (saved) {
             invalidateRequestCache('budget:');
             invalidateRequestCache('budget-multi-year:');
             return { success: true, message: 'Multi-year budget created successfully.' };
         }
-        if (useBackendSession()) {
-            return {
-                success: false,
-                message: 'Gagal membuat multi-year budget via backend (capexbe). Pastikan backend berjalan.',
-            };
-        }
+    } catch (err) {
+        return {
+            success: false,
+            message:
+                err instanceof Error && err.message.trim()
+                    ? err.message
+                    : 'Gagal membuat multi-year budget via backend (capexbe). Pastikan backend berjalan.',
+        };
     }
 
-    return { success: false, message: 'Gagal membuat multi-year budget via backend (capexbe).' };
+    return {
+        success: false,
+        message: 'Gagal membuat multi-year budget via backend (capexbe). Pastikan backend berjalan.',
+    };
 };
 
 export const getAllBudgetPeriods = async (): Promise<BudgetPeriod[]> =>
