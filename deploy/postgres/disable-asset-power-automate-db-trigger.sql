@@ -1,7 +1,3 @@
--- LEGACY FILENAME — Nest is canonical (POWER_AUTOMATE_ASSET_WEBHOOK_URL).
--- This file now DISABLES the DB trigger (same as disable-asset-power-automate-db-trigger.sql).
--- DEV webhook vs PROD = env on capex-api only.
-
 -- Disable DB-side Power Automate (Nest is canonical via POWER_AUTOMATE_ASSET_WEBHOOK_URL).
 -- Safe / idempotent. Does NOT drop pg_net extension (may be used elsewhere).
 --
