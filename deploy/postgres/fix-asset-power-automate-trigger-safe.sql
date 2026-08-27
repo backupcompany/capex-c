@@ -17,9 +17,6 @@ CREATE OR REPLACE FUNCTION public.send_asset_to_power_automate() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    -- No-op: asset → Power Automate is sent by Nest (persistAssetRow) when
-    -- POWER_AUTOMATE_ASSET_WEBHOOK_URL is set. Kept so old migrations referencing
-    -- this function name do not break.
     RETURN NEW;
 END;
 $$;
