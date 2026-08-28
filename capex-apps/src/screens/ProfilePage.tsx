@@ -39,7 +39,7 @@ export const ProfilePage = memo(function ProfilePage({
     const [changePwError, setChangePwError] = useState('');
 
     const primaryRole = currentUser.assignments[0]?.roleName || 'No Role';
-    const publicId = currentUser.publicId ?? formatUserPublicId(currentUser.id);
+    const publicId = currentUser.publicId ?? formatUserPublicId();
 
     const initials = React.useMemo(() => {
         const name = (currentUser.username || '').trim();

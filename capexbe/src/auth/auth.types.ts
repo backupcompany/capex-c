@@ -38,7 +38,9 @@ export type AuthMeAssignmentDto = {
 };
 
 export type AuthMeDto = {
-  /** Opaque account ref — numeric id is not exposed on the wire. */
+  /** Authenticated caller's own DB id (self only — needed so FE never Hashids-decodes). */
+  id: number;
+  /** Opaque account ref for URLs/UI. */
   publicId: string;
   username: string;
   email: string;

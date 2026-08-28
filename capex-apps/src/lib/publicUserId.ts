@@ -1,44 +1,16 @@
-import Hashids from 'hashids';
+/**
+ * Client-safe public id helpers — opaque strings from the API only.
+ * Never encode/decode numeric ids in the browser.
+ */
 
-const DEFAULT_SALT = 'capex-siloam-public-id-v1';
-const MIN_LENGTH = 8;
-
-let codec: Hashids | null = null;
-
-function getCodec(): Hashids {
-  if (!codec) {
-    const salt =
-      (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_PUBLIC_ID_SALT : undefined)?.trim() ||
-      DEFAULT_SALT;
-    codec = new Hashids(salt, MIN_LENGTH);
-  }
-  return codec;
+/** Display helper — never invent tokens on the client. */
+export function formatUserPublicId(publicIdOrFallback?: string | null): string {
+  const t = String(publicIdOrFallback ?? '').trim();
+  return t || '—';
 }
 
-/** Mask numeric user id for UI/URL — DB & API tetap pakai angka. */
-export function encodeUserPublicId(userId: number): string {
-  if (!Number.isFinite(userId) || userId <= 0) return '';
-  return getCodec().encode(userId);
-}
-
-export function decodeUserPublicId(token: string | null | undefined): number | null {
-  const trimmed = String(token ?? '').trim();
-  if (!trimmed) return null;
-  const decoded = getCodec().decode(trimmed);
-  if (decoded.length !== 1) return null;
-  const id = Number(decoded[0]);
-  return Number.isFinite(id) && id > 0 ? id : null;
-}
-
-export function formatUserPublicId(userId: number): string {
-  const encoded = encodeUserPublicId(userId);
-  return encoded || '—';
-}
-
-if (process.env.NODE_ENV !== 'production') {
-  const sample = encodeUserPublicId(148);
-  const roundTrip = decodeUserPublicId(sample);
-  if (roundTrip !== 148) {
-    throw new Error(`publicUserId round-trip failed: ${sample} -> ${roundTrip}`);
-  }
+/** True if token looks like a non-empty opaque public id (not a bare integer). */
+export function isOpaquePublicId(token: string | null | undefined): boolean {
+  const t = String(token ?? '').trim();
+  return t.length >= 4 && !/^\d+$/.test(t);
 }

@@ -2,17 +2,16 @@ import Hashids from 'hashids';
 import { BadRequestException } from '@nestjs/common';
 import { getAuthRequestContext } from '../auth/auth-request-context';
 
-const DEFAULT_SALT = 'capex-siloam-public-id-v1';
+/** Rotated after client salt exposure (cyber finding). Override via PUBLIC_ID_SALT in prod. */
+const DEFAULT_SALT = 'capex-siloam-public-id-v2';
 const MIN_LENGTH = 8;
 
 let codec: Hashids | null = null;
 
 function getCodec(): Hashids {
   if (!codec) {
-    const salt =
-      process.env.PUBLIC_ID_SALT?.trim() ||
-      process.env.NEXT_PUBLIC_PUBLIC_ID_SALT?.trim() ||
-      DEFAULT_SALT;
+    // Server-only — never read NEXT_PUBLIC_* (would encourage client bundling of the salt).
+    const salt = process.env.PUBLIC_ID_SALT?.trim() || DEFAULT_SALT;
     codec = new Hashids(salt, MIN_LENGTH);
   }
   return codec;

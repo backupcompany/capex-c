@@ -5,17 +5,15 @@ import { isDefinitiveUnauthenticated } from '@/lib/auth/sessionValidity';
 import { fetchAppInitPackFromBackend } from '@/services/appBootstrapApi';
 import { useBackendSession } from '@/lib/auth/authConstants';
 import { readCachedAuthUser } from '@/lib/authSessionCache';
-import { decodeUserPublicId } from '@/lib/publicUserId';
 
-/** User id for backend bootstrap — never trust local cache without a live /me in BFF mode. */
+/** User id for backend bootstrap — never Hashids-decode in the browser. */
 async function resolveBootstrapUserId(): Promise<number | null> {
   if (typeof window === 'undefined') return null;
 
   if (useBackendSession()) {
     const me = await fetchAuthSession();
-    if (me?.authenticated && me.user?.publicId) {
-      const uid = decodeUserPublicId(me.user.publicId);
-      if (uid) return uid;
+    if (me?.authenticated && me.user?.id != null && Number.isFinite(me.user.id)) {
+      return me.user.id;
     }
     // Guest / logged-out: do not use sessionStorage/disk cache — that fires pack+refresh 401s.
     if (isDefinitiveUnauthenticated(me)) return null;

@@ -1,28 +1,15 @@
+/** @deprecated Prefer notificationService via BFF — identity from JWT, no userId in body. */
 'use server';
 
-import { proxyAuthToBackend } from '@/lib/auth/authBff';
 import { proxyBePost } from '@/lib/auth/beProxy';
-import { decodeUserPublicId } from '@/lib/publicUserId';
-
-async function resolveServerUserId(): Promise<number | null> {
-  const meRes = await proxyAuthToBackend('/session', { method: 'GET' });
-  if (!meRes.ok) return null;
-  const me = (await meRes.json()) as { authenticated?: boolean; user?: { publicId?: string } };
-  if (!me.authenticated || !me.user?.publicId) return null;
-  const userId = decodeUserPublicId(me.user.publicId);
-  return userId ?? null;
-}
 
 /** @deprecated Prefer notificationService.markNotificationAsRead via BFF. */
 export async function markNotificationReadAction(
   notificationId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const userId = await resolveServerUserId();
-  if (userId == null) return { ok: false, error: 'Unauthorized' };
-
   const res = await proxyBePost(
     '/notifications/mark-read',
-    JSON.stringify({ userId, notificationId }),
+    JSON.stringify({ notificationId }),
     null,
   );
   if (!res.ok) {
@@ -34,10 +21,7 @@ export async function markNotificationReadAction(
 
 /** @deprecated Prefer notificationService.markAllNotificationsAsRead via BFF. */
 export async function markAllNotificationsReadAction(): Promise<{ ok: true } | { ok: false; error: string }> {
-  const userId = await resolveServerUserId();
-  if (userId == null) return { ok: false, error: 'Unauthorized' };
-
-  const res = await proxyBePost('/notifications/mark-all-read', JSON.stringify({ userId }), null);
+  const res = await proxyBePost('/notifications/mark-all-read', JSON.stringify({}), null);
   if (!res.ok) {
     const text = await res.text();
     return { ok: false, error: text || 'Failed to mark all notifications read' };

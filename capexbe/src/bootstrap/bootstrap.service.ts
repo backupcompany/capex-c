@@ -48,11 +48,12 @@ export class BootstrapService {
       throw new UnauthorizedException('User not found');
     }
 
+    // exposeNumericId: self only — FE must not Hashids-decode publicId in the browser.
     const sanitizedSelf = sanitizeUsersForDirectory(
       [selfUser as Record<string, unknown>],
       userId,
       includePii,
-      false,
+      true,
     );
     const self = sanitizedSelf[0];
     const multiYears = buildMultiYearsShellFromRows(multiYearRows);

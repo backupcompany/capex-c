@@ -29,7 +29,6 @@ import * as notificationService from '@/services/notificationService';
 import { NAV_ITEMS } from '@/constants';
 import { canNavigateToPage } from '@/lib/pagePermissions';
 import { pageToHref, pathnameToPage, profilePublicIdFromPathname } from '@/lib/pageRoutes';
-import { decodeUserPublicId, encodeUserPublicId } from '@/lib/publicUserId';
 import { resolvePostLoginLandingPage } from '@/lib/postLoginLanding';
 import { queryKeys } from '@/lib/query-keys';
 import {
@@ -839,15 +838,12 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
   const hrefForPage = useCallback(
     (page: Page) => {
-      if (page === Page.Profile && currentUser?.id) {
-        return pageToHref(
-          page,
-          currentUser.publicId?.trim() || encodeUserPublicId(currentUser.id),
-        );
+      if (page === Page.Profile && currentUser?.publicId?.trim()) {
+        return pageToHref(page, currentUser.publicId.trim());
       }
       return pageToHref(page);
     },
-    [currentUser?.id],
+    [currentUser?.publicId],
   );
 
   const handleNavigation = useCallback((targetPage: Page) => {
@@ -880,13 +876,13 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
   /** Profile URL pakai public id — `/profile` atau id orang lain di-redirect ke akun sendiri. */
   useEffect(() => {
-    if (!currentUser?.id || routePage !== Page.Profile) return;
-    const canonical = encodeUserPublicId(currentUser.id);
+    if (!currentUser?.publicId?.trim() || routePage !== Page.Profile) return;
+    const canonical = currentUser.publicId.trim();
     const pathToken = profilePublicIdFromPathname(pathname);
-    if (!pathToken || decodeUserPublicId(pathToken) !== currentUser.id) {
+    if (!pathToken || pathToken !== canonical) {
       router.replace(pageToHref(Page.Profile, canonical));
     }
-  }, [currentUser?.id, routePage, pathname, router]);
+  }, [currentUser?.publicId, routePage, pathname, router]);
 
   const handlePoGrDataRefresh = useCallback(() => {
     refreshBudgetData();
@@ -1042,7 +1038,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
             }
             const sessionIdentity = {
               publicId,
-              id: decodeUserPublicId(publicId) ?? undefined,
+              id: me.user.id,
             };
             let fromList = usersSnapshot.find(
               (u) =>

@@ -1,20 +1,16 @@
 import type { User } from '@/types';
 import type { AppInitPack } from '@/services/appBootstrapApi';
-import { decodeUserPublicId, formatUserPublicId } from '@/lib/publicUserId';
+import { formatUserPublicId } from '@/lib/publicUserId';
 
 function hydratePackUser(row: User, sessionUser: Pick<User, 'publicId'> & { id?: number }): User {
-  const id =
-    row.id ??
-    (row.publicId ? decodeUserPublicId(row.publicId) : null) ??
-    sessionUser.id ??
-    decodeUserPublicId(sessionUser.publicId);
+  const id = row.id ?? sessionUser.id;
   if (id == null || !Number.isFinite(id)) {
     throw new Error('Cannot hydrate user without resolvable id');
   }
   return {
     ...row,
     id,
-    publicId: row.publicId ?? sessionUser.publicId ?? formatUserPublicId(id),
+    publicId: row.publicId ?? sessionUser.publicId ?? formatUserPublicId(),
   };
 }
 

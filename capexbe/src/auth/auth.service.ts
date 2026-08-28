@@ -80,6 +80,7 @@ export class AuthService {
 
   toMeDto(user: ResolvedAppUser, sessionMeta?: AuthSessionMetaDto): AuthMeDto {
     return {
+      id: user.id,
       publicId: encodeUserPublicId(user.id),
       username: user.username,
       email: user.email,

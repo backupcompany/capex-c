@@ -1,6 +1,6 @@
 import type { User, UserAssignment, UserRole } from '../../types';
 import { readCachedAuthUser } from '../authSessionCache';
-import { formatUserPublicId, decodeUserPublicId } from '../publicUserId';
+import { formatUserPublicId } from '../publicUserId';
 import {
   findRoleForAssignment,
   isUserSuperAdmin,
@@ -104,17 +104,16 @@ export function mergeAuthIdentityUser(
 
   const resolvedId =
     (identity.id != null && Number.isFinite(identity.id) ? identity.id : null) ??
-    (identity.publicId ? decodeUserPublicId(identity.publicId) : null) ??
     previous?.id ??
     (cached?.id != null && cached.publicId === identity.publicId ? cached.id : null);
 
   if (resolvedId == null || !Number.isFinite(resolvedId)) {
-    throw new Error('Invalid session identity: missing publicId');
+    throw new Error('Invalid session identity: missing id (server must return id for self)');
   }
 
   return {
     id: resolvedId,
-    publicId: identity.publicId ?? previous?.publicId ?? formatUserPublicId(resolvedId),
+    publicId: identity.publicId ?? previous?.publicId ?? formatUserPublicId(),
     username: identity.username,
     email: identity.email,
     phoneNumber: previous?.phoneNumber,

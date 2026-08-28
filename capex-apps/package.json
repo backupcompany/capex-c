@@ -22,7 +22,6 @@
     "@tanstack/react-query-persist-client": "^5.100.9",
     "@tanstack/react-virtual": "^3.14.3",
     "axios": "^1.18.1",
-    "hashids": "^2.3.0",
     "jose": "^6.2.4",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
