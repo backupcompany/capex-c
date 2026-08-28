@@ -553,6 +553,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
               ? mergeAuthIdentityUser(
                   {
                     publicId,
+                    id: me.user.id,
                     username: me.user.username,
                     email: me.user.email,
                   },
@@ -1118,6 +1119,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
                 const hydratedUser = mergeAuthIdentityUser(
                   {
                     publicId: meAfterRefresh.user.publicId?.trim() || undefined,
+                    id: meAfterRefresh.user.id,
                     username: meAfterRefresh.user.username,
                     email: meAfterRefresh.user.email,
                   },
