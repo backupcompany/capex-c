@@ -21,6 +21,17 @@ export function assertProductionEnv(): void {
     throw new Error(`Production startup blocked — missing env: ${missing.join(', ')}`);
   }
 
+  // In-stack Docker PostgREST (USE_VPS_POSTGRES≠1): never point at host loopback.
+  // 127.0.0.1:54321 inside capex-api is the API container, not PostgREST.
+  const useVps =
+    process.env.USE_VPS_POSTGRES === '1' || process.env.USE_VPS_POSTGRES === 'true';
+  const supabaseUrl = process.env.SUPABASE_URL!.trim();
+  if (!useVps && /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:|\/|$)/i.test(supabaseUrl)) {
+    throw new Error(
+      'Production startup blocked — SUPABASE_URL must be the Docker service (e.g. http://capex-postgrest), not 127.0.0.1/localhost',
+    );
+  }
+
   const jwtSecret = process.env.JWT_ACCESS_SECRET!.trim();
   if (jwtSecret === DEFAULT_JWT_SECRET || jwtSecret.length < 32) {
     throw new Error('Production startup blocked — JWT_ACCESS_SECRET must be a strong random value (≥32 chars)');

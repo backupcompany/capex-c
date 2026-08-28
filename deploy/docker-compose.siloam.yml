@@ -70,6 +70,34 @@ services:
       retries: 5
       start_period: 10s
 
+  # After gateway is up, refresh PostgREST schema cache (stale cache → auth_sessions POST 404).
+  capex-pgrst-reload:
+    image: ${CAPEX_POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    container_name: capex-pgrst-reload
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    entrypoint:
+      [
+        "psql",
+        "-h",
+        "capex-postgres",
+        "-U",
+        "${POSTGRES_USER:-capex_app}",
+        "-d",
+        "${POSTGRES_DB:-capex}",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "NOTIFY pgrst, 'reload schema';",
+      ]
+    depends_on:
+      capex-postgres:
+        condition: service_healthy
+      capex-postgrest:
+        condition: service_healthy
+    networks: [capex-db]
+
   capex-redis:
     image: redis:7-alpine
     container_name: capex-redis
@@ -94,14 +122,18 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      # Siloam in-stack PostgREST — NOT laptop VPS-tunnel mode (override env_file)
+      # Siloam in-stack PostgREST — NOT laptop VPS-tunnel mode (override env_file).
+      # Hardcode URL: .env.compose often has http://127.0.0.1:54321 for host curls;
+      # that loopback inside capex-api is the API itself → "Database tidak tersedia".
       USE_VPS_POSTGRES: "0"
       CURSOR_TUNNEL_MODE: "false"
-      SUPABASE_URL: ${SUPABASE_URL:-http://capex-postgrest}
+      SUPABASE_URL: http://capex-postgrest
       REDIS_URL: ${REDIS_URL:-redis://capex-redis:6379}
     depends_on:
       capex-postgrest:
         condition: service_healthy
+      capex-pgrst-reload:
+        condition: service_completed_successfully
       capex-redis:
         condition: service_healthy
     networks: [capex-db]
