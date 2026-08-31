@@ -77,7 +77,7 @@ async function postDuplicate<T>(path: string, body: Record<string, unknown>): Pr
 export async function searchDuplicateProjects(
   params: SearchParams,
 ): Promise<DuplicateSearchResult<DuplicateProjectHit>> {
-  const cacheKey = `dup:proj:${params.userId}:${params.periodName}:${params.query}:${params.cursor ?? 0}`;
+  const cacheKey = `dup:proj:${params.userId}:${params.periodName}:${params.huId ?? ''}:${params.query}:${params.cursor ?? 0}`;
   const fallback = { items: [], nextCursor: null, total: 0 };
   return (
     (await withRequestCache(

@@ -38,6 +38,8 @@ export async function searchDuplicateProjects(
 
   for (const column of ['project_name', 'project_code'] as const) {
     let q = client.from('projects').select('*').eq('period_name', pn).ilike(column, sqlPat);
+    // Same-HU only: duplicate warning must not list projects from other units.
+    if (opts.huId) q = q.eq('hospital_unit_id', opts.huId);
     if (opts.excludeId) q = q.neq('id', opts.excludeId);
     const { data, error } = await q.limit(CANDIDATE_CAP);
     if (error) throw new Error(`duplicate project search ${column}: ${error.message}`);
@@ -54,11 +56,7 @@ export async function searchDuplicateProjects(
       String(row.project_code ?? row.projectCode ?? ''),
     );
     if (score < 50) continue;
-    const hit = mapProjectRowToHit(row, huNameById, score);
-    if (opts.huId && hit.hospitalUnitId === opts.huId) {
-      hit.matchScore += 5;
-    }
-    scored.push(hit);
+    scored.push(mapProjectRowToHit(row, huNameById, score));
   }
 
   scored.sort((a, b) => b.matchScore - a.matchScore || a.projectCode.localeCompare(b.projectCode));
