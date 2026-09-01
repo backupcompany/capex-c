@@ -48,7 +48,7 @@ interface AppBrandProps {
 
 const AppBrand: React.FC<AppBrandProps> = ({ isCollapsed }) => (
   <div
-    className={`bg-white/95 rounded-xl shadow-soft mb-4 flex items-center justify-center select-none ${
+    className={`bg-white/95 rounded-xl shadow-soft flex items-center justify-center select-none ${
       isCollapsed ? 'p-2 min-h-[2.5rem]' : 'p-4 min-h-[4rem]'
     }`}
   >
@@ -175,13 +175,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const showCollapsed = isCollapsed && isDesktop;
 
   return (
-    <div className={`relative shrink-0 ${className ?? ''}`}>
+    <div className={`relative shrink-0 h-full min-h-0 ${className ?? ''}`}>
       <aside
-        className={`bg-[#4f39f6] shadow-lg flex flex-col border-r border-[#3e2dd0] z-50 h-full
+        className={`bg-[#4f39f6] shadow-lg flex flex-col gap-3 border-r border-[#3e2dd0] z-50
+          h-full min-h-0 overflow-hidden
           transition-[width,transform,padding] duration-300 ease-in-out
           fixed inset-y-0 left-0 w-64 p-4
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:relative md:translate-x-0
+          md:relative md:inset-auto md:translate-x-0
           ${showCollapsed ? 'md:w-[4.5rem] md:p-2' : 'md:w-64 md:p-4'}`}
       >
         <div className="shrink-0">
@@ -197,7 +198,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden" aria-label="Main Navigation">
+      {/* min-h-0: flex child must shrink so overflow-y-auto scrolls instead of clipping top items */}
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" aria-label="Main Navigation">
         <ul role="menu">
           {navLoading ? (
             <li className="space-y-2 px-1 py-2" aria-busy="true" aria-label="Memuat menu">
@@ -226,7 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </ul>
       </nav>
 
-      <div className="mt-auto pt-4 border-t border-white/20">
+      <div className="shrink-0 border-t border-white/20 pt-3">
         <div className={`flex flex-col ${showCollapsed ? 'items-center space-y-2' : 'space-y-3'}`}>
           {currentUser && (
             <div
