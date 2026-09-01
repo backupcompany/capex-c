@@ -20,9 +20,9 @@ export function UsersRolesTab({
   patchRolesList,
 }: UsersRolesTabProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <section>
-        <h2 className="text-base font-bold text-siloam-text-primary mb-2">User Management & Role Assignment</h2>
+        <h2 className="text-lg font-bold text-siloam-text-primary mb-3">User Management & Role Assignment</h2>
         <UserManagement
           users={pack.users ?? []}
           roles={pack.roles ?? []}
@@ -34,7 +34,7 @@ export function UsersRolesTab({
         />
       </section>
       <section>
-        <h2 className="text-base font-bold text-siloam-text-primary mb-2">Role Management</h2>
+        <h2 className="text-lg font-bold text-siloam-text-primary mb-3">Role Management</h2>
         <RoleManagement
           roles={pack.roles ?? []}
           onRolesListPatch={patchRolesList}
