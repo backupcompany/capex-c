@@ -56,8 +56,10 @@ export const TAB_REQUIRED_SLICES: Record<ConfigurationTab, ConfigSliceKey[]> = {
   'Data Management': ['allPeriods'],
 };
 
-/** Tidak ada auto-revalidate saat ganti tab — master hanya berubah lewat Save eksplisit. */
-export const TAB_REVALIDATE_ON_ACTIVE_SLICES: Partial<Record<ConfigurationTab, ConfigSliceKey[]>> = {};
+/** Tidak auto-revalidate semua tab; Users & Roles harus fresh biar role baru dari admin lain terlihat. */
+export const TAB_REVALIDATE_ON_ACTIVE_SLICES: Partial<Record<ConfigurationTab, ConfigSliceKey[]>> = {
+  'Users & Roles': ['roles', 'users'],
+};
 
 const BACKGROUND_SLICES: ConfigSliceKey[] = CONFIGURATION_SLICE_KEYS.filter(
   (k) => !INITIAL_CRITICAL_SLICES.includes(k),

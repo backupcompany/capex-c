@@ -5,6 +5,7 @@ import { createSupabaseClient, getSupabaseServiceKey } from '../shared/supabase-
 import { assertEmailDomainAllowedForUser } from '../shared/prod-env.util';
 import {
   perfCacheDelete,
+  perfCacheDeleteByPattern,
   perfCacheDeleteByPrefix,
   perfCacheGet,
   perfCacheSet,
@@ -345,9 +346,26 @@ export class ConfigurationService {
     await perfCacheDeleteByPrefix(`app:table:configuration:slice:${userId}:`);
   }
 
-  private async invalidateForCrudEntity(userId: number, entity: CrudEntityKey): Promise<void> {
+  /** Shared master slices (roles, HU, …) — wipe every user cache, not only the actor. */
+  private async invalidateSlicesGlobally(slices: ConfigurationSliceKey[]): Promise<void> {
+    const unique = [...new Set(slices)];
+    for (const slice of unique) {
+      for (const key of [...this.responseCache.keys()]) {
+        if (
+          key.startsWith('app:table:configuration:slice:') &&
+          key.endsWith(`:${slice}`)
+        ) {
+          this.responseCache.delete(key);
+          this.inflight.delete(key);
+        }
+      }
+      await perfCacheDeleteByPattern(`app:table:configuration:slice:*:${slice}`);
+    }
+  }
+
+  private async invalidateForCrudEntity(_userId: number, entity: CrudEntityKey): Promise<void> {
     const slices = CRUD_SLICE_INVALIDATION[entity];
-    if (slices?.length) await this.invalidateSlices(userId, slices);
+    if (slices?.length) await this.invalidateSlicesGlobally(slices);
   }
 
   private isPkConflict(error: unknown, constraintName: string): boolean {
