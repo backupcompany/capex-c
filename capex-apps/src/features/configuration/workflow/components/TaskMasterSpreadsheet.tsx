@@ -5,7 +5,6 @@ import { Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import type { Task } from '@/types';
 import { SpreadsheetTable, type SpreadsheetColumn } from '@/components/organisms/SpreadsheetTable/SpreadsheetTable';
 import { useToast } from '@/contexts/ToastContext';
-import * as configService from '@/services/configService';
 import {
   deleteConfigViaBeOrFallback,
   saveConfigViaBeOrFallback,
@@ -31,6 +30,7 @@ import {
 import { SpreadsheetPasteToolbar } from './SpreadsheetPasteToolbar';
 import { SystemTriggerDropdown } from './SystemTriggerDropdown';
 import type { SystemTriggerEvent } from '@/types';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 const DEFAULT_EMPTY_ROWS = 3;
 
@@ -38,9 +38,17 @@ type TaskMasterSpreadsheetProps = {
   tasks: Task[];
   onSaved: () => void;
   onEditDetail?: (task: Task | null) => void;
+  unsavedKey?: string;
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
 };
 
-export function TaskMasterSpreadsheet({ tasks, onSaved, onEditDetail }: TaskMasterSpreadsheetProps) {
+export function TaskMasterSpreadsheet({
+  tasks,
+  onSaved,
+  onEditDetail,
+  unsavedKey = 'task-spreadsheet',
+  onUnsavedReport,
+}: TaskMasterSpreadsheetProps) {
   const { showToast } = useToast();
   const [rows, setRows] = useState<TaskMasterSpreadsheetRow[]>([]);
   const [validationErrors, setValidationErrors] = useState<TaskSpreadsheetValidation[]>([]);
@@ -212,6 +220,20 @@ export function TaskMasterSpreadsheet({ tasks, onSaved, onEditDetail }: TaskMast
       setIsSaving(false);
     }
   }, [rows, tasks, showToast, onSaved]);
+
+  useEffect(() => {
+    if (!onUnsavedReport) return;
+    if (!dirty) {
+      onUnsavedReport(unsavedKey, null);
+      return;
+    }
+    onUnsavedReport(unsavedKey, {
+      label: 'Task Master (spreadsheet)',
+      save: handleSave,
+      discard: resetFromTasks,
+    });
+    return () => onUnsavedReport(unsavedKey, null);
+  }, [dirty, handleSave, resetFromTasks, onUnsavedReport, unsavedKey]);
 
   const handlePasteText = useCallback(
     (text: string) => {

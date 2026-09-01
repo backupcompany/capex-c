@@ -1,18 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole, HIERARCHY_LEVELS, PermissionLevel, HierarchyLevel, Permission } from '@/types';
-import * as configService from '@/services/configService';
 import { useToast } from '@/contexts/ToastContext';
 import { Dropdown } from '@/components/molecules/Dropdown/Dropdown';
 import {
   deleteConfigViaBeOrFallback,
-  deleteConfigurationEntityViaBackend,
-  saveConfigurationEntityViaBackend,
+  saveConfigViaBeOrFallback,
 } from '@/services/configurationCrudApi';
 import { RolePermissionsEditor } from '@/features/configuration/users-roles/components/RolePermissionsEditor';
-import { getCurrentAppUserIdFromSession } from '@/features/configuration/shared/configSession';
-import { allocateNextRoleId } from '@/features/configuration/users-roles/utils/roleIdAllocation';
 import { normalizeRolesWithAllLevels } from '@/features/configuration/users-roles/utils/roleNormalization';
 
 export const RoleManagement: React.FC<{
@@ -21,7 +17,6 @@ export const RoleManagement: React.FC<{
 }> = ({ roles, onRolesListPatch }) => {
     const { showToast } = useToast();
     const [editedRoles, setEditedRoles] = useState<UserRole[]>([]);
-    const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
     const [isAddingNewRole, setIsAddingNewRole] = useState(false);
@@ -30,29 +25,29 @@ export const RoleManagement: React.FC<{
     const persistedRoleIds = useMemo(() => new Set(roles.map((r) => r.id)), [roles]);
 
     useEffect(() => {
-        if (isDirty) return;
+        if (isSaving) return;
 
         const rolesWithAllLevels = normalizeRolesWithAllLevels(
             JSON.parse(JSON.stringify(roles)) as UserRole[],
         );
 
         setEditedRoles(rolesWithAllLevels);
-        setIsDirty(false);
 
         if (selectedRoleId && !rolesWithAllLevels.some((r) => r.id === selectedRoleId)) {
             setSelectedRoleId(rolesWithAllLevels.length > 0 ? rolesWithAllLevels[0].id : null);
         } else if (!selectedRoleId && rolesWithAllLevels.length > 0) {
             setSelectedRoleId(rolesWithAllLevels[0].id);
         }
-    }, [roles, selectedRoleId, isDirty]);
+    }, [roles, selectedRoleId, isSaving]);
 
     const selectedRole = useMemo(
         () => editedRoles.find((r) => r.id === selectedRoleId),
         [editedRoles, selectedRoleId],
     );
 
-    const updatePermission = (level: HierarchyLevel, newPermission: PermissionLevel) => {
-        if (!selectedRoleId) return;
+    const updatePermission = async (level: HierarchyLevel, newPermission: PermissionLevel) => {
+        if (!selectedRoleId || isSaving) return;
+        const prevRoles = editedRoles;
         const nextRoles = editedRoles.map((role) => {
             if (role.id !== selectedRoleId) return role;
             const existingPermission = role.permissions.find((p) => p.hierarchy === level);
@@ -63,9 +58,21 @@ export const RoleManagement: React.FC<{
                 : [...role.permissions, { hierarchy: level, permission: newPermission }];
             return { ...role, permissions: nextPermissions };
         });
+        const roleToSave = nextRoles.find((r) => r.id === selectedRoleId);
+        if (!roleToSave) return;
+
         setEditedRoles(nextRoles);
-        onRolesListPatch?.(nextRoles);
-        setIsDirty(true);
+        setIsSaving(true);
+        try {
+            const saved = await saveConfigViaBeOrFallback<UserRole>('role', roleToSave);
+            if (!saved) throw new Error(`Gagal menyimpan izin '${roleToSave.roleName}'.`);
+            onRolesListPatch?.(nextRoles);
+        } catch (e) {
+            setEditedRoles(prevRoles);
+            showToast(e instanceof Error ? e.message : 'Gagal menyimpan izin role.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleStartAddNewRole = () => {
@@ -73,7 +80,7 @@ export const RoleManagement: React.FC<{
         setNewRoleName('');
     };
 
-    const handleConfirmAddNewRole = () => {
+    const handleConfirmAddNewRole = async () => {
         const trimmed = newRoleName.trim();
         if (!trimmed) {
             showToast('Nama role wajib diisi.', 'error');
@@ -83,17 +90,40 @@ export const RoleManagement: React.FC<{
             showToast('Nama role sudah ada.', 'error');
             return;
         }
-        const newId = allocateNextRoleId([...roles, ...editedRoles]);
-        const newRole: UserRole = {
-            id: newId,
-            roleName: trimmed,
-            permissions: HIERARCHY_LEVELS.map((level) => ({ hierarchy: level, permission: 'Hide' })),
-        };
-        setEditedRoles([...editedRoles, newRole]);
-        setSelectedRoleId(newId);
-        setIsDirty(true);
-        setIsAddingNewRole(false);
-        setNewRoleName('');
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            const draft: UserRole = {
+                id: 0,
+                roleName: trimmed,
+                permissions: HIERARCHY_LEVELS.map((level) => ({
+                    hierarchy: level,
+                    permission: 'Hide',
+                })),
+            };
+            const saved = await saveConfigViaBeOrFallback<UserRole>('role', draft);
+            if (!saved) throw new Error(`Gagal menyimpan role '${trimmed}'.`);
+            const savedId = Number((saved as UserRole).id);
+            const persisted: UserRole = {
+                ...draft,
+                id: Number.isFinite(savedId) && savedId > 0 ? savedId : draft.id,
+                roleName: (saved as UserRole).roleName || trimmed,
+            };
+            if (!Number.isFinite(persisted.id) || persisted.id <= 0) {
+                throw new Error('Server tidak mengembalikan id role yang valid.');
+            }
+            const nextRoles = [...editedRoles, persisted];
+            setEditedRoles(nextRoles);
+            setSelectedRoleId(persisted.id);
+            setIsAddingNewRole(false);
+            setNewRoleName('');
+            onRolesListPatch?.(nextRoles);
+            showToast(`Role '${persisted.roleName}' tersimpan.`, 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Gagal membuat role.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleCancelAddNewRole = () => {
@@ -113,13 +143,12 @@ export const RoleManagement: React.FC<{
             return;
         }
         try {
-            if (persistedRoleIds.has(roleId)) {
+            if (persistedRoleIds.has(roleId) || roleId > 0) {
                 await deleteConfigViaBeOrFallback('role', roleId);
             }
             const nextRoles = editedRoles.filter((r) => r.id !== roleId);
             setEditedRoles(nextRoles);
             setSelectedRoleId(nextRoles.length > 0 ? nextRoles[0].id : null);
-            setIsDirty(false);
             onRolesListPatch?.(nextRoles);
             showToast('Role berhasil dihapus.', 'success');
         } catch (e) {
@@ -127,66 +156,9 @@ export const RoleManagement: React.FC<{
         }
     };
 
-    const handleSave = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
-        try {
-            const actorId = getCurrentAppUserIdFromSession();
-            if (actorId == null) {
-                throw new Error('Sesi user tidak ditemukan. Silakan login ulang.');
-            }
-            const selectedNameBeforeSave = selectedRole?.roleName ?? '';
-            const savedRoles = await Promise.all(
-                editedRoles.map(async (role) => {
-                    const savedFromBe = await saveConfigurationEntityViaBackend<UserRole>(
-                        actorId,
-                        'role',
-                        role,
-                        { strictBackend: true },
-                    );
-                    if (!savedFromBe) {
-                        throw new Error(`Gagal menyimpan role '${role.roleName}'.`);
-                    }
-                    const savedId = Number((savedFromBe as UserRole).id);
-                    return {
-                        ...role,
-                        id: Number.isFinite(savedId) && savedId > 0 ? savedId : role.id,
-                        roleName: (savedFromBe as UserRole).roleName || role.roleName,
-                    } as UserRole;
-                }),
-            );
-            const nextSelectedId =
-                savedRoles.find((r) => r.roleName === selectedNameBeforeSave)?.id ??
-                savedRoles[0]?.id ??
-                null;
-            setEditedRoles(savedRoles);
-            setSelectedRoleId(nextSelectedId);
-            setIsDirty(false);
-            onRolesListPatch?.(savedRoles);
-            showToast('Role berhasil disimpan.', 'success');
-        } catch (e) {
-            showToast(e instanceof Error ? e.message : 'Gagal menyimpan role.', 'error');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleCancel = () => {
-        const restored = normalizeRolesWithAllLevels(
-            JSON.parse(JSON.stringify(roles)) as UserRole[],
-        );
-        setEditedRoles(restored);
-        onRolesListPatch?.(restored);
-        const currentSelectedName = editedRoles.find((r) => r.id === selectedRoleId)?.roleName;
-        const newSelectedId =
-            restored.find((r) => r.roleName === currentSelectedName)?.id || restored[0]?.id || null;
-        setSelectedRoleId(newSelectedId);
-        setIsDirty(false);
-    };
-
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center flex-wrap gap-4">
+        <div className="space-y-3">
+            <div className="flex justify-between items-center flex-wrap gap-3">
                 <div className="flex items-center gap-4">
                     <div className="w-64">
                         <Dropdown
@@ -218,22 +190,27 @@ export const RoleManagement: React.FC<{
                                 type="text"
                                 value={newRoleName}
                                 onChange={(e) => setNewRoleName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmAddNewRole()}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void handleConfirmAddNewRole();
+                                }}
                                 placeholder="New role name"
                                 className="border border-siloam-border rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-siloam-blue"
                                 autoFocus
+                                disabled={isSaving}
                             />
                             <button
                                 type="button"
-                                onClick={handleConfirmAddNewRole}
-                                className="px-3 py-1.5 rounded-lg bg-siloam-blue text-white text-sm hover:bg-siloam-blue/90"
+                                onClick={() => void handleConfirmAddNewRole()}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 rounded-lg bg-siloam-blue text-white text-sm hover:bg-siloam-blue/90 disabled:opacity-50"
                             >
-                                Add
+                                {isSaving ? 'Saving…' : 'Add'}
                             </button>
                             <button
                                 type="button"
                                 onClick={handleCancelAddNewRole}
-                                className="px-3 py-1.5 rounded-lg border border-siloam-border text-sm hover:bg-siloam-surface"
+                                disabled={isSaving}
+                                className="px-3 py-1.5 rounded-lg border border-siloam-border text-sm hover:bg-siloam-surface disabled:opacity-50"
                             >
                                 Cancel
                             </button>
@@ -248,33 +225,18 @@ export const RoleManagement: React.FC<{
                             + New Role
                         </button>
                     )}
-                    {isDirty && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                disabled={isSaving}
-                                className="px-4 py-2 rounded-xl border text-sm border-siloam-border hover:bg-siloam-bg disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="px-4 py-2 rounded-xl bg-siloam-green text-sm text-white hover:bg-siloam-green/90 disabled:opacity-50"
-                            >
-                                {isSaving ? 'Saving…' : 'Save Changes'}
-                            </button>
-                        </>
-                    )}
+                    {isSaving ? (
+                        <span className="text-xs text-siloam-text-secondary">Menyimpan…</span>
+                    ) : null}
                 </div>
             </div>
 
             {selectedRole ? (
                 <RolePermissionsEditor
                     selectedRole={selectedRole}
-                    onUpdatePermission={updatePermission}
+                    onUpdatePermission={(level, permission) => {
+                        void updatePermission(level, permission);
+                    }}
                 />
             ) : (
                 <div className="text-center p-12 bg-siloam-bg rounded-lg">
@@ -286,4 +248,3 @@ export const RoleManagement: React.FC<{
         </div>
     );
 };
-

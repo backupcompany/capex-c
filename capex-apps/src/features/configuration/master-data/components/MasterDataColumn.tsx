@@ -134,7 +134,7 @@ export function MasterDataColumn({
         hasActiveControls={list.hasActiveControls}
         onClear={list.clearFilters}
       />
-      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[calc(100dvh-16rem)] overflow-y-auto pr-1">
         {list.filteredItems.map((item) => (
           <div key={item.id} className="bg-siloam-surface p-2.5 rounded-lg border border-siloam-border group">
             <div className="flex justify-between items-start">

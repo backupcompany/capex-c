@@ -16,18 +16,18 @@ export const UserTableRow = memo(function UserTableRow({
 }) {
     return (
         <tr className="bg-white hover:bg-siloam-bg/50 transition-colors">
-            <td className="px-6 py-4 align-top">
+            <td className="px-4 py-2.5 align-middle">
                 <div className="flex items-center">
-                    <div className="h-10 w-10 rounded-full bg-siloam-blue/10 flex items-center justify-center text-siloam-blue font-bold mr-3 flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-siloam-blue/10 flex items-center justify-center text-siloam-blue text-xs font-bold mr-2.5 flex-shrink-0">
                         {user.username.substring(0, 2).toUpperCase()}
                     </div>
-                    <div className="truncate">
-                        <div className="font-semibold text-siloam-text-primary truncate" title={user.username}>{user.username}</div>
+                    <div className="truncate min-w-0">
+                        <div className="font-semibold text-siloam-text-primary truncate text-sm" title={user.username}>{user.username}</div>
                         <div className="text-siloam-text-secondary text-xs truncate" title={user.email}>{user.email}</div>
                     </div>
                 </div>
             </td>
-            <td className="px-6 py-4 align-top">
+            <td className="px-4 py-2.5 align-middle">
                 {user.phoneNumber ? (
                     <div className="flex items-center gap-2 text-siloam-text-primary text-sm">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" className="bi bi-whatsapp text-siloam-green" viewBox="0 0 16 16">
@@ -39,40 +39,34 @@ export const UserTableRow = memo(function UserTableRow({
                     <span className="text-siloam-text-secondary italic text-xs">-</span>
                 )}
             </td>
-            <td className="px-6 py-4 align-top">
-                <div className="space-y-2">
+            <td className="px-4 py-2.5 align-middle">
+                <div className="space-y-1">
                     {user.assignments.map((a, i) => (
                         <div
                             key={`${a.roleId ?? a.roleName ?? 'role'}-${(a.assignedScopes || []).join('|')}-${i}`}
-                            className="flex flex-col text-xs"
+                            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
                         >
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold bg-siloam-blue/10 text-siloam-blue px-2 py-0.5 rounded-full border border-siloam-blue/20">
-                                    {a.roleName}
-                                </span>
-                                <span className="text-siloam-text-secondary">
-                                    in
-                                </span>
-                            </div>
-                            <div className="mt-1 pl-2 border-l-2 border-siloam-border ml-1 text-siloam-text-primary leading-relaxed">
-                                {formatScopes(a.assignedScopes)}
-                            </div>
+                            <span className="font-bold bg-siloam-blue/10 text-siloam-blue px-2 py-0.5 rounded-full border border-siloam-blue/20">
+                                {a.roleName}
+                            </span>
+                            <span className="text-siloam-text-secondary">in</span>
+                            <span className="text-siloam-text-primary">{formatScopes(a.assignedScopes)}</span>
                         </div>
                     ))}
                     {user.assignments.length === 0 && <span className="text-siloam-text-secondary italic">No roles assigned</span>}
                 </div>
             </td>
-            <td className="px-6 py-4 text-right align-top">
-                <div className="flex items-center justify-end gap-3">
+            <td className="px-4 py-2.5 text-right align-middle">
+                <div className="flex items-center justify-end gap-2">
                     <button type="button"
                         onClick={() => onEdit(user)}
-                        className="text-siloam-blue hover:text-siloam-blue/80 font-medium text-xs bg-siloam-blue/5 px-3 py-1.5 rounded-lg hover:bg-siloam-blue/10 transition-colors"
+                        className="text-siloam-blue hover:text-siloam-blue/80 font-medium text-xs bg-siloam-blue/5 px-2.5 py-1 rounded-lg hover:bg-siloam-blue/10 transition-colors"
                     >
                         Edit
                     </button>
                     <button type="button"
                         onClick={() => onDelete(user.id)}
-                        className="text-danger hover:text-red-700 font-medium text-xs bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+                        className="text-danger hover:text-red-700 font-medium text-xs bg-red-50 px-2.5 py-1 rounded-lg hover:bg-red-100 transition-colors"
                     >
                         Delete
                     </button>

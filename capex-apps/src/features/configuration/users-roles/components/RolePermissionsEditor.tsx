@@ -90,7 +90,7 @@ const PermissionBoard: React.FC<{
         {PERMISSION_LEVELS.map((permission) => (
           <div
             key={`${source}-${permission}`}
-            className="bg-siloam-bg border border-siloam-border rounded-lg p-3 min-h-[200px]"
+            className="bg-siloam-bg border border-siloam-border rounded-lg p-2.5 min-h-[120px]"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => handleDrop(e, permission)}
           >
@@ -181,16 +181,12 @@ export const RolePermissionsEditor: React.FC<RolePermissionsEditorProps> = ({
   };
 
   return (
-    <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-4 md:p-5 space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-siloam-border pb-4">
-        <div>
-          <h3 className="text-base font-semibold text-siloam-text-primary">Izin Role — {selectedRole.roleName}</h3>
-          <p className="text-sm text-siloam-text-secondary mt-1">
-            <strong>Akses Screen</strong> hanya mengontrol menu sidebar (buka halaman). Untuk edit data
-            (mis. Budget Plan), set minimal <strong>View &amp; Update</strong> pada{' '}
-            <strong>Akses Screen → Budget Network</strong>, atau modul <strong>Network</strong> /{' '}
-            <strong>Budget</strong> di Hak Operasi Data, atau baris <strong>Budget Network</strong> di
-            Aksi Button. Setelah ubah, klik <strong>Save Changes</strong>.
+    <div className="bg-siloam-surface rounded-xl shadow-soft border border-siloam-border p-3 md:p-4 space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-siloam-border pb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-siloam-text-primary">Izin Role — {selectedRole.roleName}</h3>
+          <p className="text-xs text-siloam-text-secondary mt-0.5">
+            Drag kartu antar kolom, lalu <strong>Save Changes</strong>. Hide = hilang dari sidebar.
           </p>
         </div>
         <div
@@ -228,7 +224,7 @@ export const RolePermissionsEditor: React.FC<RolePermissionsEditorProps> = ({
       </div>
 
       {viewMode === 'board' ? (
-        <div className="space-y-8">
+        <div className="space-y-5 max-h-[min(520px,calc(100dvh-18rem))] overflow-y-auto pr-1">
           <PermissionBoard
             title="Akses Screen (Navigasi)"
             description="Satu kartu = satu halaman. Hide = tidak muncul di sidebar; View Only atau lebih = menu tampil sesuai izin."
@@ -260,7 +256,7 @@ export const RolePermissionsEditor: React.FC<RolePermissionsEditorProps> = ({
           />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 max-h-[min(520px,calc(100dvh-18rem))] overflow-y-auto pr-1">
           <section className="space-y-2">
             <h4 className="text-sm font-semibold text-siloam-text-primary">Akses Screen (Navigasi)</h4>
             <p className="text-xs text-siloam-text-secondary">

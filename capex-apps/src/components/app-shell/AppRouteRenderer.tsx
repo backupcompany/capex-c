@@ -341,6 +341,8 @@ function AppRouteRendererComponent({
           onUsersListPatch={onUsersListPatch}
           onRolesListPatch={onRolesListPatch}
           currentUser={currentUser}
+          setIsPageDirty={setIsPageDirty}
+          setPageActions={setPageActions}
         />
       );
     case Page.Profile:

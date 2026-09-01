@@ -21,6 +21,7 @@ import type { AssetTypeMasterPatch } from '@/components/organisms/AssetTypeManag
 import { TaskEditorModal } from './TaskEditorModal';
 import { WorkflowEditorModal } from './WorkflowEditorModal';
 import { WorkflowSpreadsheetPanel } from './WorkflowSpreadsheetPanel';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 const AssetTypeManagement = lazy(() =>
   import('@/components/organisms/AssetTypeManagement/AssetTypeManagement').then((m) => ({
@@ -42,6 +43,7 @@ export const WorkflowManagement: React.FC<{
   onWorkflowConfigChange: () => void;
   onAssetTypesPatched: (patch: AssetTypeMasterPatch) => void;
   currentUser: User;
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
 }> = ({
   tasks,
   workflows,
@@ -51,6 +53,7 @@ export const WorkflowManagement: React.FC<{
   onWorkflowConfigChange,
   onAssetTypesPatched,
   currentUser,
+  onUnsavedReport,
 }) => {
   const [editMode, setEditMode] = useState<WorkflowEditMode>('standard');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -109,7 +112,19 @@ export const WorkflowManagement: React.FC<{
         <span className="text-sm font-medium text-siloam-text-secondary mr-2">Mode edit:</span>
         <button
           type="button"
-          onClick={() => setEditMode('standard')}
+          onClick={() => {
+            if (editMode === 'spreadsheet') {
+              // Spreadsheet dirty state lives in child registry; confirm before leaving mode.
+              if (
+                !window.confirm(
+                  'Pindah ke mode Standar? Simpan spreadsheet dulu kalau ada edit belum tersimpan.',
+                )
+              ) {
+                return;
+              }
+            }
+            setEditMode('standard');
+          }}
           className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
             editMode === 'standard'
               ? 'bg-siloam-blue text-white shadow-soft'
@@ -241,6 +256,7 @@ export const WorkflowManagement: React.FC<{
           workflows={workflows}
           roles={roles}
           onSaved={onWorkflowConfigChange}
+          onUnsavedReport={onUnsavedReport}
           onEditTaskDetail={(task) => {
             setEditingTask(task);
             setIsTaskModalOpen(true);

@@ -66,6 +66,6 @@ export const ConfigurationPageShell: React.FC<{
         ))}
       </nav>
     </div>
-    <div className="animate-fade-in">{children}</div>
+    <div className="animate-fade-in pb-8">{children}</div>
   </div>
 );

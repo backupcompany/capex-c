@@ -30,6 +30,7 @@ import {
 import { SpreadsheetPasteToolbar } from './SpreadsheetPasteToolbar';
 import { RoleCheckboxDropdown } from './RoleCheckboxDropdown';
 import { WorkflowTriggerDropdown } from './WorkflowTriggerDropdown';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 type WorkflowSetSpreadsheetProps = {
   workflows: WorkflowSet[];
@@ -37,6 +38,8 @@ type WorkflowSetSpreadsheetProps = {
   roles: UserRole[];
   onSaved: () => void;
   onEditDetail?: (workflow: WorkflowSet | null) => void;
+  unsavedKey?: string;
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
 };
 
 function isFirstStepInGroup(row: WorkflowSetSpreadsheetRow, rows: WorkflowSetSpreadsheetRow[]): boolean {
@@ -51,6 +54,8 @@ export function WorkflowSetSpreadsheet({
   roles,
   onSaved,
   onEditDetail,
+  unsavedKey = 'workflow-spreadsheet',
+  onUnsavedReport,
 }: WorkflowSetSpreadsheetProps) {
   const { showToast } = useToast();
   const [rows, setRows] = useState<WorkflowSetSpreadsheetRow[]>([]);
@@ -324,6 +329,20 @@ export function WorkflowSetSpreadsheet({
       setIsSaving(false);
     }
   }, [rows, tasks, roles, workflows, showToast, onSaved]);
+
+  useEffect(() => {
+    if (!onUnsavedReport) return;
+    if (!dirty) {
+      onUnsavedReport(unsavedKey, null);
+      return;
+    }
+    onUnsavedReport(unsavedKey, {
+      label: 'Workflow Sets (spreadsheet)',
+      save: handleSave,
+      discard: resetFromWorkflows,
+    });
+    return () => onUnsavedReport(unsavedKey, null);
+  }, [dirty, handleSave, resetFromWorkflows, onUnsavedReport, unsavedKey]);
 
   const handlePasteText = useCallback(
     (text: string) => {

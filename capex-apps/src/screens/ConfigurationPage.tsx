@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useCallback, memo, useMemo, useRef } from 'react';
-import type { User, UserRole, ProjectPriorityConfig } from '@/types';
+import type { User, UserRole, ProjectPriorityConfig, ChangeSummary } from '@/types';
 import type { ConfigSliceKey } from '@/services/configurationApi';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfigurationPageData } from '@/features/configuration/core/useConfigurationPageData';
@@ -16,12 +16,19 @@ import {
 } from '@/features/configuration/core/ConfigurationPageShell';
 import { ConfigurationTabPanels } from '@/features/configuration/core/ConfigurationTabPanels';
 import { useConfigurationTab } from '@/features/configuration/core/useConfigurationTab';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 export interface ConfigurationPageProps {
   onConfigurationChange: () => void;
   onUsersListPatch?: (users: User[]) => void;
   onRolesListPatch?: (roles: UserRole[]) => void;
   currentUser: User;
+  setIsPageDirty?: (dirty: boolean) => void;
+  setPageActions?: (actions: {
+    onSave: () => Promise<void>;
+    onCancel: () => void;
+    getSummary: () => ChangeSummary | null;
+  }) => void;
 }
 
 export const ConfigurationPage = memo(function ConfigurationPage({
@@ -29,10 +36,13 @@ export const ConfigurationPage = memo(function ConfigurationPage({
   onUsersListPatch,
   onRolesListPatch,
   currentUser,
+  setIsPageDirty,
+  setPageActions,
 }: ConfigurationPageProps) {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useConfigurationTab();
   const configErrorToastShownRef = useRef(false);
+  const unsavedRef = useRef(new Map<string, ConfigurationUnsavedHandle>());
 
   const {
     pack: allData,
@@ -49,6 +59,62 @@ export const ConfigurationPage = memo(function ConfigurationPage({
     activeTabLoadStatus,
     retryActiveTab,
   } = useConfigurationPageData({ userId: currentUser.id, activeTab });
+
+  const syncUnsavedToShell = useCallback(() => {
+    const handles = [...unsavedRef.current.values()];
+    const dirty = handles.length > 0;
+    setIsPageDirty?.(dirty);
+    if (!setPageActions) return;
+    setPageActions({
+      onSave: async () => {
+        for (const h of [...unsavedRef.current.values()]) {
+          await h.save();
+        }
+      },
+      onCancel: () => {
+        for (const h of [...unsavedRef.current.values()]) {
+          h.discard();
+        }
+        unsavedRef.current.clear();
+        setIsPageDirty?.(false);
+      },
+      getSummary: () => {
+        const list = [...unsavedRef.current.values()];
+        if (!list.length) return null;
+        return {
+          title: 'Configuration — unsaved spreadsheet',
+          changes: list.map((h) => ({
+            item: h.label,
+            before: 'Saved on server',
+            after: 'Local edits (not saved)',
+          })),
+        };
+      },
+    });
+  }, [setIsPageDirty, setPageActions]);
+
+  const reportUnsaved = useCallback(
+    (key: string, handle: ConfigurationUnsavedHandle | null) => {
+      if (handle) unsavedRef.current.set(key, handle);
+      else unsavedRef.current.delete(key);
+      syncUnsavedToShell();
+    },
+    [syncUnsavedToShell],
+  );
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (unsavedRef.current.size === 0) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      unsavedRef.current.clear();
+      setIsPageDirty?.(false);
+    };
+  }, [setIsPageDirty]);
 
   useEffect(() => {
     if (!configQuery.isError) {
@@ -108,8 +174,23 @@ export const ConfigurationPage = memo(function ConfigurationPage({
   const tabReady = isConfigurationTabReady(partialPack, activeTab);
 
   const handleTabChange = useCallback(
-    (tab: string) => setActiveTab(tab as typeof activeTab),
-    [setActiveTab],
+    (tab: string) => {
+      if (unsavedRef.current.size > 0) {
+        const labels = [...unsavedRef.current.values()].map((h) => h.label).join(', ');
+        if (
+          !window.confirm(
+            `Ada perubahan belum disimpan (${labels}). Pindah tab akan membuang edit lokal. Lanjut?`,
+          )
+        ) {
+          return;
+        }
+        for (const h of unsavedRef.current.values()) h.discard();
+        unsavedRef.current.clear();
+        setIsPageDirty?.(false);
+      }
+      setActiveTab(tab as typeof activeTab);
+    },
+    [setActiveTab, setIsPageDirty],
   );
 
   const handleRetryActiveTab = useCallback(() => {
@@ -145,6 +226,7 @@ export const ConfigurationPage = memo(function ConfigurationPage({
         patchProjectPriorities={patchProjectPriorities}
         refreshOnly={refreshOnly}
         refreshThenNotifyApp={refreshThenNotifyApp}
+        onUnsavedReport={reportUnsaved}
       />
     );
   }, [
@@ -160,6 +242,7 @@ export const ConfigurationPage = memo(function ConfigurationPage({
     patchProjectPriorities,
     refreshOnly,
     refreshThenNotifyApp,
+    reportUnsaved,
   ]);
 
   if (isInitialLoading || !canRenderShell) {

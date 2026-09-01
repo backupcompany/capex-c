@@ -14,6 +14,7 @@ import { PipelineTab } from './tabs/PipelineTab';
 import { DataManagementTab } from './tabs/DataManagementTab';
 import { invalidateRequestCache } from '@/lib/requestCache';
 import { invalidateBudgetHuConfigDiskCache } from '@/lib/budgetHuDiskCache';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 export type ConfigurationTabPanelsProps = {
   activeTab: ConfigurationTab;
@@ -25,6 +26,7 @@ export type ConfigurationTabPanelsProps = {
   patchProjectPriorities: (priorities: ProjectPriorityConfig[]) => void;
   refreshOnly: (slices: ConfigSliceKey[]) => void;
   refreshThenNotifyApp: (slices: ConfigSliceKey[]) => Promise<void>;
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
 };
 
 export function ConfigurationTabPanels({
@@ -37,6 +39,7 @@ export function ConfigurationTabPanels({
   patchProjectPriorities,
   refreshOnly,
   refreshThenNotifyApp,
+  onUnsavedReport,
 }: ConfigurationTabPanelsProps) {
   const refreshMasterCatalogue = useCallback(() => refreshOnly(['masterCatalogue']), [refreshOnly]);
   const refreshRooms = useCallback(() => refreshOnly(['rooms']), [refreshOnly]);
@@ -92,6 +95,7 @@ export function ConfigurationTabPanels({
         currentUser={currentUser}
         refreshWorkflowTasks={refreshWorkflowTasks}
         onAssetTypesPatched={patchAssetTypeMaster}
+        onUnsavedReport={onUnsavedReport}
       />
     );
   }

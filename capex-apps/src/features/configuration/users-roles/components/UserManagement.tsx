@@ -10,9 +10,8 @@ import { resolveMyTasksAccessToken } from '@/services/myTasksApi';
 import * as userAdminApi from '@/services/userAdminApi';
 import type { OfficeListDiffRow } from '@/services/userAdminApi';
 import { fetchConfigurationSlicesFromBackend } from '@/services/configurationApi';
-import { deleteConfigViaBeOrFallback, saveConfigurationEntityViaBackend } from '@/services/configurationCrudApi';
+import { deleteConfigViaBeOrFallback, saveConfigViaBeOrFallback } from '@/services/configurationCrudApi';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { getCurrentAppUserIdFromSession } from '@/features/configuration/shared/configSession';
 import { USER_TABLE_PAGE_SIZE, USER_TABLE_SCROLL_THRESHOLD_PX, MAX_OFFICE_UPLOAD_SIZE_BYTES } from '@/features/configuration/shared/configConstants';
 import { UserEditorModal } from './UserEditorModal';
 import { UserTableRow } from './UserTableRow';
@@ -154,16 +153,7 @@ export const UserManagement: React.FC<{
                 id: stableId,
                 assignments: normalizedAssignments,
             };
-            const actorId = getCurrentAppUserIdFromSession();
-            if (actorId == null) {
-                throw new Error('Sesi user tidak ditemukan. Silakan login ulang.');
-            }
-            const savedFromBe = await saveConfigurationEntityViaBackend<User>(
-                actorId,
-                'user',
-                userToSave as User,
-                { strictBackend: true },
-            );
+            const savedFromBe = await saveConfigViaBeOrFallback<User>('user', userToSave as User);
             if (!savedFromBe) {
                 throw new Error('Gagal menyimpan user ke backend.');
             }
@@ -482,8 +472,8 @@ export const UserManagement: React.FC<{
     }, [scopeLabelMap]);
 
     return (
-        <div className="bg-siloam-surface p-6 rounded-xl shadow-soft">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <div className="bg-siloam-surface p-4 rounded-xl shadow-soft">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-3 gap-3">
                 <div className="flex items-center gap-4 flex-1 w-full">
                     {/* Search Input */}
                     <div className="relative flex-1 max-w-md">
@@ -531,14 +521,12 @@ export const UserManagement: React.FC<{
                 </div>
             </div>
 
-            <div className="mb-6 p-4 border border-dashed border-siloam-border rounded-xl bg-siloam-bg/40">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div>
+            <div className="mb-3 px-3 py-2 border border-dashed border-siloam-border rounded-lg bg-siloam-bg/40">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="min-w-0">
                         <h4 className="text-sm font-semibold text-siloam-text-primary">Cek email vs daftar kantor (Excel / CSV)</h4>
-                        <p className="text-xs text-siloam-text-secondary mt-1 max-w-2xl">
-                            Unggah file Excel (.xlsx, .xls) atau CSV (.csv). Pembandingan dan daftar user dilakukan di server (
-                            <span className="font-medium">capexbe</span>) agar ringan. Centang baris lalu hapus terpilih, atau hapus
-                            semua yang tampil — tanpa memuat ulang seluruh data konfigurasi.
+                        <p className="text-xs text-siloam-text-secondary truncate">
+                            Unggah Excel/CSV — banding di server, lalu hapus user yang tidak cocok.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -683,14 +671,18 @@ export const UserManagement: React.FC<{
             </div>
 
             <div className="border border-siloam-border rounded-xl overflow-hidden">
-                <div className="max-h-[600px] overflow-y-auto" onScroll={handleUsersTableScroll}>
+                {/* Keep users list short so Role Management stays above the fold */}
+                <div
+                    className="max-h-[min(280px,38vh)] overflow-y-auto"
+                    onScroll={handleUsersTableScroll}
+                >
                     <table className="w-full text-left text-sm">
                         <thead className="text-xs text-siloam-text-secondary uppercase bg-siloam-sidebar sticky top-0 z-10 shadow-sm">
                             <tr>
-                                <th className="px-6 py-3 font-semibold">User Details</th>
-                                <th className="px-6 py-3 font-semibold">Phone / WA</th>
-                                <th className="px-6 py-3 font-semibold">Roles & Scopes</th>
-                                <th className="px-6 py-3 font-semibold text-right">Actions</th>
+                                <th className="px-4 py-2 font-semibold">User Details</th>
+                                <th className="px-4 py-2 font-semibold">Phone / WA</th>
+                                <th className="px-4 py-2 font-semibold">Roles & Scopes</th>
+                                <th className="px-4 py-2 font-semibold text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-siloam-border">

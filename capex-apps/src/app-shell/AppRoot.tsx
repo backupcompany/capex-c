@@ -818,7 +818,7 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     [permissions, sidebarNavRevision, allRoles, currentUser],
   );
 
-  const budgetEditingPages: Page[] = [Page.BudgetMultiYear, Page.BudgetPeriod, Page.BudgetArchetype, Page.BudgetHU, Page.POUpdate, Page.GRUpdate, Page.FSUpdate, Page.FSApproval];
+  const budgetEditingPages: Page[] = [Page.BudgetMultiYear, Page.BudgetPeriod, Page.BudgetArchetype, Page.BudgetHU, Page.POUpdate, Page.GRUpdate, Page.FSUpdate, Page.FSApproval, Page.Configuration];
 
   // User change handler removed - users can only login via LazyLoginPage
   // No more dropdown user selector in Sidebar
