@@ -9,7 +9,7 @@ import {
 import { useDebouncedValue } from './useDebouncedValue';
 import { DEFAULT_TABLE_PAGE_SIZE, clampTablePageSize } from '../../../lib/table/pageSizeOptions';
 
-/** Debounce while typing (300–500ms band); Enter/Cari flushes immediately via `submitSearch`. */
+/** Debounce typing + clear→all (400ms). Non-empty Enter/Cari still flushes immediately. */
 export const CPL_SEARCH_DEBOUNCE_MS = 400;
 
 const savedSearchOnMount = () => {
@@ -72,15 +72,20 @@ export function useProjectListFilterState(
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(() => initialSelectedPeriods);
   const initialSearch = savedSearchOnMount();
   const [searchTerm, setSearchTerm] = useState(() => initialSearch);
-  const [flushSearch, setFlushSearch] = useState<string | null>(null);
+  /** Immediate apply on Cari/Enter; null = follow debounce. Seed from saved so reload keeps filter. */
+  const [flushSearch, setFlushSearch] = useState<string | null>(() =>
+    initialSearch.trim() ? initialSearch.trim() : null,
+  );
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), CPL_SEARCH_DEBOUNCE_MS);
   useEffect(() => {
     if (flushSearch !== null && searchTerm.trim() !== flushSearch) setFlushSearch(null);
   }, [searchTerm, flushSearch]);
-  const appliedSearchTerm = flushSearch ?? debouncedSearch;
+  const appliedSearchTerm = (flushSearch ?? debouncedSearch).trim();
   const submitSearch = useCallback((term: string) => {
+    const next = term.trim();
     setSearchTerm(term);
-    setFlushSearch(term.trim());
+    // Non-empty → apply now. Empty (clear) → debounce so full-list query doesn't slam BE.
+    setFlushSearch(next ? next : null);
   }, []);
   const [selectedHUs, setSelectedHUs] = useState<string[]>(() => saved.current?.selectedHUs ?? []);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>(
@@ -113,7 +118,7 @@ export function useProjectListFilterState(
 
   const clearSearch = useCallback(() => {
     setSearchTerm('');
-    setFlushSearch('');
+    setFlushSearch(null); // debounce return-to-all (same CPL_SEARCH_DEBOUNCE_MS)
   }, []);
 
   const isSearchActive = appliedSearchTerm.length > 0;

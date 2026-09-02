@@ -789,6 +789,24 @@ function normalizeProjectListCodeSearchTerm(term: string): string {
   return normalizeProjectListSearchTerm(term).replace(/\s+/g, '');
 }
 
+/** Compact code key: AIDO.26.00,001 === AIDO.26.00.001 (mirrors BE). */
+function normalizeProjectListAssetCodeKey(code: string): string {
+  return normalizeProjectListSearchTerm(code).replace(/[\s.,_-]+/g, '');
+}
+
+/** Whitespace tokens — multi-term search is AND (mirrors BE resolveSearchMatchingAssetIdsForQuery). */
+function splitProjectListSearchTokens(search: string): string[] {
+  return normalizeProjectListSearchTerm(search).split(/\s+/).filter(Boolean);
+}
+
+/** Codes like AIDO.26.00.001 / AIDO.26.00,001 — exact asset_code first (mirrors BE). */
+function isProjectListCodeLikeSearchToken(token: string): boolean {
+  const t = token.trim();
+  if (!t) return false;
+  if (t.includes('.') || t.includes(',')) return true;
+  return /^[a-z0-9]+(?:[-_][a-z0-9]+){2,}$/i.test(t);
+}
+
 function textIncludesProjectListSearchTerm(
   haystack: string,
   term: string,
@@ -799,10 +817,21 @@ function textIncludesProjectListSearchTerm(
   return normalized.includes(term) || (termCode.length > 0 && normalizedCode.includes(termCode));
 }
 
-/** Match code asset, nama asset, nama project, code project (+ optional HU/archetype/description/last task). */
-export function enrichedAssetMatchesProjectListSearch(
+function assetMatchesCodeLikeSearchToken(
+  fields: ProjectListSearchFieldTexts,
+  token: string,
+): boolean {
+  const want = normalizeProjectListAssetCodeKey(token);
+  if (!want) return true;
+  const assetKey = normalizeProjectListAssetCodeKey(fields.assetCode);
+  if (assetKey === want) return true;
+  // Partial: compact contains (still asset_code only).
+  return assetKey.includes(want);
+}
+
+function assetMatchesFreeTextSearchToken(
   asset: EnrichedAsset,
-  searchLower: string,
+  token: string,
   opts?: {
     project?: Project | null;
     assetLastTaskMap?: Map<string, string>;
@@ -810,10 +839,9 @@ export function enrichedAssetMatchesProjectListSearch(
     includeExtendedFields?: boolean;
   },
 ): boolean {
-  const term = normalizeProjectListSearchTerm(searchLower);
+  const term = normalizeProjectListSearchTerm(token);
   if (!term) return true;
-
-  const termCode = normalizeProjectListCodeSearchTerm(searchLower);
+  const termCode = normalizeProjectListCodeSearchTerm(token);
   const fields = resolveProjectListSearchFieldTexts(asset, opts?.project);
   const coreMatch =
     textIncludesProjectListSearchTerm(fields.assetCode, term, termCode) ||
@@ -835,6 +863,28 @@ export function enrichedAssetMatchesProjectListSearch(
     archetypeSearch.includes(term) ||
     Boolean((asset as { description?: string }).description?.toLowerCase().includes(term)) ||
     lastTask.includes(term)
+  );
+}
+
+/** Match code asset, nama asset, nama project, code project (+ optional HU/archetype/description/last task). */
+export function enrichedAssetMatchesProjectListSearch(
+  asset: EnrichedAsset,
+  searchLower: string,
+  opts?: {
+    project?: Project | null;
+    assetLastTaskMap?: Map<string, string>;
+    archetypeByHuName?: Map<string, string>;
+    includeExtendedFields?: boolean;
+  },
+): boolean {
+  const tokens = splitProjectListSearchTokens(searchLower);
+  if (tokens.length === 0) return true;
+
+  const fields = resolveProjectListSearchFieldTexts(asset, opts?.project);
+  return tokens.every((token) =>
+    isProjectListCodeLikeSearchToken(token)
+      ? assetMatchesCodeLikeSearchToken(fields, token)
+      : assetMatchesFreeTextSearchToken(asset, token, opts),
   );
 }
 

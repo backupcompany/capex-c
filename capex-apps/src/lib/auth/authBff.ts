@@ -189,11 +189,13 @@ export async function proxyAuthRedirectToBackend(
       return out;
     }
 
-    // Non-redirect (unexpected) — still never raw 500 to the browser for Azure callback.
-    if (path.includes('/azure/callback')) {
+    // Non-redirect (unexpected) — never forward raw Nest/HTML 404 for OAuth routes.
+    if (path.includes('/azure/')) {
       const detail = (await res.text().catch(() => '')).slice(0, 180) || `HTTP ${res.status}`;
       return oauthErrorRedirect(
-        `Login Microsoft gagal diproses (${detail}). Coba lagi.`,
+        path.includes('/azure/callback')
+          ? `Login Microsoft gagal diproses (${detail}). Coba lagi.`
+          : `Login Microsoft tidak bisa dimulai (${detail}). Cek AZURE_* di capexbe/.env.`,
         incomingReq,
       );
     }

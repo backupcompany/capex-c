@@ -13,9 +13,7 @@ import {
   isDefaultProjectListQueryFilters,
   PROJECT_LIST_DATA_POLICY,
   resolveAuthoritativeProjectListScope,
-  resolveSearchAssetIdsForList,
-  resolveSearchProjectIdsForList,
-  resolveFullSearchMatchingAssetIds,
+  resolveSearchMatchingAssetIdsForQuery,
   loadAssetTypeGroupMasterMaps,
   resolveAssetTypeGroupFilterIds,
 } from './project-list-query.util';
@@ -475,21 +473,20 @@ export async function loadProjectListQueryPage(
   let searchProjectIds: string[] = [];
   let searchAssetIds: string[] = [];
   if (query.search.trim() && !resolvedBase.forceEmpty) {
-    [searchProjectIds, searchAssetIds] = await Promise.all([
-      resolveSearchProjectIdsForList(
-        client,
-        query.periodName,
-        query.search,
-        { archetypes: master.archetypes, hus: master.hus },
-        resolvedBase.filterHuIds,
-      ),
-      resolveSearchAssetIdsForList(
-        client,
-        query.periodName,
-        query.search,
-        resolvedBase.filterHuIds,
-      ),
-    ]);
+    // Flattened asset IDs: code-like = exact asset_code; multi-token = AND; free-text expand done inside.
+    searchAssetIds = await resolveSearchMatchingAssetIdsForQuery(
+      client,
+      query.periodName,
+      query.search,
+      { archetypes: master.archetypes, hus: master.hus },
+      resolvedBase.filterHuIds,
+    );
+    searchProjectIds = [];
+    if (process.env.PROJECT_LIST_PIPELINE_LOG !== '0') {
+      console.info(
+        `[project-list-query] search resolve period=${query.periodName} term=${JSON.stringify(query.search)} assetHits=${searchAssetIds.length}`,
+      );
+    }
   }
 
   const resolved = { ...resolvedBase, searchProjectIds, searchAssetIds };
@@ -497,17 +494,14 @@ export async function loadProjectListQueryPage(
   if (resolved.forceEmpty) {
     let searchOutsideScope = false;
     if (query.search.trim()) {
-      const [openProjects, openAssets] = await Promise.all([
-        resolveSearchProjectIdsForList(
-          client,
-          query.periodName,
-          query.search,
-          { archetypes: master.archetypes, hus: master.hus },
-          null,
-        ),
-        resolveSearchAssetIdsForList(client, query.periodName, query.search, null),
-      ]);
-      searchOutsideScope = openProjects.length > 0 || openAssets.length > 0;
+      const openAssets = await resolveSearchMatchingAssetIdsForQuery(
+        client,
+        query.periodName,
+        query.search,
+        { archetypes: master.archetypes, hus: master.hus },
+        null,
+      );
+      searchOutsideScope = openAssets.length > 0;
     }
     return {
       rawEnrichedAssets: [],
@@ -533,25 +527,18 @@ export async function loadProjectListQueryPage(
 
   let searchMatchingAssetIds: string[] = [];
   if (useSearchScan) {
-    searchMatchingAssetIds = await resolveFullSearchMatchingAssetIds(
-      client,
-      searchProjectIds,
-      searchAssetIds,
-    );
+    searchMatchingAssetIds = searchAssetIds;
     if (searchMatchingAssetIds.length === 0) {
       let searchOutsideScope = false;
       if (!serverScope.scopeAll && query.search.trim()) {
-        const [openProjects, openAssets] = await Promise.all([
-          resolveSearchProjectIdsForList(
-            client,
-            query.periodName,
-            query.search,
-            { archetypes: master.archetypes, hus: master.hus },
-            null,
-          ),
-          resolveSearchAssetIdsForList(client, query.periodName, query.search, null),
-        ]);
-        searchOutsideScope = openProjects.length > 0 || openAssets.length > 0;
+        const openAssets = await resolveSearchMatchingAssetIdsForQuery(
+          client,
+          query.periodName,
+          query.search,
+          { archetypes: master.archetypes, hus: master.hus },
+          null,
+        );
+        searchOutsideScope = openAssets.length > 0;
       }
       return {
         rawEnrichedAssets: [],
@@ -712,7 +699,7 @@ export async function loadProjectListQueryPage(
   }
   if (process.env.PROJECT_LIST_PIPELINE_LOG !== '0') {
     console.info(
-      `[project-list-query] pipeline period=${query.periodName} page=${query.page}/${query.pageSize} dbTruth=${dbTruthCount} dbMatched=${dbMatchedCount} returned=${rawEnrichedAssets.length} enrichDropped=${enrichDroppedCount} default=${defaultQuery} scopeAll=${serverScope.scopeAll}`,
+      `[project-list-query] pipeline period=${query.periodName} page=${query.page}/${query.pageSize} dbTruth=${dbTruthCount} dbMatched=${dbMatchedCount} returned=${rawEnrichedAssets.length} enrichDropped=${enrichDroppedCount} default=${defaultQuery} scopeAll=${serverScope.scopeAll} search=${JSON.stringify(query.search)} hits=${searchAssetIds.length}`,
     );
   }
 

@@ -59,6 +59,12 @@ class AppConfigGetBodyDto {
   key!: string;
 }
 
+class UsersQueryBodyDto {
+  userId!: number;
+  roleId?: number;
+  q?: string;
+}
+
 @Controller('configuration')
 export class ConfigurationController {
   private readonly logger = new Logger(ConfigurationController.name);
@@ -74,6 +80,16 @@ export class ConfigurationController {
       body?.slices,
       !!body?.skipCache,
     );
+  }
+
+  @CONFIG_READ
+  @Post('users-query')
+  async usersQuery(@Req() req: Request, @Body() body: UsersQueryBodyDto) {
+    const token = requireAccessTokenFromRequest(req);
+    return this.configurationService.queryUsersDirectory(token, getCallerUserId(req), {
+      roleId: body?.roleId,
+      q: body?.q,
+    });
   }
 
   @CONFIG_WRITE

@@ -27,6 +27,7 @@ import {
 import {
   getAllUsers,
   getUserById,
+  queryDirectoryUsers,
   getAllRoles,
   getAllTasks,
   getAllWorkflowSets,
@@ -491,7 +492,14 @@ export class ConfigurationService {
       if (insPermErr) throw new BadRequestException(insPermErr.message);
     }
 
-    return roleRows?.[0] ? toCamelCase(roleRows[0]) : { id: roleId, roleName };
+    const roleRow = roleRows?.[0] ? toCamelCase(roleRows[0]) : { id: roleId, roleName };
+    return {
+      ...roleRow,
+      permissions: permissionRows.map((p) => ({
+        hierarchy: p.hierarchy,
+        permission: p.permission,
+      })),
+    };
   }
 
   private async saveUserEntity(client: SupabaseClient, payload: Record<string, unknown>) {
@@ -576,6 +584,42 @@ export class ConfigurationService {
     const savedFull = await getUserById(client, userId);
     if (savedFull) return savedFull;
     return userRows?.[0] ? toCamelCase(userRows[0]) : { id: userId, username, email, assignments: [] };
+  }
+
+  /**
+   * Filtered user directory — DB filters on user_assignments.role_id + username/email ILIKE.
+   * Requires at least one of roleId / q so we never silently return the full table.
+   */
+  async queryUsersDirectory(
+    accessToken: string,
+    userId: number,
+    opts: { roleId?: number; q?: string },
+  ) {
+    if (!accessToken?.trim()) {
+      throw new UnauthorizedException('Missing access token');
+    }
+    const ctx = await this.assertConfigAccess(accessToken, userId, 'view');
+    const client = this.getConfigurationClient(ctx.client);
+    const roleId =
+      opts.roleId != null && Number.isFinite(Number(opts.roleId)) && Number(opts.roleId) > 0
+        ? Number(opts.roleId)
+        : undefined;
+    const q = String(opts.q ?? '').trim();
+    if (roleId == null && !q) {
+      throw new BadRequestException('roleId or q required');
+    }
+    const result = await queryDirectoryUsers(client, { roleId, q });
+    const includePii = await viewerCanSeeUserPii(this.authZ, accessToken, userId);
+    return {
+      users: sanitizeUsersForDirectory(
+        result.users as Record<string, unknown>[],
+        userId,
+        includePii,
+        true,
+      ),
+      total: result.total,
+      totalDirectory: result.totalDirectory,
+    };
   }
 
   /**
@@ -670,7 +714,8 @@ export class ConfigurationService {
   ): Promise<unknown> {
     if (key === 'users' && Array.isArray(value)) {
       const includePii = await viewerCanSeeUserPii(this.authZ, accessToken, userId);
-      return sanitizeUsersForDirectory(value as Record<string, unknown>[], userId, includePii);
+      // Config pack is already gated — expose numeric id for edit/delete/filter by roleId.
+      return sanitizeUsersForDirectory(value as Record<string, unknown>[], userId, includePii, true);
     }
     if (key === 'vendors' && Array.isArray(value)) {
       const includeTaxId = await viewerCanSeeVendorTaxId(this.authZ, accessToken, userId);

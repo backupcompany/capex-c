@@ -1,7 +1,7 @@
 import { useAuthStore } from '@/stores/authStore';
 
 /** Must match capexbe PROJECT_LIST_DATA_POLICY — bump invalidates FE disk caches. */
-export const PROJECT_LIST_DATA_POLICY = 'v9-scope-fp';
+export const PROJECT_LIST_DATA_POLICY = 'v12-code-fuzzy';
 
 export const PROJECT_LIST_DATA_POLICY_MARKER_KEY = 'capex.projectList.dataPolicy';
 

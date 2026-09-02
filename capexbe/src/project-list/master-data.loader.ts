@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { USER_DIRECTORY_COLUMNS } from '../shared/response-sanitize.util';
+import { sanitizePostgrestSearchTerm, sqlIlikePattern } from '../shared/postgrest-filter.util';
 import { fetchAllRecords, fetchRecordsInBatches, normId, normRoleId, toCamelCase } from './supabase-helpers';
 
 const ROLE_LIST_COLUMNS = 'id,role_name';
 const ROLE_PERMISSION_COLUMNS = 'role_id,hierarchy,permission';
 const USER_ASSIGNMENT_SELECT = 'id,user_id,role_id,roles(role_name)';
 const ASSIGNMENT_SCOPE_COLUMNS = 'user_assignment_id,scope_type,scope_id';
+const USER_ID_IN_CHUNK = 200;
 
 type RoleRef = { role_name?: string; name?: string };
 
@@ -165,6 +167,45 @@ export async function getAllRoles(client: SupabaseClient): Promise<any[]> {
   });
 }
 
+function mapUserWithAssignments(
+  user: Record<string, unknown>,
+  assignments: any[] | null | undefined,
+  scopes: any[] | null | undefined,
+): Record<string, unknown> {
+  const userAssignments: any[] = [];
+  const userIdNum = Number(user.id);
+  if (assignments) {
+    assignments
+      .filter((ua: any) => Number(ua.user_id) === userIdNum)
+      .forEach((ua: any) => {
+        const aid = Number(ua.id);
+        const roleName = roleDisplayName(ua.roles);
+        const assignmentScopes =
+          scopes
+            ?.filter((s: any) => Number(s.user_assignment_id) === aid)
+            .map((s: any) => {
+              const scopeType = String(s.scope_type ?? '').trim();
+              if (scopeType === 'All') return 'All';
+              const scopeId = String(s.scope_id ?? '').trim();
+              return scopeId;
+            })
+            .filter((x: unknown): x is string => x != null && String(x) !== '') || [];
+
+        const roleId = Number(ua.role_id);
+        userAssignments.push({
+          ...(Number.isFinite(roleId) && roleId > 0 ? { roleId } : {}),
+          roleName,
+          assignedScopes: Array.from(new Set(assignmentScopes)),
+        });
+      });
+  }
+
+  return {
+    ...toCamelCase(user),
+    assignments: userAssignments,
+  };
+}
+
 export async function getAllUsers(client: SupabaseClient): Promise<any[]> {
   const users = await fetchAllRecords(client, 'users', USER_DIRECTORY_COLUMNS);
   if (!users?.length) return [];
@@ -173,40 +214,103 @@ export async function getAllUsers(client: SupabaseClient): Promise<any[]> {
     fetchAllRecords(client, 'user_assignment_scopes', ASSIGNMENT_SCOPE_COLUMNS),
   ]);
 
-  return users.map((user: any) => {
-    const userAssignments: any[] = [];
-    const userIdNum = Number(user.id);
-    if (assignments) {
-      assignments
-        .filter((ua: any) => Number(ua.user_id) === userIdNum)
-        .forEach((ua: any) => {
-          const aid = Number(ua.id);
-          const roleName = roleDisplayName(ua.roles);
-          const assignmentScopes =
-            scopes
-              ?.filter((s: any) => Number(s.user_assignment_id) === aid)
-              .map((s: any) => {
-                const scopeType = String(s.scope_type ?? '').trim();
-                if (scopeType === 'All') return 'All';
-                const scopeId = String(s.scope_id ?? '').trim();
-                return scopeId;
-              })
-              .filter((x: unknown): x is string => x != null && String(x) !== '') || [];
+  return users.map((user: any) => mapUserWithAssignments(user, assignments, scopes));
+}
 
-          const roleId = Number(ua.role_id);
-          userAssignments.push({
-            ...(Number.isFinite(roleId) && roleId > 0 ? { roleId } : {}),
-            roleName,
-            assignedScopes: Array.from(new Set(assignmentScopes)),
-          });
-        });
+/**
+ * Directory filter at DB layer: user_assignments.role_id (+ optional username/email ILIKE).
+ * Returns only matching users — never the full directory when a filter is active.
+ */
+export async function queryDirectoryUsers(
+  client: SupabaseClient,
+  opts: { roleId?: number; q?: string },
+): Promise<{ users: any[]; total: number; totalDirectory: number }> {
+  const roleId =
+    opts.roleId != null && Number.isFinite(Number(opts.roleId)) && Number(opts.roleId) > 0
+      ? Number(opts.roleId)
+      : undefined;
+  const q = sanitizePostgrestSearchTerm(opts.q ?? '').trim();
+
+  const { count: totalDirectory, error: countErr } = await client
+    .from('users')
+    .select('id', { count: 'exact', head: true });
+  if (countErr) throw new Error(countErr.message);
+
+  let roleUserIds: number[] | undefined;
+  if (roleId != null) {
+    const { data: uaRows, error: uaErr } = await client
+      .from('user_assignments')
+      .select('user_id')
+      .eq('role_id', roleId);
+    if (uaErr) throw new Error(uaErr.message);
+    roleUserIds = [
+      ...new Set(
+        (uaRows || [])
+          .map((r: { user_id?: number }) => Number(r.user_id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+    if (!roleUserIds.length) {
+      return { users: [], total: 0, totalDirectory: totalDirectory ?? 0 };
     }
+  }
 
-    return {
-      ...toCamelCase(user),
-      assignments: userAssignments,
-    };
-  });
+  // Chunk .in() to stay under PostgREST URL limits when a role has many users.
+  const idChunks: number[][] =
+    roleUserIds == null
+      ? [[]]
+      : Array.from({ length: Math.ceil(roleUserIds.length / USER_ID_IN_CHUNK) }, (_, i) =>
+          roleUserIds!.slice(i * USER_ID_IN_CHUNK, (i + 1) * USER_ID_IN_CHUNK),
+        );
+
+  const userRows: Record<string, unknown>[] = [];
+  for (const chunk of idChunks) {
+    let qy = client.from('users').select(USER_DIRECTORY_COLUMNS);
+    if (chunk.length) qy = qy.in('id', chunk);
+    if (q) {
+      const pat = sqlIlikePattern(q);
+      qy = qy.or(`username.ilike.${pat},email.ilike.${pat}`);
+    }
+    const { data, error } = await qy.order('username');
+    if (error) throw new Error(error.message);
+    for (const row of data || []) userRows.push(row as Record<string, unknown>);
+  }
+
+  if (!userRows.length) {
+    return { users: [], total: 0, totalDirectory: totalDirectory ?? 0 };
+  }
+
+  const matchedIds = userRows.map((u) => Number(u.id)).filter((id) => Number.isFinite(id) && id > 0);
+  const assignmentChunks = Array.from(
+    { length: Math.ceil(matchedIds.length / USER_ID_IN_CHUNK) },
+    (_, i) => matchedIds.slice(i * USER_ID_IN_CHUNK, (i + 1) * USER_ID_IN_CHUNK),
+  );
+  const assignments: any[] = [];
+  for (const chunk of assignmentChunks) {
+    const { data, error } = await client
+      .from('user_assignments')
+      .select(USER_ASSIGNMENT_SELECT)
+      .in('user_id', chunk);
+    if (error) throw new Error(error.message);
+    assignments.push(...(data || []));
+  }
+
+  const assignmentIds = assignments.map((ua) => Number(ua.id)).filter(Number.isFinite);
+  let scopes: any[] = [];
+  if (assignmentIds.length) {
+    for (let i = 0; i < assignmentIds.length; i += USER_ID_IN_CHUNK) {
+      const chunk = assignmentIds.slice(i, i + USER_ID_IN_CHUNK);
+      const { data, error } = await client
+        .from('user_assignment_scopes')
+        .select(ASSIGNMENT_SCOPE_COLUMNS)
+        .in('user_assignment_id', chunk);
+      if (error) throw new Error(error.message);
+      scopes.push(...(data || []));
+    }
+  }
+
+  const users = userRows.map((user) => mapUserWithAssignments(user, assignments, scopes));
+  return { users, total: users.length, totalDirectory: totalDirectory ?? 0 };
 }
 
 /** Load one user with assignments — avoids full-table getAllUsers() after save. */

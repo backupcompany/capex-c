@@ -10,11 +10,15 @@ import {
   sanitizePostgrestIdList,
   sanitizePostgrestSearchTerm,
   sanitizeSearchForOrFilter,
+  sqlIlikeExactPattern,
   sqlIlikePattern,
+  formatPostgrestInList,
+  projectListAssetCodeSearchVariants,
+  normalizeProjectListAssetCodeKey,
 } from '../shared/postgrest-filter.util';
 
 /** Bump when list read policy changes — invalidates Redis + FE disk caches. */
-export const PROJECT_LIST_DATA_POLICY = 'v9-scope-fp';
+export const PROJECT_LIST_DATA_POLICY = 'v12-code-fuzzy';
 
 /** Fingerprint of role+scopes so query caches miss after Configuration role edits. */
 export function assignmentScopeCacheFingerprint(
@@ -40,13 +44,29 @@ export {
   postgrestOrIlikeFilterValue,
   postgrestOrIlikePattern,
   sanitizeSearchForOrFilter,
+  sqlIlikeExactPattern,
   sqlIlikePattern,
+  projectListAssetCodeSearchVariants,
+  normalizeProjectListAssetCodeKey,
 };
 
 const MAX_SEARCH_PROJECT_IDS_IN_OR = 120;
 const SEARCH_ASSET_ID_CAP = 3000;
 
 type SearchableAssetColumn = 'asset_code' | 'asset_name' | 'description';
+
+/** Whitespace tokens — multi-term search is AND across tokens. */
+export function splitProjectListSearchTokens(search: string): string[] {
+  return sanitizePostgrestSearchTerm(search).split(/\s+/).filter(Boolean);
+}
+
+/** Codes like AIDO.26.00.001 or AIDO.26.00,001 — exact asset_code path, no free-text sibling expand. */
+export function isProjectListCodeLikeSearchToken(token: string): boolean {
+  const t = token.trim();
+  if (!t) return false;
+  if (t.includes('.') || t.includes(',')) return true;
+  return /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+){2,}$/.test(t);
+}
 
 /**
  * Resolve project IDs matching search (project/HU/archetype names) for the period.
@@ -197,6 +217,115 @@ export async function resolveFullSearchMatchingAssetIds(
     for (const row of data || []) ids.add(String((row as { id: string }).id));
   }
   return [...ids];
+}
+
+async function resolveAssetIdsByAssetCodeIlike(
+  client: SupabaseClient,
+  periodName: string,
+  pattern: string,
+  restrictHuIds: string[] | null,
+): Promise<string[]> {
+  if (!pattern) return [];
+  const pn = periodName.trim();
+  let q = client
+    .from('assets')
+    .select('id, projects!inner(period_name, hospital_unit_id)')
+    .eq('projects.period_name', pn)
+    .ilike('asset_code', pattern);
+  if (restrictHuIds?.length) {
+    q = q.in('projects.hospital_unit_id', restrictHuIds);
+  }
+  const { data, error } = await q.limit(SEARCH_ASSET_ID_CAP);
+  if (error) throw new Error(`search assets asset_code: ${error.message}`);
+  return (data || []).map((row) => String((row as { id: string }).id));
+}
+
+/**
+ * One search token → matching asset IDs.
+ * Code-like: exact asset_code (dot/comma variants), else contains on asset_code only (no project expand).
+ * Free text: asset/project/HU/archetype contains + expand assets under matched projects.
+ */
+async function resolveOneSearchTokenAssetIds(
+  client: SupabaseClient,
+  periodName: string,
+  token: string,
+  master: {
+    archetypes: { id: string; name: string }[];
+    hus: { id: string; name: string; archetypeId?: string; archetype_id?: string }[];
+  },
+  restrictHuIds: string[] | null,
+): Promise<string[]> {
+  if (isProjectListCodeLikeSearchToken(token)) {
+    const variants = projectListAssetCodeSearchVariants(token);
+    for (const variant of variants) {
+      const exactIds = await resolveAssetIdsByAssetCodeIlike(
+        client,
+        periodName,
+        sqlIlikeExactPattern(variant),
+        restrictHuIds,
+      );
+      if (exactIds.length > 0) return exactIds;
+    }
+    // Partial code: contains on each variant (asset_code only — SQL, no sibling expand).
+    const partial = new Set<string>();
+    for (const variant of variants) {
+      const ids = await resolveAssetIdsByAssetCodeIlike(
+        client,
+        periodName,
+        sqlIlikePattern(variant),
+        restrictHuIds,
+      );
+      for (const id of ids) partial.add(id);
+      if (partial.size >= SEARCH_ASSET_ID_CAP) break;
+    }
+    return [...partial].slice(0, SEARCH_ASSET_ID_CAP);
+  }
+
+  const [searchProjectIds, searchAssetIds] = await Promise.all([
+    resolveSearchProjectIdsForList(client, periodName, token, master, restrictHuIds),
+    resolveSearchAssetIdsForList(client, periodName, token, restrictHuIds),
+  ]);
+  return resolveFullSearchMatchingAssetIds(client, searchProjectIds, searchAssetIds);
+}
+
+/**
+ * Capex Project List search: whitespace tokens AND'd; code-like tokens prefer exact asset_code.
+ * Returns flattened asset IDs (project expansion already applied for free-text tokens).
+ */
+export async function resolveSearchMatchingAssetIdsForQuery(
+  client: SupabaseClient,
+  periodName: string,
+  search: string,
+  master: {
+    archetypes: { id: string; name: string }[];
+    hus: { id: string; name: string; archetypeId?: string; archetype_id?: string }[];
+  },
+  restrictHuIds: string[] | null,
+): Promise<string[]> {
+  const tokens = splitProjectListSearchTokens(search);
+  if (tokens.length === 0) return [];
+
+  let acc: Set<string> | null = null;
+  for (const token of tokens) {
+    const ids = await resolveOneSearchTokenAssetIds(
+      client,
+      periodName,
+      token,
+      master,
+      restrictHuIds,
+    );
+    if (acc === null) {
+      acc = new Set(ids);
+    } else {
+      const next = new Set<string>();
+      for (const id of ids) {
+        if (acc.has(id)) next.add(id);
+      }
+      acc = next;
+    }
+    if (acc.size === 0) return [];
+  }
+  return [...acc!].slice(0, SEARCH_ASSET_ID_CAP);
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -635,8 +764,8 @@ export function applyProjectListSearchFilter<T extends FilterableQuery>(
   const projectIds = sanitizePostgrestIdList(searchProjectIds).slice(0, MAX_SEARCH_PROJECT_IDS_IN_OR);
   const parts: string[] = [];
 
-  if (assetIds.length > 0) parts.push(`id.in.(${assetIds.join(',')})`);
-  if (projectIds.length > 0) parts.push(`project_id.in.(${projectIds.join(',')})`);
+  if (assetIds.length > 0) parts.push(`id.in.(${formatPostgrestInList(assetIds)})`);
+  if (projectIds.length > 0) parts.push(`project_id.in.(${formatPostgrestInList(projectIds)})`);
 
   if (parts.length === 0) {
     return query.eq('id', EMPTY_RESULT_HU_ID) as T;

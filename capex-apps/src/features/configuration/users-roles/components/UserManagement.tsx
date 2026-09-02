@@ -9,13 +9,18 @@ import { useBackendSession, isPasswordLoginEnabled } from '@/lib/auth/authConsta
 import { resolveMyTasksAccessToken } from '@/services/myTasksApi';
 import * as userAdminApi from '@/services/userAdminApi';
 import type { OfficeListDiffRow } from '@/services/userAdminApi';
-import { fetchConfigurationSlicesFromBackend } from '@/services/configurationApi';
+import {
+    fetchConfigurationSlicesFromBackend,
+    fetchUsersQueryFromBackend,
+} from '@/services/configurationApi';
 import { deleteConfigViaBeOrFallback, saveConfigViaBeOrFallback } from '@/services/configurationCrudApi';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { USER_TABLE_PAGE_SIZE, USER_TABLE_SCROLL_THRESHOLD_PX, MAX_OFFICE_UPLOAD_SIZE_BYTES } from '@/features/configuration/shared/configConstants';
+import { filterUsersDirectory } from '../utils/userDirectoryFilter';
 import { UserEditorModal } from './UserEditorModal';
 import { UserTableRow } from './UserTableRow';
 import { AuthBusyOverlay } from '@/components/auth/AuthBusyOverlay';
+
 
 export const UserManagement: React.FC<{
     users: User[];
@@ -36,8 +41,12 @@ export const UserManagement: React.FC<{
     const [isLoggingOutAfterRoleChange, setIsLoggingOutAfterRoleChange] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebouncedValue(searchTerm, 280);
-    const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('');
+    /** Filter key = roles.id (DB user_assignments.role_id), not display name. */
+    const [selectedRoleId, setSelectedRoleId] = useState<number | ''>('');
     const [visibleUserCount, setVisibleUserCount] = useState(USER_TABLE_PAGE_SIZE);
+    const [queriedUsers, setQueriedUsers] = useState<User[] | null>(null);
+    const [queryTotalDirectory, setQueryTotalDirectory] = useState<number | null>(null);
+    const [isQueryingUsers, setIsQueryingUsers] = useState(false);
     const [syncingAuth, setSyncingAuth] = useState(false);
     const officeFileInputRef = useRef<HTMLInputElement>(null);
     const [officeDiffLoading, setOfficeDiffLoading] = useState(false);
@@ -390,49 +399,69 @@ export const UserManagement: React.FC<{
         }
     };
 
-    useEffect(() => {
-        setVisibleUserCount(USER_TABLE_PAGE_SIZE);
-    }, [debouncedSearch, selectedRoleFilter, users.length]);
+    const roleIdFilter =
+        selectedRoleId === '' ? undefined : Number(selectedRoleId);
+    const hasActiveDirectoryFilter =
+        (roleIdFilter != null && Number.isFinite(roleIdFilter) && roleIdFilter > 0) ||
+        !!debouncedSearch.trim();
 
-    const indexedUsers = useMemo(
-        () =>
-            effectiveUsers.map((user) => ({
-                user,
-                usernameLower: user.username.toLowerCase(),
-                emailLower: user.email.toLowerCase(),
-            })),
-        [effectiveUsers],
-    );
+    // Server filter when role/search active — FE never invents rows outside DB match.
+    useEffect(() => {
+        if (!hasActiveDirectoryFilter) {
+            setQueriedUsers(null);
+            setQueryTotalDirectory(null);
+            setIsQueryingUsers(false);
+            return;
+        }
+        let cancelled = false;
+        setIsQueryingUsers(true);
+        // Optimistic preview from pack while BE answers (same role_id semantics).
+        setQueriedUsers(
+            filterUsersDirectory(effectiveUsers, {
+                roleId: roleIdFilter,
+                q: debouncedSearch,
+            }),
+        );
+        (async () => {
+            try {
+                const token = await resolveMyTasksAccessToken(getAccessTokenForBackend);
+                if (!useBackendSession() && !token) return;
+                const res = await fetchUsersQueryFromBackend(token, currentUserId, {
+                    roleId: roleIdFilter,
+                    q: debouncedSearch.trim() || undefined,
+                });
+                if (cancelled) return;
+                setQueriedUsers(res.users);
+                setQueryTotalDirectory(res.totalDirectory);
+            } catch {
+                if (cancelled) return;
+                // Keep optimistic client mirror; do not dump full directory.
+                showToast('Gagal memuat filter user dari server — menampilkan mirror lokal.', 'error');
+            } finally {
+                if (!cancelled) setIsQueryingUsers(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // effectiveUsers intentionally omitted: pack hydrate shouldn't retrigger every patch mid-type
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- filter keys only
+    }, [hasActiveDirectoryFilter, roleIdFilter, debouncedSearch, currentUserId]);
 
     const filteredUsers = useMemo(() => {
-        const q = debouncedSearch.trim().toLowerCase();
-        const bySearchAndRole = indexedUsers
-            .filter(({ user, usernameLower, emailLower }) => {
-            const matchesSearch =
-                !q ||
-                    usernameLower.includes(q) ||
-                    emailLower.includes(q);
-
-            const matchesRole = selectedRoleFilter
-                ? (user.assignments || []).some((a) => a.roleName === selectedRoleFilter)
-                : true;
-
-            return matchesSearch && matchesRole;
-            })
-            .map(({ user }) => user);
-        // UX fallback: when no search keyword is used, never hide the entire user list
-        // just because a stale role filter yields zero rows.
-        if (!q && bySearchAndRole.length === 0 && effectiveUsers.length > 0) {
-            return effectiveUsers;
-        }
-        return bySearchAndRole;
-    }, [effectiveUsers, indexedUsers, debouncedSearch, selectedRoleFilter]);
+        if (!hasActiveDirectoryFilter) return effectiveUsers;
+        return queriedUsers ?? [];
+    }, [hasActiveDirectoryFilter, effectiveUsers, queriedUsers]);
 
     useEffect(() => {
-        if (!selectedRoleFilter) return;
-        if (effectiveRoles.some((r) => r.roleName === selectedRoleFilter)) return;
-        setSelectedRoleFilter('');
-    }, [effectiveRoles, selectedRoleFilter]);
+        setVisibleUserCount(USER_TABLE_PAGE_SIZE);
+    }, [hasActiveDirectoryFilter, roleIdFilter, debouncedSearch]);
+
+    useEffect(() => {
+        if (selectedRoleId === '') return;
+        if (effectiveRoles.some((r) => r.id === selectedRoleId)) return;
+        setSelectedRoleId('');
+    }, [effectiveRoles, selectedRoleId]);
 
     const visibleUsers = useMemo(
         () => filteredUsers.slice(0, visibleUserCount),
@@ -489,15 +518,21 @@ export const UserManagement: React.FC<{
                         </svg>
                     </div>
 
-                    {/* Role Filter */}
+                    {/* Role Filter — value = roles.id (matches user_assignments.role_id) */}
                     <select
-                        value={selectedRoleFilter}
-                        onChange={(e) => setSelectedRoleFilter(e.target.value)}
+                        value={selectedRoleId === '' ? '' : String(selectedRoleId)}
+                        onChange={(e) => {
+                            const v = e.target.value;
+                            setSelectedRoleId(v === '' ? '' : Number(v));
+                        }}
                         className="px-4 py-2 border border-siloam-border rounded-xl focus:outline-none focus:ring-2 focus:ring-siloam-blue text-sm bg-white"
                     >
                         <option value="">All Roles</option>
                         {effectiveRoles.map((role, roleIdx) => (
-                            <option key={`role-${role.id ?? role.roleName}-${roleIdx}`} value={role.roleName}>
+                            <option
+                                key={`role-${role.id ?? role.roleName}-${roleIdx}`}
+                                value={role.id}
+                            >
                                 {role.roleName}
                             </option>
                         ))}
@@ -714,7 +749,10 @@ export const UserManagement: React.FC<{
             
             <div className="mt-4 text-xs text-siloam-text-secondary flex flex-wrap justify-between items-center gap-2">
                 <span>
-                    Showing {visibleUsers.length} of {filteredUsers.length} filtered ({effectiveUsers.length} total)
+                    Showing {visibleUsers.length} of {filteredUsers.length}
+                    {hasActiveDirectoryFilter ? ' filtered' : ''}
+                    {' '}({queryTotalDirectory ?? effectiveUsers.length} total)
+                    {isQueryingUsers ? ' · updating…' : ''}
                 </span>
                 {hasMoreUsers && (
                     <button

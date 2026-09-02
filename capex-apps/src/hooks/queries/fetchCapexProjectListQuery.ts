@@ -6,7 +6,7 @@ export type { ProjectListQueryParams, ProjectListQueryResult };
 
 const QUERY_REQUEST_TTL_MS = 5 * 60 * 1000;
 /** Bump when server-side list read policy changes (invalidates stale table disk cache). */
-const PROJECT_LIST_SCOPE_CACHE_REVISION = 'v9-scope-fp';
+const PROJECT_LIST_SCOPE_CACHE_REVISION = 'v12-code-fuzzy';
 
 function isSuspiciousEmptyList(result: ProjectListQueryResult): boolean {
   const d = result._debug;

@@ -230,7 +230,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
                 <div className="flex flex-grow min-w-[200px] items-center gap-2">
                     <input
                         type="text"
-                        placeholder="Cari asset, project, HU… (otomatis 0,4 dtk / Enter / Cari)"
+                        placeholder="Cari code/asset/project/HU — spasi=AND; koma≈titik (Enter/Cari)"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyDown={(e) => {

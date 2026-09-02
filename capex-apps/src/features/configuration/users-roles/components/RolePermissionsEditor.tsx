@@ -186,7 +186,8 @@ export const RolePermissionsEditor: React.FC<RolePermissionsEditorProps> = ({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-siloam-text-primary">Izin Role — {selectedRole.roleName}</h3>
           <p className="text-xs text-siloam-text-secondary mt-0.5">
-            Drag kartu antar kolom, lalu <strong>Save Changes</strong>. Hide = hilang dari sidebar.
+            Drag kartu antar kolom, lalu klik <strong>Save Changes</strong>. Hide = hilang dari
+            sidebar.
           </p>
         </div>
         <div

@@ -1,8 +1,11 @@
 import {
   buildSafeOrIlikeFilter,
+  normalizeProjectListAssetCodeKey,
   postgrestOrIlikeFilterValue,
+  projectListAssetCodeSearchVariants,
   sanitizePostgrestIdList,
   sanitizePostgrestSearchTerm,
+  sqlIlikeExactPattern,
   sqlIlikePattern,
 } from './postgrest-filter.util';
 
@@ -14,6 +17,23 @@ describe('postgrest-filter.util', () => {
 
   it('escapes ILIKE wildcards', () => {
     expect(sqlIlikePattern('100%_done')).toBe('%100\\%\\_done%');
+  });
+
+  it('exact ILIKE keeps commas (asset-code typos)', () => {
+    expect(sqlIlikeExactPattern('AIDO.26.00.001')).toBe('AIDO.26.00.001');
+    expect(sqlIlikeExactPattern('AIDO.26.00,001')).toBe('AIDO.26.00,001');
+    expect(sqlIlikeExactPattern('100%_done')).toBe('100\\%\\_done');
+  });
+
+  it('code search variants swap comma/dot', () => {
+    expect(projectListAssetCodeSearchVariants('AIDO.26.00,001')).toEqual([
+      'AIDO.26.00,001',
+      'AIDO.26.00.001',
+      'AIDO,26,00,001',
+    ]);
+    expect(normalizeProjectListAssetCodeKey('AIDO.26.00,001')).toBe(
+      normalizeProjectListAssetCodeKey('AIDO.26.00.001'),
+    );
   });
 
   it('quotes PostgREST .or() ilike values (dots and commas safe)', () => {
@@ -32,7 +52,9 @@ describe('postgrest-filter.util', () => {
     expect(expr).not.toMatch(/,id\.neq/);
   });
 
-  it('sanitizePostgrestIdList drops malformed ids', () => {
-    expect(sanitizePostgrestIdList(['abc-123', 'bad;drop', ''])).toEqual(['abc-123']);
+  it('sanitizePostgrestIdList keeps dotted asset ids, drops injection', () => {
+    expect(
+      sanitizePostgrestIdList(['ASSET-AIDO.26.RA-1781574949102-35eez', 'abc-123', 'bad;drop', '']),
+    ).toEqual(['ASSET-AIDO.26.RA-1781574949102-35eez', 'abc-123']);
   });
 });

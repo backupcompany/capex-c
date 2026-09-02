@@ -160,6 +160,44 @@ export async function fetchConfigurationSlicesFromBackend(
   return postPack(accessToken, userId, slices, !!options?.skipCache);
 }
 
+export type UsersQueryResponse = {
+  users: User[];
+  total: number;
+  totalDirectory: number;
+};
+
+/** DB-filtered user directory (role_id + search). Requires roleId and/or q. */
+export async function fetchUsersQueryFromBackend(
+  accessToken: string | null,
+  userId: number,
+  opts: { roleId?: number; q?: string },
+): Promise<UsersQueryResponse> {
+  const bff = useBeBffProxy();
+  const base = (process.env.NEXT_PUBLIC_CAPEXBE_URL || '').replace(/\/$/, '').trim();
+  if (!bff && !base) {
+    throw new Error('NEXT_PUBLIC_CAPEXBE_URL is not set');
+  }
+  const res = await (bff ? authenticatedFetch : fetch)(capexBeRequestUrl('/configuration/users-query'), {
+    method: 'POST',
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      userId,
+      ...(opts.roleId != null ? { roleId: opts.roleId } : {}),
+      ...(opts.q?.trim() ? { q: opts.q.trim() } : {}),
+    }),
+    credentials: bff || useBackendSession() ? 'include' : 'same-origin',
+    ...(bff ? { retryOn401: true } : {}),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as UsersQueryResponse;
+}
+
 /**
  * Fresh configuration slices — backend-only when Supabase fallback is disabled.
  */

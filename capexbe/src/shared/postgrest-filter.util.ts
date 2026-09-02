@@ -31,6 +31,29 @@ export function sqlIlikePattern(term: string): string {
   return `%${core}%`;
 }
 
+/** Case-insensitive equality for `.ilike('col', pattern)` (no `%` / `_` wildcards). */
+export function sqlIlikeExactPattern(term: string): string {
+  // Do NOT use sanitizeSearchForOrFilter — that turns commas into spaces (breaks asset codes).
+  return escapeIlikePattern(sanitizePostgrestSearchTerm(term));
+}
+
+/**
+ * Code variants for typo tolerance: AIDO.26.00,001 ↔ AIDO.26.00.001
+ * (comma / dot interchangeable; keep original too).
+ */
+export function projectListAssetCodeSearchVariants(term: string): string[] {
+  const raw = sanitizePostgrestSearchTerm(term);
+  if (!raw) return [];
+  const asDots = raw.replace(/,/g, '.');
+  const asCommas = raw.replace(/\./g, ',');
+  return [...new Set([raw, asDots, asCommas])];
+}
+
+/** Compact key for client-side similarity: strips separators. */
+export function normalizeProjectListAssetCodeKey(code: string): string {
+  return sanitizePostgrestSearchTerm(code).toLowerCase().replace(/[\s.,_-]+/g, '');
+}
+
 /**
  * ILIKE value for PostgREST `.or('col.ilike.…')` string filters.
  * Dots/commas in asset codes are reserved in `.or()` unless quoted.
@@ -50,11 +73,18 @@ export function buildSafeOrIlikeFilter(columns: readonly string[], searchTerm: s
   return columns.map((col) => `${col}.ilike.${v}`).join(',');
 }
 
-/** IDs embedded in PostgREST `.in.(a,b)` filter strings — alphanumeric + hyphen only. */
-const SAFE_POSTGREST_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** IDs embedded in PostgREST `.in.(a,b)` filter strings — alphanumeric + hyphen/underscore/dot. */
+const SAFE_POSTGREST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 export function sanitizePostgrestIdList(ids: string[]): string[] {
   return [...new Set(ids.map((id) => String(id).trim()))].filter((id) => SAFE_POSTGREST_ID.test(id));
+}
+
+/** Quote ids for PostgREST `.in.()` / `.or()` string filters (dots are reserved otherwise). */
+export function formatPostgrestInList(ids: string[]): string {
+  return sanitizePostgrestIdList(ids)
+    .map((id) => `"${id.replace(/"/g, '')}"`)
+    .join(',');
 }
 
 /** @deprecated use postgrestOrIlikeFilterValue */

@@ -763,9 +763,9 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
   );
 
   const {
-    paginatedAssets,
-    tableAssets,
-    footerTotalCount,
+    paginatedAssets: rawPaginatedAssets,
+    tableAssets: rawTableAssets,
+    footerTotalCount: rawFooterTotalCount,
   } = useProjectListTableDisplay({
     useClientFilteredDisplay,
     clientFilteredPage,
@@ -774,11 +774,18 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     deferTableRows: isFilterRefreshing && !isSearchActive && !searchAwaitingServer,
   });
 
-  const isPageDataRefreshing = isFilterRefreshing || isBackgroundRefetch;
-  const isSearchBusy =
+  // While typing/debounce or in-flight search — hide previous page (avoid stale AIDO under ASRI input).
+  // Trust BE/SQL results once fetch settles; do NOT re-filter client-side (that hid valid matches).
+  const searchTransition =
     isSearchStaging ||
-    searchAwaitingServer ||
-    (isSearchActive && (showBlockingSkeleton || isPageDataRefreshing));
+    (Boolean(searchTerm.trim()) && (tableQuery.isFetching || tableQuery.isPending));
+
+  const paginatedAssets = searchTransition ? [] : rawPaginatedAssets;
+  const tableAssets = searchTransition ? [] : rawTableAssets;
+  const footerTotalCount = searchTransition ? 0 : rawFooterTotalCount;
+
+  const isPageDataRefreshing = isFilterRefreshing || isBackgroundRefetch;
+  const isSearchBusy = searchTransition || (isSearchActive && showBlockingSkeleton);
 
   /** Detail panel keyed by asset.id — resolve row from current page / cache only. */
   const selectedAsset = useMemo(() => {
@@ -1854,7 +1861,10 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           <AssetFilterPanel
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
-            onSearchSubmit={submitSearch}
+            onSearchSubmit={(term) => {
+              submitSearch(term);
+              resetTableForFilterChange();
+            }}
             onSearchReset={handleSearchReset}
             onFilterPanelOpen={refreshMasterConfig}
             toolbarLeading={
@@ -1906,7 +1916,7 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
           selectedAssetId={selectedAssetId}
           onRowClick={handleRowClick}
           onRowHover={handleRowHover}
-          showBlockingSkeleton={showInitialTableLoading && !searchAwaitingServer}
+          showBlockingSkeleton={(showInitialTableLoading && !searchAwaitingServer) || searchTransition}
           isTableLoading={isPageDataRefreshing && !isSearchBusy}
           isSearchPending={isSearchBusy}
           isBackgroundRefetch={isBackgroundRefetch && !isSearchBusy}
@@ -1916,7 +1926,8 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
             footerTotalCount === 0 &&
             !showInitialTableLoading &&
             !isPageDataRefreshing &&
-            !isSearchStaging
+            !isSearchStaging &&
+            !searchTransition
               ? Boolean(tableQuery.data?._debug?.searchOutsideScope)
                 ? `Tidak ada hasil untuk “${appliedSearchTerm}” di scope akses Anda. Ada data cocok di HU/archetype lain — minta admin menambah assignment.`
                 : `Tidak ada hasil untuk “${appliedSearchTerm}” pada periode & filter saat ini (hasil dibatasi scope akses Anda).`
