@@ -36,6 +36,7 @@ import type { PagePreloads } from '@/hooks/usePagePreloads';
 import type { ShowToastOptions } from '@/contexts/ToastContext';
 import { PageContentSkeleton } from '@/components/app-shell/PageContentSkeleton';
 import { canNavigateToPage, type UserDataScopeShape } from '@/lib/pagePermissions';
+import { resolvePostLoginLandingPage } from '@/lib/postLoginLanding';
 
 type PermissionsLike = {
   canAccessPage: (page: Page) => boolean;
@@ -122,6 +123,15 @@ function AppRouteRendererComponent({
   if (
     !canNavigateToPage(routePage, permissions.canAccessPage(routePage), permissions.userScopes)
   ) {
+    const landing = resolvePostLoginLandingPage(currentUser, allRoles);
+    // Ada menu lain → AppRoot replace; skeleton singkat, jangan tampilkan Access Denied.
+    if (landing !== routePage) {
+      return (
+        <div className="flex-1" aria-busy="true" aria-label="Mengalihkan ke menu yang tersedia">
+          <PageContentSkeleton variant="table" />
+        </div>
+      );
+    }
     return (
       <div className="flex-1 p-4 md:p-8 text-center h-screen flex items-center justify-center">
         <div className="bg-siloam-surface rounded-xl p-8 shadow-soft max-w-md">

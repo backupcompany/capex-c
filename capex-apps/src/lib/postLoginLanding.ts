@@ -39,13 +39,9 @@ function scopesFromUser(user: User, allRoles: UserRole[]): UserDataScopeShape {
 }
 
 /**
- * Halaman setelah login: item pertama di sidebar yang boleh dibuka
- * (Akses Screen + data scope bila halaman membutuhkannya).
+ * Halaman setelah login / bila URL saat ini Hide: item pertama sidebar yang boleh dibuka.
  */
-export async function resolvePostLoginLandingPage(
-  user: User,
-  allRoles: UserRole[],
-): Promise<Page> {
+export function resolvePostLoginLandingPage(user: User, allRoles: UserRole[]): Page {
   const permMap = buildConsolidatedPermissionMap(user, allRoles);
   const scopes = scopesFromUser(user, allRoles);
 

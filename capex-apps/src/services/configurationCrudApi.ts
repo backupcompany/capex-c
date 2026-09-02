@@ -6,6 +6,7 @@ import {
   slicesForCrudEntity,
 } from '../lib/configurationCacheSync';
 import { invalidateRequestCache } from '../lib/requestCache';
+import { markShellCachePatched } from '../lib/syncAppShellCaches';
 
 export type ConfigurationCrudEntity =
   | 'user'
@@ -168,6 +169,10 @@ export async function saveConfigViaBeOrFallback<T extends object>(
   if (userId != null) {
     const saved = await saveConfigurationEntityViaBackend<T>(userId, entity, payload, { strictBackend });
     if (saved) {
+      // Role/user: block same-tab stale refetch until syncAppShellCaches runs (caller patches next).
+      if (entity === 'role' || entity === 'user') {
+        markShellCachePatched();
+      }
       if (entity === 'assetTypeConfig' || entity === 'assetTypeGroup') {
         notifyAssetTypeMasterChanged();
       } else if (entity === 'appConfig') {
@@ -193,6 +198,9 @@ export async function deleteConfigViaBeOrFallback(
   if (userId != null) {
     const ok = await deleteConfigurationEntityViaBackend(userId, entity, id, { strictBackend });
     if (ok) {
+      if (entity === 'role' || entity === 'user') {
+        markShellCachePatched();
+      }
       if (entity === 'assetTypeConfig' || entity === 'assetTypeGroup') {
         notifyAssetTypeMasterChanged();
       } else {

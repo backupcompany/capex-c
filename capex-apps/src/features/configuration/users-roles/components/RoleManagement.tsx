@@ -10,6 +10,7 @@ import {
 } from '@/services/configurationCrudApi';
 import { RolePermissionsEditor } from '@/features/configuration/users-roles/components/RolePermissionsEditor';
 import { normalizeRolesWithAllLevels } from '@/features/configuration/users-roles/utils/roleNormalization';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 function rolePermissionsEqual(a: UserRole | undefined, b: UserRole | undefined): boolean {
   if (!a || !b) return a === b;
@@ -26,7 +27,8 @@ function rolePermissionsEqual(a: UserRole | undefined, b: UserRole | undefined):
 export const RoleManagement: React.FC<{
   roles: UserRole[];
   onRolesListPatch?: (roles: UserRole[]) => void;
-}> = ({ roles, onRolesListPatch }) => {
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
+}> = ({ roles, onRolesListPatch, onUnsavedReport }) => {
   const { showToast } = useToast();
   const [editedRoles, setEditedRoles] = useState<UserRole[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -77,12 +79,12 @@ export const RoleManagement: React.FC<{
     setIsDirty(true);
   };
 
-  const handleCancelChanges = () => {
+  const handleCancelChanges = useCallback(() => {
     if (isSaving) return;
     hydrateFromProps();
-  };
+  }, [isSaving, hydrateFromProps]);
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = useCallback(async () => {
     if (!selectedRoleId || isSaving || !isDirty) return;
     const roleToSave = editedRoles.find((r) => r.id === selectedRoleId);
     if (!roleToSave) return;
@@ -98,15 +100,16 @@ export const RoleManagement: React.FC<{
     try {
       const saved = await saveConfigViaBeOrFallback<UserRole>('role', roleToSave);
       if (!saved) throw new Error(`Gagal menyimpan izin '${roleToSave.roleName}'.`);
+      const savedPerms = (saved as UserRole).permissions;
+      if (!Array.isArray(savedPerms) || !savedPerms.length) {
+        throw new Error('Server tidak mengembalikan permissions — simpan mungkin gagal.');
+      }
       const savedId = Number((saved as UserRole).id);
       const persisted: UserRole = {
         ...roleToSave,
         id: Number.isFinite(savedId) && savedId > 0 ? savedId : roleToSave.id,
         roleName: (saved as UserRole).roleName || roleToSave.roleName,
-        permissions:
-          Array.isArray((saved as UserRole).permissions) && (saved as UserRole).permissions!.length
-            ? (saved as UserRole).permissions!
-            : roleToSave.permissions,
+        permissions: savedPerms,
       };
       const nextRoles = editedRoles.map((r) => (r.id === selectedRoleId ? persisted : r));
       setEditedRoles(nextRoles);
@@ -119,7 +122,29 @@ export const RoleManagement: React.FC<{
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [
+    selectedRoleId,
+    isSaving,
+    isDirty,
+    editedRoles,
+    roles,
+    onRolesListPatch,
+    showToast,
+  ]);
+
+  useEffect(() => {
+    if (!onUnsavedReport) return;
+    if (!isDirty) {
+      onUnsavedReport('role-permissions', null);
+      return;
+    }
+    onUnsavedReport('role-permissions', {
+      label: `Role permissions${selectedRole ? `: ${selectedRole.roleName}` : ''}`,
+      save: handleSaveChanges,
+      discard: handleCancelChanges,
+    });
+    return () => onUnsavedReport('role-permissions', null);
+  }, [isDirty, onUnsavedReport, handleSaveChanges, handleCancelChanges, selectedRole]);
 
   const handleStartAddNewRole = () => {
     if (isDirty) {

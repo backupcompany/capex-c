@@ -923,20 +923,41 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     pageActionRefs.current = actions;
   }, []);
 
-  const goToFirstAccessibleSidebarPage = useCallback(async () => {
-    if (!currentUser) return;
-    const landing = await resolvePostLoginLandingPage(currentUser, allRoles);
-    handleNavigation(landing);
-  }, [currentUser, allRoles, handleNavigation]);
-
-  const handleGoToFirstAccessiblePage = useCallback(() => {
-    void goToFirstAccessibleSidebarPage();
-  }, [goToFirstAccessibleSidebarPage]);
-
   const shellPermissionsReady = areShellPermissionsReady(currentUser, allRoles, {
     dataInitialized,
     bootstrapFailed: bootstrapQuery.isError,
   });
+
+  const goToFirstAccessibleSidebarPage = useCallback(() => {
+    if (!currentUser) return;
+    const landing = resolvePostLoginLandingPage(currentUser, allRoles);
+    if (landing === routePage) return;
+    setIsSidebarOpen(false);
+    prefetchScreenChunk(landing);
+    startTransition(() => {
+      router.replace(hrefForPage(landing));
+    });
+    setIsPageDirty(false);
+  }, [currentUser, allRoles, routePage, router, hrefForPage]);
+
+  const handleGoToFirstAccessiblePage = useCallback(() => {
+    goToFirstAccessibleSidebarPage();
+  }, [goToFirstAccessibleSidebarPage]);
+
+  // Role tanpa akses ke URL saat ini (mis. Dashboard=Hide) → langsung menu pertama yang boleh.
+  useEffect(() => {
+    if (!shellPermissionsReady || !currentUser) return;
+    if (canNavigateToPage(routePage, permissions.canAccessPage(routePage), permissions.userScopes)) {
+      return;
+    }
+    goToFirstAccessibleSidebarPage();
+  }, [
+    shellPermissionsReady,
+    currentUser,
+    routePage,
+    permissions,
+    goToFirstAccessibleSidebarPage,
+  ]);
 
   const hideUnassignedBdd = useMemo(
     () => !!currentUser && !userCanAccessUnassignedBdd(currentUser),

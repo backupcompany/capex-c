@@ -68,6 +68,7 @@ export function ConfigurationTabPanels({
         currentUser={currentUser}
         patchUsersList={patchUsersList}
         patchRolesList={patchRolesList}
+        onUnsavedReport={onUnsavedReport}
       />
     );
   }

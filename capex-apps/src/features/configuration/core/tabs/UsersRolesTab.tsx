@@ -5,12 +5,14 @@ import type { User, UserRole } from '@/types';
 import type { ConfigurationDataPack } from '@/services/configurationApi';
 import { UserManagement } from '@/features/configuration/users-roles/components/UserManagement';
 import { RoleManagement } from '@/features/configuration/users-roles/components/RoleManagement';
+import type { ConfigurationUnsavedHandle } from '@/features/configuration/shared/configurationUnsaved';
 
 type UsersRolesTabProps = {
   pack: Partial<ConfigurationDataPack>;
   currentUser: User;
   patchUsersList: (users: User[]) => void;
   patchRolesList: (roles: UserRole[]) => void;
+  onUnsavedReport?: (key: string, handle: ConfigurationUnsavedHandle | null) => void;
 };
 
 export function UsersRolesTab({
@@ -18,6 +20,7 @@ export function UsersRolesTab({
   currentUser,
   patchUsersList,
   patchRolesList,
+  onUnsavedReport,
 }: UsersRolesTabProps) {
   return (
     <div className="space-y-6">
@@ -38,6 +41,7 @@ export function UsersRolesTab({
         <RoleManagement
           roles={pack.roles ?? []}
           onRolesListPatch={patchRolesList}
+          onUnsavedReport={onUnsavedReport}
         />
       </section>
     </div>
