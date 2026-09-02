@@ -13,7 +13,7 @@ Sign-in **production** = **Microsoft SSO only** (`CAPEX_AUTH_MODE=sso`, `CAPEX_D
 
 ## Versi — skema & step bump
 
-Skema: **`Major.Minor.Patch.Build`** (contoh `1.1.1.4`).
+Skema: **`Major.Minor.Patch.Build`** (contoh `1.1.2.0`).
 
 | Segmen | Kapan naik |
 |--------|------------|
@@ -37,7 +37,7 @@ Jangan commit `.env` / secret. Contoh auth ada di `capex-apps/.env.example` dan 
 
 ## Versi sekarang
 
-**`1.1.1.4`** (23 Agustus 2026) — lihat [RELEASES.md](./RELEASES.md).
+**`1.1.2.0`** (2 September 2026) — lihat [RELEASES.md](./RELEASES.md).
 
 ---
 

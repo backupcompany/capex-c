@@ -1,6 +1,6 @@
 # CAPEX Pro — Update Releases
 
-Skema versi: **`Major.Minor.Patch.Build`** (contoh `1.1.1.4`).
+Skema versi: **`Major.Minor.Patch.Build`** (contoh `1.1.2.0`).
 
 | Segmen | Arti |
 |--------|------|
@@ -11,6 +11,49 @@ Skema versi: **`Major.Minor.Patch.Build`** (contoh `1.1.1.4`).
 
 **Runtime target:** monolit Siloam (`capex-web` + `capex-api` + Postgres/PostgREST + Redis).  
 **Panduan bump / optimasi:** lihat [README.md](./README.md).
+
+---
+
+## 1.1.2.0 — 2 September 2026
+
+**Status:** pushed ke `main` (`d37e559` + docs) — git only; deploy VM terpisah  
+**Bump:** **patch** dari `1.1.1.4` — kumpulan bugfix/hardening sejak 23 Agu (bukan major/minor).
+
+### Ringkasan
+Landing role tanpa Dashboard tidak lagi stuck Access Denied; Role Management pakai **Save Changes** yang benar-benar POST ke BE/DB; Project List search lebih ketat; Configuration Users & Roles sync/cache; Budget HU / Multi-Year save & empty-state; Power Automate via Nest (bukan mengandalkan `pg_net`); SSO/session + pentest salt.
+
+### Auth / akses / Configuration
+- Auto-redirect ke menu pertama sidebar bila URL (mis. Dashboard) = Hide untuk role.
+- Role permissions: dirty draft + Cancel / Save Changes; BE echo `permissions` wajib; guard cache agar refresh tidak mengembalikan state lama.
+- Users filter by `roleId` (bukan fallback all users); role save invalidate shared cache semua user.
+- Sidebar / sticky Users & Roles heading.
+
+### Capex Project List
+- Search server-side ketat (multi-token AND, comma≈dot, asset id dengan `.`).
+
+### Budget / data
+- Budget HU: summary nol, dropdown kosong, loading vs empty, save category/serial PK, assets modal.
+- Multi-Year / Network / Archetype: save harden + error UI; bundle trust setelah refresh.
+
+### Ops / PA / SSO
+- Power Automate: Nest webhook canonical; DB trigger no-op aman tanpa `pg_net`.
+- Compose Siloam port/env; PostgREST wrapper; SSO seed/pentest; Hashids salt keluar dari client bundle.
+
+### Residual (ops — bukan blocker release)
+| Item | Catatan |
+|------|---------|
+| Deploy `d37e559` ke DEV/PROD | Belum (sengaja docs/git dulu) |
+| `heni.andriyanie@…` | Belum ada di PROD & Supabase — tunggu role + HU |
+| FC Unit Dashboard DEV open / PROD Hide | Opsional sync; UX redirect menutupi |
+| My Task kosong (beberapa user) | Cek data queue/assignment |
+
+### Cara verifikasi
+
+```bash
+# Setelah deploy (nanti):
+# Login Purchasing Unit → landing langsung menu pertama (bukan Access Denied)
+# Configuration → Role Management: drag → Save Changes → refresh → izin tetap
+```
 
 ---
 
