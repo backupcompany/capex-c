@@ -1,6 +1,7 @@
 import type { UserRole } from '../types';
 
-const STORAGE_KEY = 'capex.allRoles.v1';
+// v2: force clients off empty/partial FC Unit (etc.) matrices that painted Access Denied.
+const STORAGE_KEY = 'capex.allRoles.v2';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
