@@ -55,8 +55,19 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         const newSelected = selected.includes(option)
             ? selected.filter(item => item !== option)
             : [...selected, option];
+        // All options checked ≡ All (empty) — same as Priority "All" in the closed label.
+        if (
+            normalizedOptions.length > 0 &&
+            newSelected.length >= normalizedOptions.length &&
+            normalizedOptions.every((o) => newSelected.includes(o))
+        ) {
+            onSelectionChange([]);
+            return;
+        }
         onSelectionChange(newSelected);
     };
+
+    const selectAll = () => onSelectionChange([]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -92,6 +103,17 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
             {isOpen && (
                 <div className="absolute z-[100] mt-1 w-full min-w-[220px] bg-white border border-siloam-border rounded-lg shadow-xl animate-fade-in">
                     <div className="max-h-72 overflow-y-auto overscroll-contain py-1 custom-scrollbar">
+                        <button
+                            type="button"
+                            onClick={selectAll}
+                            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-siloam-bg transition-colors border-l-4 ${
+                              selected.length === 0
+                                ? 'border-siloam-blue text-siloam-blue font-medium'
+                                : 'border-transparent text-siloam-text-primary'
+                            }`}
+                        >
+                            {emptySelectionLabel}
+                        </button>
                         {normalizedOptions.map((option, idx) => (
                             <label key={`${title}-${option}-${idx}`} className="flex items-center px-4 py-2.5 text-sm hover:bg-siloam-bg cursor-pointer transition-colors border-l-4 border-transparent hover:border-siloam-blue/30">
                                 <input

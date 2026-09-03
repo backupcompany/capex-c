@@ -1020,17 +1020,8 @@ export function buildResolvedFilterOpts(
           .map(([id]) => id)
       : [];
 
-  if (query.priorityNames.length > 0 && priorityIds.length === 0) {
-    return {
-      ...resolveProjectListFilterOpts(query, master, serverScope),
-      priorityIds: [],
-      assetTypeGroupFilter,
-      workflowSetIdsForGroup: assetTypeGroupFilter?.workflowSetIds ?? null,
-      forceEmpty: true,
-      filterHuIds: [],
-    };
-  }
-
+  // Unknown / stale priority labels (or "All" with leftover names) → no priority filter.
+  // Do not forceEmpty — that made Capex Project List look blank when Priority showed All.
   const base = resolveProjectListFilterOpts(query, master, serverScope);
   return {
     ...base,

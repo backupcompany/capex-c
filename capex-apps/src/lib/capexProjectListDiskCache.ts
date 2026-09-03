@@ -24,7 +24,8 @@ export {
   invalidateProjectListCache,
 };
 
-const FILTER_KEY = 'capex.projectList.filters.v1';
+/** v2: default periods = Semua (reset saved single-period like "budget laptop"). */
+const FILTER_KEY = 'capex.projectList.filters.v2';
 /** Legacy full-bundle disk (v2) — kept for backward compat reads only. */
 const LEGACY_BUNDLE_PREFIX = 'capexProjectListCache:v2:';
 /** Server-side table page responses (current architecture). */

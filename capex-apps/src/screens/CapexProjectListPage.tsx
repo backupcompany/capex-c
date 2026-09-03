@@ -1597,6 +1597,18 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     [priorities],
   );
 
+  // Drop stale priority labels (ex-config) so Priority "All" never force-empties the table.
+  useEffect(() => {
+    if (!priorityFilterOptions.length) return;
+    const allowed = new Set(priorityFilterOptions.map((n) => normFilterName(n)));
+    setSelectedPriorities((prev) => {
+      if (prev.length === 0) return prev;
+      const valid = prev.filter((n) => allowed.has(normFilterName(n)));
+      if (valid.length === priorityFilterOptions.length) return [];
+      return valid.length === prev.length ? prev : valid;
+    });
+  }, [priorityFilterOptions]);
+
   const hasMobileActiveFilters = useMemo(
     () =>
       Boolean(appliedSearchTerm) ||

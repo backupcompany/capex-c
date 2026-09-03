@@ -139,7 +139,10 @@ export function sortPeriodNamesNewestFirst(periods: string[]): string[] {
   return [...periods].sort((a, b) => key(b) - key(a) || a.localeCompare(b, 'id'));
 }
 
-/** Default = latest budget period; empty array = user chose "Semua budget period". */
+/**
+ * Default = Semua budget period (`[]`) so list tidak kosong di period aneh
+ * (mis. "budget laptop"). Empty array = "Semua" di PeriodCheckboxFilter.
+ */
 export function resolveInitialProjectListSelectedPeriods(
   saved: ProjectListFilterSelection | null | undefined,
   budgetPeriods: BudgetPeriod[],
@@ -147,8 +150,8 @@ export function resolveInitialProjectListSelectedPeriods(
   if (saved != null && Array.isArray(saved.selectedPeriods)) {
     return saved.selectedPeriods;
   }
-  const latest = pickLatestBudgetPeriodName(budgetPeriods);
-  return latest ? [latest] : [];
+  void budgetPeriods;
+  return [];
 }
 
 export function budgetPeriodFilterOptions(periods: BudgetPeriod[]): string[] {
