@@ -90,6 +90,7 @@ export class ProjectListService {
     accessToken: string,
     viewerUserId: number,
     bundle: T,
+    opts?: { exposeNumericId?: boolean },
   ): Promise<T> {
     if (!Array.isArray(bundle.users)) return bundle;
     const includePii = await viewerCanSeeUserPii(this.authZ, accessToken, viewerUserId);
@@ -103,7 +104,13 @@ export class ProjectListService {
     }
     return {
       ...bundle,
-      users: sanitizeUsersForDirectory(users, viewerUserId, includePii),
+      // Ad-hoc assign / CPL pickers need numeric id (publicId alone cannot be selected).
+      users: sanitizeUsersForDirectory(
+        users,
+        viewerUserId,
+        includePii,
+        opts?.exposeNumericId === true,
+      ),
     };
   }
 
@@ -710,7 +717,7 @@ export class ProjectListService {
       allRoles: master.allRoles,
       allTasks: master.allTasks,
     };
-    return this.egressBundle(accessToken, userId, bundle);
+    return this.egressBundle(accessToken, userId, bundle, { exposeNumericId: true });
   }
 
   private async loadMasterPayload(client: SupabaseClient, userId: number): Promise<MasterListPayload & { allRoles: any[] }> {

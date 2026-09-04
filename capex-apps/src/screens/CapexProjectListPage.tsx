@@ -418,6 +418,9 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
       setMasterData({ archetypes: master.archetypes, hus: master.hus, users: master.users });
       if (master.allRoles?.length) setAllRoles(master.allRoles);
       setAllTasks(master.allTasks);
+    } else if (master.users?.length) {
+      // Refresh directory when master returns users with ids (assignee picker).
+      setMasterData((prev) => ({ ...prev, users: master.users }));
     }
     if (master.priorities?.length) {
       setPriorities(master.priorities);
