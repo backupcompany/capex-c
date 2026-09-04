@@ -1,5 +1,5 @@
 /**
- * ponytail: shell not ready when role matches but permissions still empty.
+ * ponytail: shell waits for matrix only until bootstrap settles — never forever.
  * Run: node src/lib/auth/mergeAuthIdentityUser.selfcheck.mjs
  */
 import assert from 'node:assert/strict';
@@ -13,7 +13,8 @@ function ready(assignments, roles, { dataInitialized = false, bootstrapFailed = 
     return role != null && (role.permissions?.length ?? 0) > 0;
   });
   if (matrixReady) return true;
-  return Boolean(bootstrapFailed);
+  if (!dataInitialized && !bootstrapFailed) return false;
+  return true;
 }
 
 assert.equal(
@@ -31,7 +32,7 @@ assert.equal(
   ready([{ roleName: 'FC Unit' }], [{ roleName: 'FC Unit', permissions: [] }], {
     dataInitialized: true,
   }),
-  false,
+  true,
 );
 assert.equal(
   ready([{ roleName: 'FC Unit' }], [{ roleName: 'FC Unit', permissions: [] }], {

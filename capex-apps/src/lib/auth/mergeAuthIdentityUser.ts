@@ -137,14 +137,14 @@ export function areShellPermissionsReady(
   if (hasAssignments) {
     // Role name can match before permission rows hydrate (stale/partial cache) —
     // don't paint Access Denied until the mapped role has a matrix.
-    // dataInitialized alone is not enough: empty permissions still mean "not ready".
     const matrixReady = currentUser.assignments.some((a) => {
       const role = findRoleForAssignment(a, allRoles);
       return role != null && (role.permissions?.length ?? 0) > 0;
     });
     if (matrixReady) return true;
-    // Hard bootstrap failure → allow deny UI; otherwise keep skeleton.
-    return Boolean(options.bootstrapFailed);
+    // Wait only while bootstrap still in flight — never spin forever after it settles.
+    if (!options.dataInitialized && !options.bootstrapFailed) return false;
+    return true;
   }
 
   if (options.bootstrapFailed || options.dataInitialized) return true;

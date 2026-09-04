@@ -932,10 +932,14 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
     if (!currentUser) return;
     const landing = resolvePostLoginLandingPage(currentUser, allRoles);
     if (landing === routePage) {
-      // Stale matrix / no open menu → drop disk roles and reload so bootstrap can redirect.
+      // Stale matrix: one reload max — never infinity-loop when landing really is Dashboard.
       clearCachedRoles();
       if (typeof window !== 'undefined') {
-        window.location.reload();
+        const flag = 'capex.shell.rolesReloadOnce';
+        if (!sessionStorage.getItem(flag)) {
+          sessionStorage.setItem(flag, '1');
+          window.location.reload();
+        }
       }
       return;
     }
