@@ -37,8 +37,11 @@ import type { User, UserRole } from '@/types';
 import { isShellCachePatchGuarded, readGuardedAuthBootstrapSlice } from '@/lib/syncAppShellCaches';
 import { readCachedBootstrap } from '@/lib/appBootstrapCache';
 import { invalidateRequestCache } from '@/lib/requestCache';
+import { authzPackFingerprint } from '@/features/configuration/users-roles/utils/authzPackFingerprint';
 
 const CONFIG_STALE_MS = 5 * 60 * 1000;
+/** SA Configuration Users & Roles — peer UI sync only (read pack; no shell/user matrix push). */
+const USERS_ROLES_PEER_POLL_MS = 4_000;
 
 type UseConfigurationPageDataOptions = {
   userId: number;
@@ -291,6 +294,68 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
       cancelled = true;
     };
   }, [activeTab, areSlicesPresent, ensureSlices, refreshSlices]);
+
+  // Peer Super Admin UI only: poll roles/users into Configuration pack.
+  // Does not call onRolesListPatch / shell sync — active end-user matrix stays until their next bootstrap.
+  useEffect(() => {
+    if (activeTab !== 'Users & Roles') return;
+
+    let cancelled = false;
+    let inflight = false;
+    let lastFp = authzPackFingerprint(
+      queryClient.getQueryData<Partial<ConfigurationDataPack>>(qk)?.roles,
+      queryClient.getQueryData<Partial<ConfigurationDataPack>>(qk)?.users,
+    );
+
+    const tick = async () => {
+      if (cancelled || inflight) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      inflight = true;
+      try {
+        const token = useBackendSession() ? null : (await getAccessTokenForBackend()) ?? null;
+        const fresh = await fetchFreshConfigurationSlices(token, userId, ['roles', 'users']);
+        if (cancelled) return;
+        if (!Array.isArray(fresh.roles) && !Array.isArray(fresh.users)) return;
+
+        const current = queryClient.getQueryData<Partial<ConfigurationDataPack>>(qk);
+        const nextRoles = Array.isArray(fresh.roles) ? fresh.roles : current?.roles;
+        const nextUsers = Array.isArray(fresh.users) ? fresh.users : current?.users;
+        const fp = authzPackFingerprint(nextRoles, nextUsers);
+        if (fp === lastFp) return;
+        lastFp = fp;
+
+        const partial: Partial<ConfigurationDataPack> = {};
+        const keys: ConfigSliceKey[] = [];
+        if (Array.isArray(fresh.roles)) {
+          partial.roles = fresh.roles;
+          keys.push('roles');
+        }
+        if (Array.isArray(fresh.users)) {
+          partial.users = fresh.users;
+          keys.push('users');
+        }
+        if (!keys.length) return;
+        mergeAndPersistSlices(partial, keys);
+      } catch {
+        /* keep last pack */
+      } finally {
+        inflight = false;
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void tick();
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), USERS_ROLES_PEER_POLL_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [activeTab, mergeAndPersistSlices, qk, queryClient, userId]);
 
   const retryActiveTab = useCallback(async () => {
     const required = TAB_REQUIRED_SLICES[activeTab];
