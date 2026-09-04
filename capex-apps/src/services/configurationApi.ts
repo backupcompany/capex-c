@@ -86,7 +86,9 @@ async function postPack(
 
   let authDead = false;
   const invoke = async (): Promise<Partial<ConfigurationDataPack> | null> => {
-    if (Date.now() < forbiddenUntilTs) {
+    const asksAdminDirectory =
+      !slices?.length || slices.some((s) => s === 'users' || s === 'roles');
+    if (asksAdminDirectory && Date.now() < forbiddenUntilTs) {
       trackBackendFetch('configuration.pack', 'fallback', {
         reason: 'forbidden_cooldown',
         httpStatus: 403,
@@ -114,7 +116,8 @@ async function postPack(
       });
       if (!res.ok) {
         if (res.status === 401) authDead = true;
-        if (res.status === 403) {
+        // Only cooldown full/admin packs — operational slices must stay retryable.
+        if (res.status === 403 && asksAdminDirectory) {
           forbiddenUntilTs = Date.now() + FORBIDDEN_COOLDOWN_MS;
         }
         trackBackendFetch('configuration.pack', 'fallback', { reason: 'http_error', httpStatus: res.status });

@@ -358,6 +358,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
       !!selectedHU &&
       filteredCount > 0 &&
       !isInitialLoad &&
+      permissions.isAllowed('FS Update', 'view') &&
       !(remoteBundle?.studies && remoteBundle.studies.length > 0),
     staleTime: STALE_MS,
     gcTime: GC_MS,
@@ -1636,7 +1637,7 @@ const BudgetHUPageInner: React.FC<BudgetHUPageProps> = ({
 
       const XLSX = await import('xlsx');
       let fsByProjectId: Map<string, FeasibilityStudy> = fsDataMap;
-      if (fsByProjectId.size === 0) {
+      if (fsByProjectId.size === 0 && permissions.isAllowed('FS Update', 'view')) {
         const studies = await fsService.getAllFeasibilityStudies({ userId: currentUser.id }).catch(() => []);
         fsByProjectId = new Map(studies.map((s) => [s.projectId, s]));
       }

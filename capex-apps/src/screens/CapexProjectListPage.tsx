@@ -151,8 +151,12 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
     typeof window !== 'undefined' ? readProjectListFilterSelection() : null,
   );
 
+  const permissions = usePermissions(currentUser, shellAllRoles);
+
   const { resolvedBudgetPeriods, availablePeriodOptions, initialSelectedPeriods } =
-    useProjectListPeriodConfig(periodName, budgetPeriods, allPeriodNames, savedFiltersRef.current);
+    useProjectListPeriodConfig(periodName, budgetPeriods, allPeriodNames, savedFiltersRef.current, {
+      preferSinglePeriod: permissions.userScopes.all,
+    });
 
   const {
     selectedPeriods,
@@ -319,7 +323,6 @@ const CapexProjectListPageInner: React.FC<CapexProjectListPageProps> = ({
 
   // RBAC for this page MUST use shell role matrix (AppRoot). Never gate on
   // preload/master allRoles — empty local roles used to false-deny while list API 200'd.
-  const permissions = usePermissions(currentUser, shellAllRoles);
   const canView = permissions.canOperateOnPage(Page.CapexProjectList, 'view');
 
   useEffect(() => {

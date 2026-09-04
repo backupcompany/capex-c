@@ -57,7 +57,6 @@ import {
   clearCachedAuthUser,
 } from '@/lib/authSessionCache';
 import {
-  readCachedRoles,
   writeCachedRoles,
   clearCachedRoles,
 } from '@/lib/appRolesCache';
@@ -128,8 +127,9 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
 
   // Global state for user and permissions
   const [allUsers, setAllUsers] = useState<User[]>(() => initialBootstrap?.users ?? []);
-  const [allRoles, setAllRoles] = useState<UserRole[]>(
-    () => initialBootstrap?.roles?.length ? initialBootstrap.roles : readCachedRoles(),
+  // Don't seed roles from disk — stale/partial matrices paint Access Denied for FC Unit etc.
+  const [allRoles, setAllRoles] = useState<UserRole[]>(() =>
+    initialBootstrap?.roles?.length ? cloneRolesForApp(initialBootstrap.roles) : [],
   );
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -931,7 +931,14 @@ const AppRoot: React.FC<AppProps> = ({ hasSessionCookies = false }) => {
   const goToFirstAccessibleSidebarPage = useCallback(() => {
     if (!currentUser) return;
     const landing = resolvePostLoginLandingPage(currentUser, allRoles);
-    if (landing === routePage) return;
+    if (landing === routePage) {
+      // Stale matrix / no open menu → drop disk roles and reload so bootstrap can redirect.
+      clearCachedRoles();
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+      return;
+    }
     setIsSidebarOpen(false);
     prefetchScreenChunk(landing);
     startTransition(() => {

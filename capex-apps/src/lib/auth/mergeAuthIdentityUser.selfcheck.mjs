@@ -8,15 +8,12 @@ function ready(assignments, roles, { dataInitialized = false, bootstrapFailed = 
   if (!assignments?.length) {
     return bootstrapFailed || dataInitialized;
   }
-  if (!roles.length) {
-    return bootstrapFailed || dataInitialized;
-  }
   const matrixReady = assignments.some((a) => {
     const role = roles.find((r) => r.roleName === a.roleName);
     return role != null && (role.permissions?.length ?? 0) > 0;
   });
   if (matrixReady) return true;
-  return bootstrapFailed || dataInitialized;
+  return Boolean(bootstrapFailed);
 }
 
 assert.equal(
@@ -33,6 +30,12 @@ assert.equal(
 assert.equal(
   ready([{ roleName: 'FC Unit' }], [{ roleName: 'FC Unit', permissions: [] }], {
     dataInitialized: true,
+  }),
+  false,
+);
+assert.equal(
+  ready([{ roleName: 'FC Unit' }], [{ roleName: 'FC Unit', permissions: [] }], {
+    bootstrapFailed: true,
   }),
   true,
 );

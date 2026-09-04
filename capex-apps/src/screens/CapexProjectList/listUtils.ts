@@ -140,17 +140,21 @@ export function sortPeriodNamesNewestFirst(periods: string[]): string[] {
 }
 
 /**
- * Default = Semua budget period (`[]`) so list tidak kosong di period aneh
- * (mis. "budget laptop"). Empty array = "Semua" di PeriodCheckboxFilter.
+ * Default periods: Unit → Semua (`[]`); scope All / Super Admin → latest only
+ * (multi-period + org-wide is too heavy for CPL filters).
  */
 export function resolveInitialProjectListSelectedPeriods(
   saved: ProjectListFilterSelection | null | undefined,
   budgetPeriods: BudgetPeriod[],
+  options?: { preferSinglePeriod?: boolean },
 ): string[] {
   if (saved != null && Array.isArray(saved.selectedPeriods)) {
     return saved.selectedPeriods;
   }
-  void budgetPeriods;
+  if (options?.preferSinglePeriod) {
+    const latest = pickLatestBudgetPeriodName(budgetPeriods);
+    return latest ? [latest] : [];
+  }
   return [];
 }
 

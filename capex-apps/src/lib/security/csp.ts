@@ -63,6 +63,8 @@ export function buildBaselineSecurityHeaders(
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    // Document must revalidate so boomer tabs pick up Access Denied redirects without hard refresh.
+    'Cache-Control': 'no-store, must-revalidate',
     ...(isProd && enforceHttps
       ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' }
       : {}),

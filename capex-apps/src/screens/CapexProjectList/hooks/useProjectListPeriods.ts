@@ -13,6 +13,7 @@ export function useProjectListPeriodConfig(
   budgetPeriods: BudgetPeriod[] | undefined,
   allPeriodNames: string[] | undefined,
   savedFilters: ProjectListFilterSelection | null,
+  options?: { preferSinglePeriod?: boolean },
 ) {
   const resolvedBudgetPeriods = useMemo((): BudgetPeriod[] => {
     if (budgetPeriods?.length) {
@@ -37,8 +38,11 @@ export function useProjectListPeriodConfig(
   );
 
   const initialSelectedPeriods = useMemo(
-    () => resolveInitialProjectListSelectedPeriods(savedFilters, resolvedBudgetPeriods),
-    [savedFilters, resolvedBudgetPeriods],
+    () =>
+      resolveInitialProjectListSelectedPeriods(savedFilters, resolvedBudgetPeriods, {
+        preferSinglePeriod: options?.preferSinglePeriod,
+      }),
+    [savedFilters, resolvedBudgetPeriods, options?.preferSinglePeriod],
   );
 
   return { resolvedBudgetPeriods, availablePeriodOptions, initialSelectedPeriods };

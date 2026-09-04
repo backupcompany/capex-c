@@ -119,16 +119,26 @@ function CapexProjectListTableBlockInner({
             </div>
           </div>
         ) : null}
-        <GenericTable
-          columns={columns}
-          data={paginatedAssets}
-          onRowClick={onRowClick}
-          onRowMouseEnter={onRowHover}
-          selectedRowId={selectedAssetId}
-          className="h-full border-none"
-          virtualizeRows="auto"
-          estimatedRowHeight={52}
-        />
+        {!showBlockingSkeleton && !showTableBusy && paginatedAssets.length === 0 ? (
+          <div className="flex h-full min-h-[12rem] items-center justify-center px-4 text-center text-sm text-siloam-text-secondary">
+            {searchEmptyHint
+              ? searchEmptyHint
+              : hasActiveFilters
+                ? 'No assets found matching the filters.'
+                : 'No assets found.'}
+          </div>
+        ) : (
+          <GenericTable
+            columns={columns}
+            data={paginatedAssets}
+            onRowClick={onRowClick}
+            onRowMouseEnter={onRowHover}
+            selectedRowId={selectedAssetId}
+            className="h-full border-none"
+            virtualizeRows="auto"
+            estimatedRowHeight={52}
+          />
+        )}
       </div>
 
       <div
