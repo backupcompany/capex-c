@@ -37,7 +37,10 @@ import type { User, UserRole } from '@/types';
 import { isShellCachePatchGuarded, readGuardedAuthBootstrapSlice } from '@/lib/syncAppShellCaches';
 import { readCachedBootstrap } from '@/lib/appBootstrapCache';
 import { invalidateRequestCache } from '@/lib/requestCache';
-import { authzPackFingerprint } from '@/features/configuration/users-roles/utils/authzPackFingerprint';
+import {
+  authzPackFingerprint,
+  shouldKeepGuardedRoles,
+} from '@/features/configuration/users-roles/utils/authzPackFingerprint';
 
 const CONFIG_STALE_MS = 5 * 60 * 1000;
 /** SA Configuration Users & Roles — peer UI sync only (read pack; no shell/user matrix push). */
@@ -138,10 +141,15 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
         const base = old ?? readBootstrapSeed();
         let merged = mergeConfigurationPack(base, partial);
         if (isShellCachePatchGuarded()) {
+          // Keep local user/role *edits* under guard, but never keep bootstrap-stripped
+          // empty matrices over a full /configuration/pack response (Role board all-Hide bug).
+          const keepUsers = keys.includes('users');
+          const keepRoles =
+            keys.includes('roles') && shouldKeepGuardedRoles(base.roles, partial.roles);
           merged = {
             ...merged,
-            users: keys.includes('users') ? (base.users ?? merged.users) : merged.users,
-            roles: keys.includes('roles') ? (base.roles ?? merged.roles) : merged.roles,
+            users: keepUsers ? (base.users ?? merged.users) : merged.users,
+            roles: keepRoles ? (base.roles ?? merged.roles) : merged.roles,
           };
         }
         writeConfigurationPackCache(userId, merged, { replace: true });
@@ -154,7 +162,7 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
   const refreshSlices = useCallback(
     async (
       slices: ConfigSliceKey[],
-      options?: { includeUserManaged?: boolean },
+      options?: { includeUserManaged?: boolean; forceAuthz?: boolean },
     ): Promise<boolean> => {
       let keys = [...new Set(slices)];
       if (!options?.includeUserManaged) {
@@ -164,9 +172,11 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
         return areSlicesPresent(slices);
       }
 
-      const requestedKeys = isShellCachePatchGuarded()
-        ? keys.filter((k) => k !== 'users' && k !== 'roles')
-        : keys;
+      // forceAuthz: Configuration Users & Roles needs full matrices (bootstrap strips peers).
+      const requestedKeys =
+        isShellCachePatchGuarded() && !options?.forceAuthz
+          ? keys.filter((k) => k !== 'users' && k !== 'roles')
+          : keys;
 
       if (!requestedKeys.length) {
         return areSlicesPresent(slices);
@@ -284,7 +294,7 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
         ? excludeUserManagedConfigurationSlices(revalidate)
         : [];
       if (autoRefresh.length) {
-        void refreshSlices(autoRefresh);
+        void refreshSlices(autoRefresh, { forceAuthz: activeTab === 'Users & Roles' });
       }
 
       setActiveTabLoadStatus(ok ? 'idle' : 'error');
@@ -322,7 +332,6 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
         const nextUsers = Array.isArray(fresh.users) ? fresh.users : current?.users;
         const fp = authzPackFingerprint(nextRoles, nextUsers);
         if (fp === lastFp) return;
-        lastFp = fp;
 
         const partial: Partial<ConfigurationDataPack> = {};
         const keys: ConfigSliceKey[] = [];
@@ -336,6 +345,8 @@ export function useConfigurationPageData({ userId, activeTab }: UseConfiguration
         }
         if (!keys.length) return;
         mergeAndPersistSlices(partial, keys);
+        const applied = queryClient.getQueryData<Partial<ConfigurationDataPack>>(qk);
+        lastFp = authzPackFingerprint(applied?.roles, applied?.users);
       } catch {
         /* keep last pack */
       } finally {

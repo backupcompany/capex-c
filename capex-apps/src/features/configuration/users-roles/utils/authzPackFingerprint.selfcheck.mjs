@@ -3,6 +3,15 @@
  */
 import assert from 'node:assert/strict';
 
+function rolePermissionsWeight(roles) {
+  return (roles ?? []).reduce((n, r) => n + (r.permissions?.length ?? 0), 0);
+}
+
+function shouldKeepGuardedRoles(base, incoming) {
+  if (!Array.isArray(incoming)) return true;
+  return rolePermissionsWeight(base) >= rolePermissionsWeight(incoming);
+}
+
 function authzPackFingerprint(roles, users) {
   const rolePart = (roles ?? [])
     .map((r) => {
@@ -69,5 +78,24 @@ const c = authzPackFingerprint(
   [{ id: 10, assignments: [{ roleId: 2, assignedScopes: ['HU-SHMD'] }] }],
 );
 assert.notEqual(a, c);
+
+const stripped = [
+  { id: 11, roleName: 'HOSDIR', permissions: [] },
+  { id: 1, roleName: 'Super Admin', permissions: [{ hierarchy: 'Dashboard', permission: 'Hide' }] },
+];
+const full = [
+  {
+    id: 11,
+    roleName: 'HOSDIR',
+    permissions: [
+      { hierarchy: 'Budget', permission: 'View Only' },
+      { hierarchy: 'Project', permission: 'View & Update' },
+    ],
+  },
+  { id: 1, roleName: 'Super Admin', permissions: [{ hierarchy: 'Dashboard', permission: 'Hide' }] },
+];
+assert.equal(shouldKeepGuardedRoles(stripped, full), false);
+assert.equal(shouldKeepGuardedRoles(full, stripped), true);
+assert.equal(shouldKeepGuardedRoles(full, undefined), true);
 
 console.log('authzPackFingerprint.selfcheck: ok');
